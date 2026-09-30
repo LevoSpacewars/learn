@@ -29,6 +29,7 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import qrcode from "qrcode-terminal";
+import { answerPending } from "../review/prompts.ts";
 
 const PORT = Number(process.env.PI_PHONE_PORT) || 8787;
 const MAX_BODY = 40 * 1024 * 1024;
@@ -126,6 +127,19 @@ export default function phoneWork(pi: ExtensionAPI) {
 			fs.writeFileSync(path.join(dir, name), Buffer.from(img.data, "base64"));
 			return name;
 		});
+
+		// If a learner prompt (recall) is waiting, the photo IS the answer: hand it
+		// to that prompt instead of posting a new user message.
+		const answered = answerPending({
+			source: "phone",
+			text: payload.note?.trim() || undefined,
+			photos: names.map((n, i) => ({ file: path.join(dir, n), data: images[i].data, mimeType: images[i].mimeType })),
+		});
+		if (answered) {
+			ctx.ui.setWidget("phone-work", undefined);
+			ctx.ui.notify(`📱 Photo received as your answer`, "info");
+			return send(res, 200, "application/json", JSON.stringify({ ok: true, answered: true, files: names }));
+		}
 
 		const note = payload.note?.trim() || "Here's my work (photo from my phone).";
 		const embeds = names.map((n) => `![[${n}|500]]`).join("\n");
@@ -330,7 +344,7 @@ $("send").onclick = async () => {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
     files.length = 0; $("note").value = ""; render();
-    $("status").textContent = j.queued ? "Sent ✓ — queued until pi finishes its turn" : "Sent ✓ — check pi";
+    $("status").textContent = j.answered ? "Sent ✓ — received as your answer" : j.queued ? "Sent ✓ — queued until pi finishes its turn" : "Sent ✓ — check pi";
     $("status").className = "status ok";
   } catch (e) {
     $("status").textContent = "Failed: " + e.message; $("status").className = "status err";

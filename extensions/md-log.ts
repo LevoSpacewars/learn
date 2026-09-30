@@ -29,7 +29,17 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const QA_TOOLS = new Set(["quiz", "ask_user_question"]);
+const QA_TOOLS = new Set(["quiz", "ask_user_question", "recall"]);
+
+const RECALL_LABEL: Record<string, string> = {
+	recall: "Recall",
+	explain: "Explain it back",
+	predict: "Predict",
+	boundary: "Boundary",
+	flaw: "Find the flaw",
+	transfer: "Transfer",
+	problem: "Problem",
+};
 
 export default function mdLog(pi: ExtensionAPI) {
 	let logFile: string | null = null;
@@ -98,6 +108,7 @@ export default function mdLog(pi: ExtensionAPI) {
 	// callout noting the skill was loaded, so the log keeps the signal without
 	// the noise. Runs on already-trimmed text.
 	function stripSkillBlocks(text: string): string {
+		text = text.replace(/\n*<learner>[\s\S]*?<\/learner>/g, "\n\n> [!note] Learner file: relevant slice loaded");
 		return text.replace(
 			/<skill\b([^>]*)>[\s\S]*?<\/skill>/g,
 			(_match, attrs: string) => {
@@ -170,10 +181,58 @@ export default function mdLog(pi: ExtensionAPI) {
 			for (let i = 1; i < noteLines.length; i++) body.push(noteLines[i]);
 		}
 
+		if (details?.confidence !== undefined || details?.latencyMs !== undefined) {
+			const bits: string[] = [];
+			if (details.confidence !== undefined) bits.push(`Confidence: ${details.confidence}%`);
+			if (details.latencyMs !== undefined) bits.push(`${Math.round(details.latencyMs / 1000)}s`);
+			body.push(bits.join(" · "));
+		}
+
 		if (details?.explanation) {
 			body.push("");
 			for (const line of String(details.explanation).split("\n")) body.push(line);
 		}
+		return callout(type, title, body);
+	}
+
+	function recallQuestionCallout(details: any): string {
+		const label = `Recall — ${RECALL_LABEL[details?.kind] ?? details?.kind ?? ""}`.trim();
+		const context = details?.paper ? "Work it on paper and send a photo from your phone, or type your answer." : undefined;
+		return questionCallout(label, String(details?.prompt ?? ""), context, []);
+	}
+
+	function answerCalloutRecall(details: any): string {
+		const status = details?.status;
+		if (status === "cancelled") return callout("warning", "Recall — cancelled", ["(user skipped)"]);
+		if (status === "unavailable") return callout("warning", "Recall — unavailable", [details?.message || ""]);
+		if (status === "hint") return callout("warning", "Recall — hint requested", ["No attempt yet; asked for a hint."]);
+		if (status === "dontKnow") return callout("question", "Recall — I don't know", ["Your answer: I don't know"]);
+		const verdict = details?.verdict as string | undefined;
+		const type = verdict === "correct" ? "success" : verdict === "partial" ? "warning" : verdict === "incorrect" ? "failure" : "note";
+		const mark = verdict === "correct" ? "✓" : verdict === "partial" ? "◐" : verdict === "incorrect" ? "✗" : "";
+		const score = details?.score !== undefined ? ` (${Math.round(Number(details.score) * 100)}%)` : "";
+		const title = verdict ? `Recall — ${verdict} ${mark}${score}` : "Recall — ungraded";
+		const body: string[] = [];
+		if (details?.answerText) {
+			const t = String(details.answerText).split("\n");
+			body.push(`Your answer: ${t[0]}`);
+			for (let i = 1; i < t.length; i++) body.push(t[i]);
+		}
+		if (Array.isArray(details?.photos) && details.photos.length) {
+			if (!details?.answerText) body.push("Your answer (photo):");
+			for (const n of details.photos) body.push(`![[${n}|500]]`);
+		}
+		const bits: string[] = [];
+		if (details?.confidence !== undefined) bits.push(`Confidence: ${details.confidence}%`);
+		if (details?.latencyMs !== undefined) bits.push(`${Math.round(details.latencyMs / 1000)}s`);
+		if (bits.length) body.push(bits.join(" · "));
+		if (details?.reading) body.push(`Read as: ${details.reading}`);
+		if (details?.firstError) body.push(`First error: ${details.firstError}`);
+		if (details?.feedback) {
+			body.push("");
+			for (const line of String(details.feedback).split("\n")) body.push(line);
+		}
+		if (details?.cardRating) body.push("", `Card: ${details.cardRating}`);
 		return callout(type, title, body);
 	}
 
@@ -251,8 +310,15 @@ export default function mdLog(pi: ExtensionAPI) {
 	pi.on("tool_execution_update", async (event, _ctx) => {
 		if (!logFile) return;
 		const toolName = (event as any).toolName;
-		if (toolName !== "quiz") return;
 		const toolCallId = (event as any).toolCallId;
+		if (toolName === "recall") {
+			const d = (event as any).partialResult?.details;
+			if (!d || d.phase !== "asked" || loggedQuizQuestion.has(toolCallId)) return;
+			loggedQuizQuestion.add(toolCallId);
+			await withLock(() => appendToFile(recallQuestionCallout(d)));
+			return;
+		}
+		if (toolName !== "quiz") return;
 		if (loggedQuizQuestion.has(toolCallId)) return;
 		const shuffled = (event as any).partialResult?.details?.options as Array<{ index: number; label: string }> | undefined;
 		if (!shuffled || shuffled.length === 0) return;
@@ -272,7 +338,9 @@ export default function mdLog(pi: ExtensionAPI) {
 		const details = (event as any).details;
 		const block = toolName === "quiz"
 			? answerCalloutQuiz(details)
-			: answerCalloutAsk(details);
+			: toolName === "recall"
+				? answerCalloutRecall(details)
+				: answerCalloutAsk(details);
 		await withLock(() => appendToFile(block));
 	});
 
@@ -423,6 +491,12 @@ export default function mdLog(pi: ExtensionAPI) {
 				// than the original tool-call args, which are the pre-shuffle author
 				// order and can mismatch what's on screen. ask_user_question never
 				// shuffles, so its tool-call args are already the true order.
+				if (tc && tc.name === "recall") {
+					const a = tc.args || {};
+					blocks.push(recallQuestionCallout({ kind: a.kind ?? "recall", prompt: a.prompt, paper: a.paper ?? a.kind === "problem" }));
+					blocks.push(answerCalloutRecall(msg.details));
+					continue;
+				}
 				if (tc) {
 					const a = tc.args || {};
 					const label = tc.name === "quiz" ? "Quiz" : "Question";

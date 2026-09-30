@@ -9,6 +9,7 @@ import {
 	wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import { recordCalibration } from "./review/store.ts";
 
 // ────────────────────────────────────────────────────────────────────────────
 // quiz — a GRADED sibling of ask_user_question.
@@ -56,6 +57,7 @@ interface QuizResponse {
 	dontKnow: boolean;
 	note?: string;
 	answers: OptionAnswer[];
+	confidence?: number; // 0-100, asked after the selection and before feedback
 }
 
 type QuizStatus = "answered" | "cancelled" | "unavailable";
@@ -79,6 +81,8 @@ interface QuizResultDetails {
 	note?: string; // optional free-text from the always-present note field (any answer)
 	explanation?: string;
 	message?: string;
+	confidence?: number;
+	latencyMs?: number;
 }
 
 const OptionSchema = Type.Object({
@@ -112,6 +116,7 @@ const QuizParams = Type.Object({
 		description:
 			"REQUIRED. Explanation revealed AFTER the user answers (shown whether they got it right or wrong). Use it to reinforce why the correct answer is correct.",
 	}),
+	topic: Type.Optional(Type.String({ description: "Topic slug, for calibration tracking (e.g. the lesson slug)." })),
 	shuffle: Type.Optional(
 		Type.Boolean({
 			description:
@@ -266,6 +271,7 @@ function buildResult(
 	response: QuizResponse,
 	correctIndices: number[],
 	explanation: string | undefined,
+	latencyMs?: number,
 ) {
 	const { dontKnow, note, answers } = response;
 	const selectedIndices = answers.map((a) => a.index);
@@ -288,10 +294,14 @@ function buildResult(
 		if (note) text += `\nUser's note: ${note}`;
 	}
 	if (explanation) text += `\nExplanation: ${explanation}`;
+	if (!dontKnow && response.confidence !== undefined) {
+		text += `\nConfidence: ${response.confidence}%${latencyMs !== undefined ? `, answered in ${Math.round(latencyMs / 1000)}s` : ""}.`;
+		if (!correct && response.confidence >= 70) text += " HIGH-CONFIDENCE MISS: explain the mechanism, not just the answer, and re-test soon.";
+	}
 
 	return {
 		content: [{ type: "text" as const, text }],
-		details: buildStructuredResult(
+		details: withExtras(response.confidence, latencyMs, buildStructuredResult(
 			"answered",
 			question,
 			mode,
@@ -304,8 +314,48 @@ function buildResult(
 			displayedOptions,
 			dontKnow,
 			note,
-		),
+		)),
 	};
+}
+
+function withExtras(confidence: number | undefined, latencyMs: number | undefined, d: QuizResultDetails): QuizResultDetails {
+	if (!d.dontKnow && confidence !== undefined) d.confidence = confidence;
+	if (latencyMs !== undefined) d.latencyMs = latencyMs;
+	return d;
+}
+
+// ── Confidence step (shared by both components) ─────────────────────────
+interface ConfState {
+	confidence: number;
+	digits: string;
+}
+function confidenceKey(data: string, st: ConfState): "confirm" | "skip" | "changed" | undefined {
+	if (matchesKey(data, Key.enter)) return "confirm";
+	if (matchesKey(data, Key.escape)) {
+		st.confidence = 50;
+		return "skip";
+	}
+	if (matchesKey(data, Key.left)) st.confidence = Math.max(0, st.confidence - 10);
+	else if (matchesKey(data, Key.right)) st.confidence = Math.min(100, st.confidence + 10);
+	else if (matchesKey(data, Key.down)) st.confidence = Math.max(0, st.confidence - 5);
+	else if (matchesKey(data, Key.up)) st.confidence = Math.min(100, st.confidence + 5);
+	else if (/^[0-9]$/.test(data)) {
+		st.digits = (st.digits + data).slice(-3);
+		st.confidence = Math.min(100, Number(st.digits));
+	} else if (matchesKey(data, Key.backspace)) {
+		st.digits = st.digits.slice(0, -1);
+		st.confidence = st.digits ? Number(st.digits) : 0;
+	} else return undefined;
+	return "changed";
+}
+function pushConfidence(lines: string[], theme: any, width: number, confidence: number): void {
+	const add = (t: string) => lines.push(truncateToWidth(t, width));
+	const filled = Math.round(confidence / 5);
+	lines.push("");
+	add(theme.fg("text", " How confident are you that your answer is right?"));
+	add(` ${theme.fg("accent", "█".repeat(filled) + "░".repeat(20 - filled))} ${theme.fg("accent", `${confidence}%`)}`);
+	lines.push("");
+	add(theme.fg("dim", " ←/→ ±10 · ↑/↓ ±5 · type digits · Enter confirm"));
 }
 
 // Shared feedback block, rendered after the user submits.
@@ -436,7 +486,8 @@ async function askSingleChoice(
 	return ctx.ui.custom<QuizResponse | null>(
 		(tui: any, theme: any, _kb: any, done: (result: QuizResponse | null) => void) => {
 			let optionIndex = 0;
-			let phase: "select" | "feedback" = "select";
+			let phase: "select" | "confidence" | "feedback" = "select";
+			const conf: ConfState = { confidence: 70, digits: "" };
 			let focus: "options" | "note" = "options";
 			let chosen: OptionAnswer | null = null;
 			let dontKnow = false;
@@ -464,10 +515,16 @@ async function askSingleChoice(
 				const note = noteText();
 				return dontKnow
 					? { dontKnow: true, note, answers: [] }
-					: { dontKnow: false, note, answers: chosen ? [chosen] : [] };
+					: { dontKnow: false, note, answers: chosen ? [chosen] : [], confidence: conf.confidence };
 			}
 
 			function handleInput(data: string) {
+				if (phase === "confidence") {
+					const r = confidenceKey(data, conf);
+					if (r === "confirm" || r === "skip") phase = "feedback";
+					if (r) refresh();
+					return;
+				}
 				if (phase === "feedback") {
 					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
 						done(response());
@@ -516,7 +573,7 @@ async function askSingleChoice(
 						chosen = { label: selected.label, value: selected.value, index: selected.index };
 						dontKnow = false;
 					}
-					phase = "feedback";
+					phase = dontKnow ? "feedback" : "confidence";
 					refresh();
 					return;
 				}
@@ -535,6 +592,14 @@ async function askSingleChoice(
 				const lines: string[] = [];
 				const add = (text: string) => lines.push(truncateToWidth(text, width));
 				pushHeader(lines, theme, width, question, context);
+
+				if (phase === "confidence") {
+					pushConfidence(lines, theme, width, conf.confidence);
+					add(theme.fg("accent", "─".repeat(width)));
+					cachedLines = lines;
+					cachedWidth = width;
+					return lines;
+				}
 
 				if (phase === "feedback") {
 					renderFeedback(
@@ -624,7 +689,8 @@ async function askMultiChoice(
 	return ctx.ui.custom<QuizResponse | null>(
 		(tui: any, theme: any, _kb: any, done: (result: QuizResponse | null) => void) => {
 			let optionIndex = 0;
-			let phase: "select" | "feedback" = "select";
+			let phase: "select" | "confidence" | "feedback" = "select";
+			const conf: ConfState = { confidence: 70, digits: "" };
 			let focus: "options" | "note" = "options";
 			const editor = makeNoteEditor(tui, theme);
 			let cachedLines: string[] | undefined;
@@ -655,7 +721,7 @@ async function askMultiChoice(
 				const note = noteText();
 				return choseDontKnow()
 					? { dontKnow: true, note, answers: [] }
-					: { dontKnow: false, note, answers: realAnswers() };
+					: { dontKnow: false, note, answers: realAnswers(), confidence: conf.confidence };
 			}
 
 			// "I don't know" is exclusive: choosing it clears real selections, and
@@ -681,11 +747,17 @@ async function askMultiChoice(
 
 			function submit() {
 				if (selected.size === 0) return;
-				phase = "feedback";
+				phase = choseDontKnow() ? "feedback" : "confidence";
 				refresh();
 			}
 
 			function handleInput(data: string) {
+				if (phase === "confidence") {
+					const r = confidenceKey(data, conf);
+					if (r === "confirm" || r === "skip") phase = "feedback";
+					if (r) refresh();
+					return;
+				}
 				if (phase === "feedback") {
 					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
 						done(response());
@@ -757,6 +829,14 @@ async function askMultiChoice(
 				const lines: string[] = [];
 				const add = (text: string) => lines.push(truncateToWidth(text, width));
 				pushHeader(lines, theme, width, question, context);
+
+				if (phase === "confidence") {
+					pushConfidence(lines, theme, width, conf.confidence);
+					add(theme.fg("accent", "─".repeat(width)));
+					cachedLines = lines;
+					cachedWidth = width;
+					return lines;
+				}
 
 				if (phase === "feedback") {
 					renderFeedback(
@@ -957,14 +1037,24 @@ export default function quiz(pi: ExtensionAPI) {
 			}
 
 			return withUILock(async () => {
+				const t0 = Date.now();
 				const response =
 					mode === "single-select"
 						? await askSingleChoice(ctx, params.question, context, options, correctIndices, explanation)
 						: await askMultiChoice(ctx, params.question, context, options, correctIndices, explanation);
+				const latencyMs = Date.now() - t0;
 				if (!response) {
 					return cancelledResult(params.question, mode, correctIndices, context);
 				}
-				return buildResult(params.question, context, mode, options, response, correctIndices, explanation);
+				const built = buildResult(params.question, context, mode, options, response, correctIndices, explanation, latencyMs);
+				if (!response.dontKnow && response.confidence !== undefined) {
+					try {
+						recordCalibration(ctx.cwd, { topic: params.topic?.trim().toLowerCase(), confidence: response.confidence, correct: built.details.correct === true, source: "quiz", latencyMs });
+					} catch {
+						// bookkeeping must never break a quiz
+					}
+				}
+				return built;
 			});
 		},
 
