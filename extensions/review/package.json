@@ -1,0 +1,10 @@
+{
+  "name": "@learn/review",
+  "version": "0.1.0",
+  "description": "review: FSRS-scheduled spaced review cards, created during lessons and run by the teacher via /review.",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "ts-fsrs": "^5.0.0"
+  }
+}

@@ -320,6 +320,18 @@ export default function mdLog(pi: ExtensionAPI) {
 		},
 	});
 
+	// Programmatic link for other extensions (the start menu): same as /md-log,
+	// but synchronous so the caller can send its first prompt right after.
+	pi.events.on("md-log:link", (data: any) => {
+		const { file, ctx } = data ?? {};
+		if (!file || !ctx || !fs.existsSync(file)) return;
+		logFile = file;
+		pi.appendEntry("md-log", { file });
+		backfill(ctx);
+		const theme = ctx.ui.theme;
+		ctx.ui.setStatus("md-log", theme.fg("accent", "🗒 ") + theme.fg("dim", path.basename(file)));
+	});
+
 	pi.registerCommand("md-unlog", {
 		description: "Stop mirroring the session to a markdown file",
 		handler: async (_args, ctx) => {
