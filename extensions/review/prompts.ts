@@ -28,26 +28,39 @@ export interface PromptAnswer {
 	hint?: boolean;
 }
 
-let pending: PendingPrompt | undefined;
-const listeners = new Set<(p: PendingPrompt | undefined) => void>();
+// pi loads each extension file with its own module instance, so module-level
+// state would NOT be shared between recall.ts and phone-work. Stash it on
+// globalThis (same trick as the shared UI lock).
+interface Registry {
+	pending: PendingPrompt | undefined;
+	listeners: Set<(p: PendingPrompt | undefined) => void>;
+}
+function registry(): Registry {
+	const g = globalThis as any;
+	if (!g.__learnPromptRegistry) g.__learnPromptRegistry = { pending: undefined, listeners: new Set() } satisfies Registry;
+	return g.__learnPromptRegistry as Registry;
+}
 
 export function setPending(p: PendingPrompt | undefined): void {
-	pending = p;
-	for (const l of listeners) l(p);
+	const r = registry();
+	r.pending = p;
+	for (const l of r.listeners) l(p);
 }
 
 export function getPending(): PendingPrompt | undefined {
-	return pending;
+	return registry().pending;
 }
 
 /** Subscribe to prompt changes (the answer pad uses this to push updates). */
 export function onPendingChange(l: (p: PendingPrompt | undefined) => void): () => void {
-	listeners.add(l);
-	return () => listeners.delete(l);
+	const r = registry();
+	r.listeners.add(l);
+	return () => r.listeners.delete(l);
 }
 
 /** Try to answer the pending prompt from an external surface. */
 export function answerPending(a: PromptAnswer): boolean {
-	if (!pending) return false;
-	return pending.answer(a);
+	const p = registry().pending;
+	if (!p) return false;
+	return p.answer(a);
 }

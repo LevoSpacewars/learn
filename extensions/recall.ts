@@ -423,6 +423,7 @@ export default function recall(pi: ExtensionAPI) {
 		renderResult(res: any, { expanded }: any, theme: any) {
 			const d = res.details as RecallDetails | undefined;
 			if (!d) return new Text(theme.fg("dim", "recall"), 0, 0);
+			if (d.phase === "asked") return new Text(theme.fg("dim", "awaiting answer…"), 0, 0);
 			if (d.status === "unavailable") return new Text(theme.fg("warning", d.message || "recall unavailable"), 0, 0);
 			if (d.status === "hint") return new Text(theme.fg("warning", "hint requested"), 0, 0);
 			if (d.status === "dontKnow") return new Text(theme.fg("warning", "I don't know"), 0, 0);

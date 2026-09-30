@@ -108,14 +108,16 @@ export default function mdLog(pi: ExtensionAPI) {
 	// callout noting the skill was loaded, so the log keeps the signal without
 	// the noise. Runs on already-trimmed text.
 	function stripSkillBlocks(text: string): string {
-		text = text.replace(/\n*<learner>[\s\S]*?<\/learner>/g, "\n\n> [!note] Learner file: relevant slice loaded");
-		return text.replace(
+		// Skill blocks first (their body may mention "<learner>" in prose), then
+		// the learner slice — only when its tags sit alone at line starts.
+		text = text.replace(
 			/<skill\b([^>]*)>[\s\S]*?<\/skill>/g,
 			(_match, attrs: string) => {
 				const name = /name="([^"]+)"/.exec(attrs)?.[1];
 				return `> [!note] SKILL loaded: ${name ?? "(unknown)"}`;
 			},
 		);
+		return text.replace(/\n*^<learner>\n[\s\S]*?^<\/learner>$/gm, "\n\n> [!note] Learner file: relevant slice loaded");
 	}
 
 	function assistantBlock(text: string): string {
