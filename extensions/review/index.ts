@@ -380,17 +380,20 @@ export function gradeCard(cwd: string, params: GradeCardInput): { text: string; 
 	return { text, rating, details: { due: card.fsrs.due.toISOString(), remaining, retry, graduated: card.graduated } };
 }
 
+/** Recompute the "review: N due" status line (any extension may call this after grading). */
+export function refreshReviewStatus(ctx: any): void {
+	try {
+		const n = dueCards(load(ctx.cwd), new Date()).length;
+		ctx.ui.setStatus("review", n > 0 ? ctx.ui.theme?.fg?.("warning", `review: ${n} due`) ?? `review: ${n} due` : undefined);
+	} catch {
+		ctx.ui.setStatus("review", "review: cards.json unreadable");
+	}
+}
+
 export default function review(pi: ExtensionAPI) {
 	if (process.env.PI_SUBAGENT_AGENT) return;
 
-	function refreshStatus(ctx: any) {
-		try {
-			const n = dueCards(load(ctx.cwd), new Date()).length;
-			ctx.ui.setStatus("review", n > 0 ? ctx.ui.theme?.fg?.("warning", `review: ${n} due`) ?? `review: ${n} due` : undefined);
-		} catch {
-			ctx.ui.setStatus("review", "review: cards.json unreadable");
-		}
-	}
+	const refreshStatus = refreshReviewStatus;
 
 	pi.on("session_start", async (_event, ctx) => refreshStatus(ctx));
 

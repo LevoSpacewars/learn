@@ -27,7 +27,7 @@ import { Editor, type EditorTheme, Key, Text, matchesKey, truncateToWidth, wrapT
 import { Type } from "@sinclair/typebox";
 import * as path from "node:path";
 import { type GradeResult, grade } from "./review/grader.ts";
-import { gradeCard } from "./review/index.ts";
+import { gradeCard, refreshReviewStatus } from "./review/index.ts";
 import { type PromptAnswer, setPending } from "./review/prompts.ts";
 import { type CheckKind, recordCalibration } from "./review/store.ts";
 
@@ -379,6 +379,7 @@ export default function recall(pi: ExtensionAPI) {
 				if (params.cardId) {
 					const g = gradeCard(ctx.cwd, { id: params.cardId, rating: "again", note: "I don't know", check: kind, modality: "typed", latencyMs: outcome.latencyMs });
 					details.cardRating = g.rating;
+					refreshReviewStatus(ctx);
 				}
 				return result(`Learner said "I don't know" (genuine gap, not a wrong guess).${details.cardRating ? ` Card ${params.cardId} graded again.` : ""}`, details);
 			}
@@ -397,6 +398,7 @@ export default function recall(pi: ExtensionAPI) {
 					try {
 						const r = gradeCard(ctx.cwd, { id: params.cardId, rating: ratingFor(g, outcome.latencyMs), check: kind, modality, latencyMs: outcome.latencyMs, confidence, note: g.firstError || undefined });
 						details.cardRating = r.rating;
+						refreshReviewStatus(ctx);
 					} catch (e: any) {
 						details.message = `card grade failed: ${e?.message ?? e}`;
 					}
