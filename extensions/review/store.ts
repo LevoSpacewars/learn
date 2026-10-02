@@ -83,12 +83,64 @@ export interface SessionRecord {
 	note?: string;
 }
 
+// ── Curriculum: goals, milestones, fundamentals ───────────────────────────
+
+export type MilestoneKind = "do" | "derive" | "read" | "build" | "critique";
+export type MilestoneStatus = "locked" | "ready" | "in_progress" | "done";
+
+export interface Milestone {
+	id: string;
+	title: string;
+	kind: MilestoneKind;
+	description?: string;
+	/** Fundamental slugs, or "m:<milestoneId>" for another milestone of the same goal. */
+	needs: string[];
+	status: MilestoneStatus;
+	evidence?: string;
+	lesson?: string;
+	done?: string;
+}
+
+export interface Goal {
+	id: string;
+	title: string;
+	why?: string;
+	weight: number; // 1 (background) .. 3 (leading)
+	status: "active" | "paused" | "done";
+	milestones: Milestone[];
+	created: string;
+	updated: string;
+	lastTouched?: string;
+}
+
+export type FundamentalStatus = "unknown" | "shaky" | "solid";
+
+export interface Fundamental {
+	slug: string; // == the lesson slug that teaches it
+	title: string;
+	domain?: string; // math | physics | cs | chemistry | ...
+	status?: FundamentalStatus; // explicit override; otherwise derived from lessons
+	note?: string;
+	updated: string;
+}
+
+export interface Interest {
+	at: string;
+	text: string;
+	goal?: string;
+	milestone?: string;
+	fundamentals?: string[];
+}
+
 export interface LearnerStore {
 	version: 1;
 	lessons: LessonRecord[];
 	misconceptions: Misconception[];
 	calibration: CalibrationEvent[];
 	sessions: SessionRecord[];
+	goals: Goal[];
+	fundamentals: Fundamental[];
+	interests: Interest[];
 }
 
 const RESOLVE_AFTER = 2; // consecutive "against" demonstrations that close a misconception
@@ -99,7 +151,7 @@ export function learnerPath(cwd: string): string {
 
 export function loadLearner(cwd: string): LearnerStore {
 	const file = learnerPath(cwd);
-	if (!fs.existsSync(file)) return { version: 1, lessons: [], misconceptions: [], calibration: [], sessions: [] };
+	if (!fs.existsSync(file)) return { version: 1, lessons: [], misconceptions: [], calibration: [], sessions: [], goals: [], fundamentals: [], interests: [] };
 	const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<LearnerStore>;
 	return {
 		version: 1,
@@ -107,6 +159,9 @@ export function loadLearner(cwd: string): LearnerStore {
 		misconceptions: raw.misconceptions ?? [],
 		calibration: raw.calibration ?? [],
 		sessions: raw.sessions ?? [],
+		goals: raw.goals ?? [],
+		fundamentals: raw.fundamentals ?? [],
+		interests: raw.interests ?? [],
 	};
 }
 
@@ -346,6 +401,234 @@ export function calibrationLine(events: CalibrationEvent[]): string {
 	);
 }
 
+// ── Curriculum logic (the scheduler lives here, in code) ───────────────────
+
+const DAY = 24 * 60 * 60 * 1000;
+
+export function fundamentalStatus(store: LearnerStore, slug: string): FundamentalStatus {
+	const f = store.fundamentals.find((x) => x.slug === slug);
+	if (f?.status) return f.status;
+	const lesson = store.lessons.find((l) => l.slug === slug);
+	if (!lesson) return "unknown";
+	if (lesson.status === "done") return "solid";
+	return lesson.nodes.some((n) => n.status === "confirmed") ? "shaky" : "unknown";
+}
+
+function needMet(store: LearnerStore, goal: Goal, need: string): boolean {
+	if (need.startsWith("m:")) return goal.milestones.find((m) => m.id === need.slice(2))?.status === "done";
+	return fundamentalStatus(store, need) !== "unknown";
+}
+
+export function unmetNeeds(store: LearnerStore, goal: Goal, m: Milestone): string[] {
+	return m.needs.filter((n) => !needMet(store, goal, n));
+}
+
+/** Recompute locked/ready for every milestone (done / in_progress are kept). */
+export function refreshMilestones(store: LearnerStore): void {
+	for (const g of store.goals) {
+		for (const m of g.milestones) {
+			if (m.status === "done" || m.status === "in_progress") continue;
+			m.status = unmetNeeds(store, g, m).length === 0 ? "ready" : "locked";
+		}
+	}
+}
+
+export function upsertGoal(
+	cwd: string,
+	input: { id: string; title: string; why?: string; weight?: number; status?: Goal["status"]; milestones?: Array<{ id: string; title: string; kind: MilestoneKind; description?: string; needs?: string[] }> },
+): Goal {
+	const store = loadLearner(cwd);
+	const now = new Date().toISOString();
+	let g = store.goals.find((x) => x.id === input.id);
+	if (!g) {
+		g = { id: input.id, title: input.title, weight: 2, status: "active", milestones: [], created: now, updated: now };
+		store.goals.push(g);
+	}
+	g.title = input.title;
+	if (input.why) g.why = input.why;
+	if (input.weight) g.weight = Math.max(1, Math.min(3, input.weight));
+	if (input.status) g.status = input.status;
+	if (input.milestones) {
+		const prev = new Map(g.milestones.map((m) => [m.id, m]));
+		g.milestones = input.milestones.map((m) => {
+			const old = prev.get(m.id);
+			return { id: m.id, title: m.title, kind: m.kind, description: m.description, needs: m.needs ?? [], status: old?.status ?? "locked", evidence: old?.evidence, lesson: old?.lesson, done: old?.done };
+		});
+	}
+	g.updated = now;
+	refreshMilestones(store);
+	saveLearner(cwd, store);
+	return g;
+}
+
+export function setMilestone(cwd: string, goalId: string, milestoneId: string, patch: { status?: MilestoneStatus; evidence?: string; lesson?: string }): Milestone {
+	const store = loadLearner(cwd);
+	const g = store.goals.find((x) => x.id === goalId);
+	if (!g) throw new Error(`No goal "${goalId}". Known: ${store.goals.map((x) => x.id).join(", ") || "(none)"}`);
+	const m = g.milestones.find((x) => x.id === milestoneId);
+	if (!m) throw new Error(`No milestone "${milestoneId}" in goal "${goalId}". Known: ${g.milestones.map((x) => x.id).join(", ")}`);
+	const now = new Date().toISOString();
+	if (patch.status) m.status = patch.status;
+	if (patch.evidence) m.evidence = patch.evidence;
+	if (patch.lesson) m.lesson = patch.lesson;
+	if (patch.status === "done") {
+		m.done = now;
+		// Reaching a milestone is evidence the fundamentals it needs are in use.
+		for (const need of m.needs) {
+			if (need.startsWith("m:")) continue;
+			const f = store.fundamentals.find((x) => x.slug === need);
+			if (f && f.status !== "solid") {
+				f.status = "solid";
+				f.note = `used in milestone ${g.id}/${m.id}`;
+				f.updated = now;
+			} else if (!f) store.fundamentals.push({ slug: need, title: need, status: "solid", note: `used in milestone ${g.id}/${m.id}`, updated: now });
+		}
+	}
+	g.lastTouched = now;
+	g.updated = now;
+	if (g.milestones.length && g.milestones.every((x) => x.status === "done")) g.status = "done";
+	refreshMilestones(store);
+	saveLearner(cwd, store);
+	return m;
+}
+
+export function upsertFundamental(cwd: string, input: { slug: string; title?: string; domain?: string; status?: FundamentalStatus; note?: string; serves?: string[] }): Fundamental {
+	const store = loadLearner(cwd);
+	const now = new Date().toISOString();
+	let f = store.fundamentals.find((x) => x.slug === input.slug);
+	if (!f) {
+		f = { slug: input.slug, title: input.title ?? input.slug, updated: now };
+		store.fundamentals.push(f);
+	}
+	if (input.title) f.title = input.title;
+	if (input.domain) f.domain = input.domain;
+	if (input.status) f.status = input.status;
+	if (input.note) f.note = input.note;
+	f.updated = now;
+	for (const ref of input.serves ?? []) {
+		const [gid, mid] = ref.split("/");
+		const m = store.goals.find((g) => g.id === gid)?.milestones.find((x) => x.id === mid);
+		if (m && !m.needs.includes(f.slug)) m.needs.push(f.slug);
+	}
+	refreshMilestones(store);
+	saveLearner(cwd, store);
+	return f;
+}
+
+export function touchGoal(cwd: string, goalId: string): void {
+	const store = loadLearner(cwd);
+	const g = store.goals.find((x) => x.id === goalId);
+	if (!g) return;
+	g.lastTouched = new Date().toISOString();
+	saveLearner(cwd, store);
+}
+
+export function recordInterest(cwd: string, i: Omit<Interest, "at">): Interest {
+	const store = loadLearner(cwd);
+	const rec: Interest = { at: new Date().toISOString(), ...i };
+	store.interests.push(rec);
+	if (i.goal) {
+		const g = store.goals.find((x) => x.id === i.goal);
+		if (g) g.lastTouched = rec.at;
+	}
+	saveLearner(cwd, store);
+	return rec;
+}
+
+export interface PathPick {
+	goal: Goal;
+	milestone: Milestone;
+	action: "attempt" | "learn";
+	fundamental?: { slug: string; title: string; servesCount: number };
+	score: number;
+	reason: string;
+}
+
+/** How many milestones (across goals) a fundamental unlocks. */
+function servesCount(store: LearnerStore, slug: string): number {
+	let n = 0;
+	for (const g of store.goals) for (const m of g.milestones) if (m.status !== "done" && m.needs.includes(slug)) n++;
+	return n;
+}
+
+/**
+ * The scheduler. For each active goal take its first unfinished milestone;
+ * if its needs are met, propose attempting it, else propose learning the
+ * unmet fundamental that serves the most milestones. Score = goal weight ×
+ * staleness, penalised for the goal of the last learn session (rotation) and
+ * boosted for a goal the learner showed interest in this week.
+ */
+export function nextOnPath(store: LearnerStore, now = new Date()): PathPick[] {
+	refreshMilestones(store);
+	const lastLearn = [...store.sessions].reverse().find((s) => s.kind === "learn");
+	const lastGoal = lastLearn?.lesson ? goalOfLesson(store, lastLearn.lesson) : undefined;
+	const recentInterest = new Map<string, number>();
+	for (const i of store.interests) {
+		if (!i.goal) continue;
+		const age = (now.getTime() - new Date(i.at).getTime()) / DAY;
+		if (age <= 7) recentInterest.set(i.goal, Math.max(recentInterest.get(i.goal) ?? 0, 1.5 - age / 14));
+	}
+	const picks: PathPick[] = [];
+	for (const g of store.goals) {
+		if (g.status !== "active") continue;
+		const next = g.milestones.find((m) => m.status !== "done");
+		if (!next) continue;
+		const staleDays = (now.getTime() - new Date(g.lastTouched ?? g.created).getTime()) / DAY;
+		let base = g.weight * (1 + Math.min(staleDays, 14) / 7);
+		if (lastGoal === g.id) base *= 0.6;
+		base *= recentInterest.get(g.id) ?? 1;
+		const unmet = unmetNeeds(store, g, next);
+		if (unmet.length === 0 || next.status === "in_progress") {
+			picks.push({ goal: g, milestone: next, action: "attempt", score: base * 1.5, reason: `Attempt "${next.title}" in ${g.title}: ${next.status === "in_progress" ? "already in progress" : "everything it needs is in place"}.` });
+			continue;
+		}
+		const fundamentals = unmet.filter((n) => !n.startsWith("m:"));
+		if (fundamentals.length === 0) continue; // blocked on an earlier milestone (shouldn't happen if ordered)
+		const ranked = fundamentals
+			.map((slug) => ({ slug, title: store.fundamentals.find((f) => f.slug === slug)?.title ?? slug, servesCount: servesCount(store, slug) }))
+			.sort((a, b) => b.servesCount - a.servesCount);
+		const f = ranked[0];
+		const others = f.servesCount - 1;
+		picks.push({
+			goal: g,
+			milestone: next,
+			action: "learn",
+			fundamental: f,
+			score: (base / (1 + (unmet.length - 1) * 0.5)) * (1 + 0.25 * others),
+			reason: `Learn "${f.title}": it unlocks "${next.title}" in ${g.title}${others > 0 ? ` and serves ${others} other milestone${others === 1 ? "" : "s"}` : ""}${unmet.length > 1 ? ` (${unmet.length - 1} more prerequisite${unmet.length > 2 ? "s" : ""} after it)` : ""}.`,
+		});
+	}
+	return picks.sort((a, b) => b.score - a.score);
+}
+
+/** Which goal a lesson slug belongs to (milestone lessons are "m-<goal>-<milestone>"; fundamentals via needs). */
+export function goalOfLesson(store: LearnerStore, slug: string): string | undefined {
+	for (const g of store.goals) {
+		for (const m of g.milestones) {
+			if (slug === `m-${g.id}-${m.id}` || m.lesson === slug) return g.id;
+			if (m.needs.includes(slug) && m.status !== "done") return g.id;
+		}
+	}
+	return undefined;
+}
+
+export function curriculumMap(store: LearnerStore): string {
+	refreshMilestones(store);
+	if (store.goals.length === 0) return "No goals set up yet.";
+	const out: string[] = [];
+	for (const g of store.goals) {
+		const done = g.milestones.filter((m) => m.status === "done").length;
+		out.push(`## ${g.title} (${g.id}) — ${g.status}, weight ${g.weight}, ${done}/${g.milestones.length} milestones${g.why ? ` — ${g.why}` : ""}`);
+		for (const m of g.milestones) {
+			const unmet = unmetNeeds(store, g, m);
+			out.push(`- [${m.status}] ${m.id} · ${m.title} (${m.kind})${m.needs.length ? ` needs: ${m.needs.map((n) => (unmet.includes(n) ? `${n}✗` : `${n}✓`)).join(", ")}` : ""}`);
+		}
+	}
+	const fund = store.fundamentals.map((f) => `${f.slug}:${fundamentalStatus(store, f.slug)}`);
+	if (fund.length) out.push(`## Fundamentals: ${fund.join(", ")}`);
+	return out.join("\n");
+}
+
 // ── Slice for a session (what the teacher gets to see) ─────────────────────
 
 function fmtDate(iso: string): string {
@@ -375,6 +658,19 @@ export function learnerSlice(cwd: string, opts: { lesson?: string; topics?: stri
 		}
 		if (lesson.plan) out.push("Plan (mermaid):\n```mermaid\n" + lesson.plan.trim() + "\n```");
 		for (const t of [lesson.slug, ...lesson.title.toLowerCase().split(/\s+/)]) topics.add(t);
+	}
+
+	const active = store.goals.filter((g) => g.status === "active");
+	if (active.length) {
+		refreshMilestones(store);
+		out.push("## Goals (next milestone each)");
+		for (const g of active) {
+			const next = g.milestones.find((m) => m.status !== "done");
+			const done = g.milestones.filter((m) => m.status === "done").length;
+			out.push(`- ${g.title} (${g.id}, w${g.weight}): ${done}/${g.milestones.length} done${next ? ` — next "${next.title}" [${next.status}]${unmetNeeds(store, g, next).length ? ` needs ${unmetNeeds(store, g, next).join(", ")}` : ""}` : " — complete"}`);
+		}
+		const top = nextOnPath(store)[0];
+		if (top) out.push(`Scheduler's pick: ${top.reason}`);
 	}
 
 	const others = openLessons(store).filter((l) => l.slug !== opts.lesson);

@@ -5,7 +5,10 @@
  * On a fresh session (startup or /new, never on resume/reload/fork) it asks:
  *   • Review (N due)             — only offered when cards are due
  *   • Continue: <lesson> (k/n)   — one per open/paused lesson
+ *   • Next on the path: …        — the scheduler's pick, with its reason
+ *   • Bring something            — a paper (inbox/), idea, question, chapter
  *   • Learn something new        — asks what, then starts the teach skill
+ *   • Set up my goals            — only until goals exist
  * then "How much time do you have?" (minutes; blank = no budget).
  * Esc skips the menu and leaves a plain chat.
  *
@@ -22,7 +25,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { beginLearnSession, beginReviewSession, countDue, dueByTopic } from "./review/index.ts";
-import { learnerSlice, loadLearner, openLessons, slugify, upsertLesson } from "./review/store.ts";
+import { learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
 
 function today(): string {
 	return new Date().toISOString().slice(0, 10);
@@ -78,13 +81,79 @@ export default function startMenu(pi: ExtensionAPI) {
 
 		const LEARN = "Learn something new";
 		const REVIEW = `Review (${due} due)`;
+		const BRING = "Bring something (paper, idea, question)";
+		const SETUP = "Set up my goals (one-time)";
 		const continues = open.map((l) => ({
 			label: `Continue: ${l.title} (${l.nodes.filter((n) => n.status === "confirmed").length}/${l.nodes.length})`,
 			lesson: l,
 		}));
-		const options = [...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), LEARN];
-		const choice = options.length === 1 ? LEARN : await ctx.ui.select("What would you like to do?", options);
+		let pick: ReturnType<typeof nextOnPath>[number] | undefined;
+		let hasGoals = false;
+		try {
+			const store = loadLearner(ctx.cwd);
+			hasGoals = store.goals.length > 0;
+			pick = nextOnPath(store)[0];
+		} catch {
+			// no curriculum yet
+		}
+		const NEXT = pick
+			? `Next on the path: ${pick.action === "learn" ? `learn ${pick.fundamental!.title}` : `attempt ${pick.milestone.title}`} (${pick.goal.title})`
+			: undefined;
+		const options = [...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ...(hasGoals ? [] : [SETUP])];
+		const choice = await ctx.ui.select("What would you like to do?", options);
 		if (!choice) return;
+
+		if (choice === SETUP) {
+			const budget = await askBudget(ctx);
+			openNote(ctx, path.join(ctx.cwd, "lessons", `goals-${today()}.md`), "Goals");
+			pi.sendUserMessage(`/skill:curriculum Set up my goals. ${budgetLine(budget)}${learnerBlock(learnerSlice(ctx.cwd))}`, { expandPromptTemplates: true });
+			return;
+		}
+
+		if (NEXT && choice === NEXT && pick) {
+			const budget = await askBudget(ctx);
+			touchGoal(ctx.cwd, pick.goal.id);
+			if (pick.action === "learn") {
+				const slug = pick.fundamental!.slug;
+				const existing = loadLearner(ctx.cwd).lessons.find((l) => l.slug === slug);
+				const file = existing?.file && fs.existsSync(path.resolve(ctx.cwd, existing.file)) ? path.resolve(ctx.cwd, existing.file) : lessonFile(ctx.cwd, pick.fundamental!.title);
+				openNote(ctx, file, pick.fundamental!.title);
+				beginLearnSession(ctx.cwd, slug, budget);
+				const slice = learnerSlice(ctx.cwd, { lesson: slug, topics: [slug, pick.goal.id], dueByTopic: dueByTopic(ctx.cwd) });
+				pi.sendUserMessage(
+					`/skill:teach Next on the path. ${pick.reason} Teach me: ${pick.fundamental!.title}. Use lesson slug "${slug}" and note "${path.relative(ctx.cwd, file)}". Motivate it from the milestone "${pick.milestone.title}" (goal ${pick.goal.id}). ${budgetLine(budget)}${learnerBlock(slice)}`,
+					{ expandPromptTemplates: true },
+				);
+			} else {
+				const slug = `m-${pick.goal.id}-${pick.milestone.id}`;
+				const existing = loadLearner(ctx.cwd).lessons.find((l) => l.slug === slug);
+				const file = existing?.file && fs.existsSync(path.resolve(ctx.cwd, existing.file)) ? path.resolve(ctx.cwd, existing.file) : lessonFile(ctx.cwd, `${pick.goal.id} ${pick.milestone.title}`);
+				openNote(ctx, file, pick.milestone.title);
+				beginLearnSession(ctx.cwd, slug, budget);
+				const slice = learnerSlice(ctx.cwd, { lesson: slug, topics: [pick.goal.id, ...pick.milestone.needs], dueByTopic: dueByTopic(ctx.cwd) });
+				pi.sendUserMessage(
+					`/skill:teach Next on the path. ${pick.reason} Milestone attempt: "${pick.milestone.title}" (goal ${pick.goal.id}, milestone ${pick.milestone.id}, kind ${pick.milestone.kind}).${pick.milestone.description ? ` Done means: ${pick.milestone.description}` : ""} Use lesson slug "${slug}" and note "${path.relative(ctx.cwd, file)}". ${budgetLine(budget)}${learnerBlock(slice)}`,
+					{ expandPromptTemplates: true },
+				);
+			}
+			return;
+		}
+
+		if (choice === BRING) {
+			const text = (await ctx.ui.input("What did you bring?", "a file in inbox/, a URL, a question, an idea…"))?.trim();
+			if (!text) return;
+			const budget = await askBudget(ctx);
+			const file = lessonFile(ctx.cwd, text.replace(/^inbox\//, "").replace(/\.[a-z0-9]+$/i, ""));
+			const slug = path.basename(file, ".md");
+			openNote(ctx, file, text);
+			beginLearnSession(ctx.cwd, slug, budget);
+			const slice = learnerSlice(ctx.cwd, { topics: slug.split("-").filter((w) => w.length > 3), dueByTopic: dueByTopic(ctx.cwd) });
+			pi.sendUserMessage(
+				`/skill:teach Bring: ${text}. Use lesson slug "${slug}" and note "${path.relative(ctx.cwd, file)}". ${budgetLine(budget)}${learnerBlock(slice)}`,
+				{ expandPromptTemplates: true },
+			);
+			return;
+		}
 
 		if (choice === REVIEW) {
 			const budget = await askBudget(ctx);
