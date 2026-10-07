@@ -407,7 +407,6 @@ const PAGE = `<!doctype html>
 <title>Answer pad</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/contrib/auto-render.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <style>
 :root { --bg:#f6f5f2; --fg:#1d1d1f; --muted:#6e6e73; --card:#fff; --line:#e3e1dc; --accent:#2f6fde; --ok:#1f8a4c; --err:#c0392b; --warn:#b7791f; color-scheme: light; }
@@ -479,10 +478,22 @@ const MAX = 2000;
 
 function setStatus(msg, cls) { $("status").textContent = msg || ""; $("status").className = "status " + (cls || ""); }
 function fmt(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
+function esc(t) { return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]); }
 function renderPrompt(p) {
   const el = $("prompt");
-  try { el.innerHTML = window.marked ? marked.parse(p.prompt) : ""; if (!window.marked) el.textContent = p.prompt; } catch { el.textContent = p.prompt; }
-  try { if (window.renderMathInElement) renderMathInElement(el, { delimiters: [{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}], throwOnError:false }); } catch {}
+  // Set the math aside BEFORE markdown runs (marked mangles backslashes and
+  // underscores inside $...$), then render each span with KaTeX directly.
+  const spans = [];
+  const src = p.prompt
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => { spans.push({ m, d: true }); return "@@M" + (spans.length - 1) + "@@"; })
+    .replace(/\$([^$\n]+?)\$/g, (_, m) => { spans.push({ m, d: false }); return "@@M" + (spans.length - 1) + "@@"; });
+  let html;
+  try { html = window.marked ? marked.parse(src) : esc(src).replace(/\n/g, "<br>"); } catch { html = esc(src).replace(/\n/g, "<br>"); }
+  html = html.replace(/@@M(\d+)@@/g, (_, i) => {
+    const s = spans[+i];
+    try { return window.katex ? katex.renderToString(s.m, { displayMode: s.d, throwOnError: false }) : esc(s.m); } catch { return esc(s.m); }
+  });
+  el.innerHTML = html;
   $("kind").textContent = ({recall:"Recall", explain:"Explain it back", predict:"Predict", boundary:"Boundary", flaw:"Find the flaw", transfer:"Transfer", problem:"Problem"})[p.kind] || p.kind;
 }
 function updateButtons() {
