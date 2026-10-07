@@ -34,8 +34,11 @@ import { type Card as FsrsCard, type Grade, Rating, State, createEmptyCard, fsrs
 import {
 	type CheckKind,
 	calibrationLine,
+	closeSession,
 	currentSession,
 	learnerSlice,
+	loadEvents,
+	retentionSummary,
 	loadLearner,
 	noteMisconception,
 	openLessons,
@@ -85,6 +88,9 @@ const GRADUATE_AFTER = 3;
 const FLAW_MIN_REPS = 3;
 const FLAW_RATE = 0.2;
 const UNAIDED_EVERY = 5;
+const FIRST_REVIEW_DELAY_MS = 20 * 60 * 60 * 1000; // first review after a night's sleep, never the same evening
+const RETENTION_MIN_AGE_DAYS = 28; // unannounced long-delay checks: cards at least this old…
+const RETENTION_RATE = 0.25; // …get tagged as retention checks this often
 
 const RATINGS: Record<RatingName, Grade> = {
 	again: Rating.Again,
@@ -448,7 +454,7 @@ export default function review(pi: ExtensionAPI) {
 					topic: c.topic.trim().toLowerCase(),
 					lesson: params.lesson,
 					created: now.toISOString(),
-					fsrs: createEmptyCard(now),
+					fsrs: { ...createEmptyCard(now), due: new Date(now.getTime() + FIRST_REVIEW_DELAY_MS) },
 					history: [],
 					criterionSessions: 0,
 					graduated: false,
@@ -500,12 +506,16 @@ export default function review(pi: ExtensionAPI) {
 						: `Nothing due${params.topic ? ` for topic "${params.topic}"` : ""}. Next card due ${next ? humanizeUntil(next, now) : "never"}.\n${calibrationLine(learner.calibration)}`,
 				);
 			}
+			const isRetention = (c: ReviewCard) =>
+				(now.getTime() - new Date(c.created).getTime()) / 86400000 >= RETENTION_MIN_AGE_DAYS && hash01(`r${c.id}${session!.id}`) < RETENTION_RATE;
 			const fmt = (c: ReviewCard, check: CheckKind) => {
 				const state = State[c.fsrs.state];
 				const lapses = c.fsrs.lapses ? `, lapses ${c.fsrs.lapses}` : "";
 				const last = c.history.at(-1);
+				const retention = isRetention(c);
 				return [
-					`### ${c.id} [${c.kind}] topic: ${c.topic} (${state}, reps ${c.fsrs.reps}${lapses}, criterion sessions ${c.criterionSessions}${c.graduated ? ", graduated" : ""})`,
+					`### ${c.id} [${c.kind}] topic: ${c.topic} (${state}, reps ${c.fsrs.reps}${lapses}, criterion sessions ${c.criterionSessions}${c.graduated ? ", graduated" : ""})${retention ? " RETENTION CHECK" : ""}`,
+					retention ? "RETENTION: pose it unaided and unannounced — no hint, no warm-up, no reaction beyond 'noted' until the close; pass `retention: true` to `recall`. This is the outcome metric." : "",
 					`CHECK: ${check} — ${CHECK_INSTRUCTIONS[check]}`,
 					`FRONT: ${c.front}`,
 					`BACK (hidden from learner): ${c.back}`,
@@ -642,6 +652,21 @@ export default function review(pi: ExtensionAPI) {
 		},
 	});
 
+	pi.registerTool({
+		name: "session_close",
+		label: "session close",
+		description:
+			"Write the session's closing note (3-5 lines: what was worked on, what was hard and why, what's next) into the learner file. Call at the end of every learn or review session; the next session's slice shows it.",
+		renderCall: quietCall("session close"),
+		renderResult: quietResult(firstLine),
+		parameters: Type.Object({ note: Type.String({ description: "3-5 lines, concrete: names of concepts, the specific errors, the next step." }) }),
+		async execute(_id, params, _s, _u, ctx) {
+			const s = closeSession(ctx.cwd, params.note);
+			const ret = retentionSummary(loadEvents(ctx.cwd));
+			return textResult(s ? `Session ${s.id} closed.${ret.n ? ` Retention checks so far: ${ret.n}, accuracy ${Math.round(ret.accuracy * 100)}%.` : ""}` : "No session to close.");
+		},
+	});
+
 	// ── Commands ─────────────────────────────────────────────────────────
 
 	pi.registerCommand("review", {
@@ -696,6 +721,8 @@ export default function review(pi: ExtensionAPI) {
 			const openM = learner.misconceptions.filter((m) => m.status === "open").length;
 			if (openM) lines.push(`open misconceptions: ${openM}`);
 			lines.push(calibrationLine(learner.calibration));
+			const ret = retentionSummary(loadEvents(ctx.cwd));
+			if (ret.n) lines.push(`long-delay retention: ${ret.n} checks, ${Math.round(ret.accuracy * 100)}% correct`);
 			ctx.ui.notify(lines.join("\n"), "info");
 		},
 	});

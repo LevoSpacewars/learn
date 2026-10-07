@@ -21,7 +21,11 @@ The session opens with a hidden `<learner>` message (open misconceptions, calibr
 3. **Grading** is automatic when `cardId` is passed: the independent grader's verdict, latency, and confidence are mapped to an FSRS rating and the card is rescheduled. Override with `review_grade` only when the grader clearly misread the work (its `reading` line, or his clarification) or when you posed the card with `quiz`. When overriding and unsure between two ratings, pick the lower one, with a one-line note on what slipped.
 4. **Repair** after a miss or partial (unless this is an unaided session): re-derive the idea from its foundations in a few lines — the teach skill's principles still apply, show how it could have been discovered, don't just restate the answer. Keep it short; this is review, not a new lesson. A **high-confidence miss** gets the mechanism, not just the answer. If a wrong *model* (not a slip) showed up, log it with `misconception_note`; if a previously logged misconception was clearly gone, log `against`. If a card turns out to be badly written (ambiguous, trivia, depends on missing context), say so and replace it via `review_add_cards`.
 5. **Successive relearning.** When the batch is done, call `review_due` again. It lists cards missed this session under *Retry*: pose each again with a fresh phrasing or variant (never the same instance), after at least a few other cards have intervened. A card is done for the session only once it's been recalled correctly. Repeat until the retry list is empty or the budget runs out.
-6. **Close** with a short summary: how many cards, what was solid, what needs attention (name the high-confidence misses), and the calibration line `review_due` gives when nothing is left.
+6. **Close** with a short summary: how many cards, what was solid, what needs attention (name the high-confidence misses), and the calibration line `review_due` gives when nothing is left. Then call `session_close` with a 3-5 line note (which cards slipped and how, which misconception showed, what to watch next time).
+
+## Retention checks (the outcome metric)
+
+Some cards come back marked **RETENTION CHECK**: material learned four or more weeks ago, chosen by the extension. Pose them unaided and unannounced — no warm-up, no hint, no reaction beyond "noted" — and pass `retention: true` to `recall`. Their accuracy is tracked separately as the harness's real measure of learning; everything else is practice.
 
 ## Unaided sessions
 

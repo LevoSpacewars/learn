@@ -80,7 +80,30 @@ export interface SessionRecord {
 	lesson?: string;
 	unaided?: boolean;
 	ended?: string;
-	note?: string;
+	note?: string; // 3-5 lines written at close: what happened, what was hard, what's next
+}
+
+/**
+ * One graded answer. Appended to <cwd>/.learn/events.jsonl (never rewritten),
+ * so the struggle trail — what was asked, what he wrote, where it went wrong —
+ * survives across sessions and feeds the per-concept dossiers and the slice.
+ */
+export interface LearnEvent {
+	at: string;
+	session?: string;
+	source: "quiz" | "recall";
+	topic?: string; // lesson / fundamental slug
+	check?: CheckKind;
+	prompt: string; // truncated
+	answer?: string; // truncated (typed text, transcript, or "photo")
+	verdict: "correct" | "partial" | "incorrect" | "dontKnow" | "hint";
+	score?: number;
+	firstError?: string;
+	reading?: string;
+	confidence?: number;
+	latencyMs?: number;
+	cardId?: string;
+	retention?: boolean; // unannounced long-delay retention check (the outcome metric)
 }
 
 // ── Curriculum: goals, milestones, fundamentals ───────────────────────────
@@ -401,6 +424,130 @@ export function calibrationLine(events: CalibrationEvent[]): string {
 	);
 }
 
+// ── Event log (append-only) and concept dossiers ───────────────────────────
+
+const EVENT_TEXT_MAX = 400;
+
+export function eventsPath(cwd: string): string {
+	return path.join(cwd, ".learn", "events.jsonl");
+}
+
+function clip(t: string | undefined, n = EVENT_TEXT_MAX): string | undefined {
+	if (!t) return undefined;
+	const one = t.replace(/\s+/g, " ").trim();
+	return one.length > n ? `${one.slice(0, n - 1)}…` : one;
+}
+
+export function recordEvent(cwd: string, ev: Omit<LearnEvent, "at" | "session">): LearnEvent {
+	const session = currentSession(cwd);
+	const rec: LearnEvent = { at: new Date().toISOString(), session: session?.id, ...ev, prompt: clip(ev.prompt) ?? "", answer: clip(ev.answer), firstError: clip(ev.firstError), reading: clip(ev.reading) };
+	const file = eventsPath(cwd);
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	fs.appendFileSync(file, `${JSON.stringify(rec)}\n`, "utf8");
+	if (rec.topic) {
+		try {
+			writeDossier(cwd, rec.topic);
+		} catch {
+			// a dossier is a convenience; never fail the event
+		}
+	}
+	return rec;
+}
+
+export function loadEvents(cwd: string): LearnEvent[] {
+	const file = eventsPath(cwd);
+	if (!fs.existsSync(file)) return [];
+	return fs
+		.readFileSync(file, "utf8")
+		.split("\n")
+		.filter((l) => l.trim())
+		.map((l) => {
+			try {
+				return JSON.parse(l) as LearnEvent;
+			} catch {
+				return undefined;
+			}
+		})
+		.filter((e): e is LearnEvent => !!e);
+}
+
+export function closeSession(cwd: string, note: string): SessionRecord | undefined {
+	const store = loadLearner(cwd);
+	const s = store.sessions.at(-1);
+	if (!s) return undefined;
+	s.ended = new Date().toISOString();
+	s.note = note.trim();
+	saveLearner(cwd, store);
+	return s;
+}
+
+/** Accuracy on unannounced long-delay retention checks — the harness's outcome metric. */
+export function retentionSummary(events: LearnEvent[]): { n: number; accuracy: number } {
+	const r = events.filter((e) => e.retention && e.verdict !== "hint");
+	return { n: r.length, accuracy: r.length ? r.filter((e) => e.verdict === "correct").length / r.length : 0 };
+}
+
+function verdictMark(v: LearnEvent["verdict"]): string {
+	return v === "correct" ? "✓" : v === "partial" ? "◐" : v === "incorrect" ? "✗" : v === "dontKnow" ? "idk" : "hint";
+}
+
+/**
+ * knowledge/<slug>.md — one human-readable (Obsidian) dossier per concept:
+ * status, what it serves, open misconceptions, cards, and the evidence trail
+ * (latest first). Regenerated from the event log; safe to delete.
+ */
+export function writeDossier(cwd: string, slug: string): string {
+	const store = loadLearner(cwd);
+	const f = store.fundamentals.find((x) => x.slug === slug);
+	const lesson = store.lessons.find((l) => l.slug === slug);
+	const title = f?.title ?? lesson?.title ?? slug;
+	const status = fundamentalStatus(store, slug);
+	const serves: string[] = [];
+	for (const g of store.goals) for (const m of g.milestones) if (m.needs.includes(slug)) serves.push(`${g.title} → ${m.title}`);
+	const events = loadEvents(cwd).filter((e) => e.topic === slug).reverse();
+	const mis = store.misconceptions.filter((m) => m.topic === slug);
+	const lines = [
+		"---",
+		`slug: ${slug}`,
+		`status: ${status}`,
+		...(f?.domain ? [`domain: ${f.domain}`] : []),
+		`updated: ${new Date().toISOString()}`,
+		"---",
+		`# ${title}`,
+		"",
+		`**Status:** ${status}${f?.note ? ` — ${f.note}` : ""}`,
+		...(serves.length ? ["", "**Serves:**", ...serves.map((x) => `- ${x}`)] : []),
+		...(lesson ? ["", `**Lesson:** [[${(lesson.file ?? `lessons/${slug}.md`).replace(/^lessons\//, "").replace(/\.md$/, "")}]] (${lesson.status}${lesson.nodes.length ? `, ${lesson.nodes.filter((n) => n.status === "confirmed").length}/${lesson.nodes.length} nodes` : ""})${lesson.summary ? ` — ${lesson.summary}` : ""}`] : []),
+		...(mis.length ? ["", "## Misconceptions", ...mis.map((m) => `- [${m.status}] believed "${m.claim}" — truth: ${m.truth} (for ${m.evidence.filter((e) => e.kind === "for").length} / against ${m.evidence.filter((e) => e.kind === "against").length})`)] : []),
+		"",
+		`## Evidence (${events.length}, latest first)`,
+		...(events.length
+			? events.slice(0, 40).map((e) => {
+					const bits = [`${e.at.slice(0, 10)} ${e.source}${e.check ? `/${e.check}` : ""} ${verdictMark(e.verdict)}${e.score !== undefined ? ` ${Math.round(e.score * 100)}%` : ""}${e.confidence !== undefined ? ` (conf ${e.confidence}%)` : ""}${e.retention ? " [retention]" : ""}`];
+					bits.push(`  - asked: ${e.prompt}`);
+					if (e.answer) bits.push(`  - answered: ${e.answer}`);
+					if (e.firstError) bits.push(`  - first error: ${e.firstError}`);
+					return `- ${bits.join("\n")}`;
+				})
+			: ["- (none yet)"]),
+	];
+	const dir = path.join(cwd, "knowledge");
+	fs.mkdirSync(dir, { recursive: true });
+	const file = path.join(dir, `${slug}.md`);
+	fs.writeFileSync(file, `${lines.join("\n")}\n`, "utf8");
+	return file;
+}
+
+/** The struggle trail for a set of topics: recent non-correct events, newest first. */
+export function recentStruggles(cwd: string, topics: Set<string>, limit = 6): string[] {
+	const events = loadEvents(cwd).filter((e) => e.verdict !== "correct" && e.verdict !== "hint");
+	const relevant = topics.size ? events.filter((e) => e.topic && [...topics].some((t) => e.topic === t || e.topic!.includes(t) || t.includes(e.topic!))) : events;
+	return relevant
+		.slice(-limit)
+		.reverse()
+		.map((e) => `- ${e.at.slice(0, 10)} [${e.topic ?? "?"}${e.check ? `/${e.check}` : ""}] ${verdictMark(e.verdict)}${e.confidence !== undefined ? ` conf ${e.confidence}%` : ""}: ${clip(e.prompt, 120)}${e.firstError ? ` → ${clip(e.firstError, 140)}` : ""}`);
+}
+
 // ── Curriculum logic (the scheduler lives here, in code) ───────────────────
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -699,19 +846,22 @@ export function learnerSlice(cwd: string, opts: { lesson?: string; topics?: stri
 		for (const m of recentResolved) out.push(`- [${m.topic}] "${m.claim}" → resolved ${fmtDate(m.updated)}`);
 	}
 
+	const struggles = recentStruggles(cwd, topics);
+	if (struggles.length) out.push("## Recent struggles (what was asked → where it went wrong; re-test these, don't assume)", ...struggles);
+
 	const cal = store.calibration.filter((e) => topics.size === 0 || (e.topic && topics.has(e.topic)));
 	out.push(`## ${calibrationLine(cal.length >= 5 ? cal : store.calibration)}`);
+	const ret = retentionSummary(loadEvents(cwd));
+	if (ret.n) out.push(`## Long-delay retention checks: ${ret.n}, accuracy ${Math.round(ret.accuracy * 100)}% (the real outcome metric)`);
 
 	if (opts.dueByTopic && Object.keys(opts.dueByTopic).length) {
 		out.push("## Cards due: " + Object.entries(opts.dueByTopic).map(([t, n]) => `${t} ${n}`).join(", "));
 	}
 
-	const sessions = store.sessions.slice(-5);
+	const sessions = store.sessions.slice(-4);
 	if (sessions.length) {
-		out.push(
-			"## Recent sessions: " +
-				sessions.map((s) => `${fmtDate(s.at)} ${s.kind}${s.budgetMin ? ` ${s.budgetMin}min` : ""}${s.lesson ? ` (${s.lesson})` : ""}`).join("; "),
-		);
+		out.push("## Recent sessions");
+		for (const s of sessions) out.push(`- ${fmtDate(s.at)} ${s.kind}${s.budgetMin ? ` ${s.budgetMin}min` : ""}${s.lesson ? ` (${s.lesson})` : ""}${s.note ? `: ${s.note}` : ""}`);
 	}
 	return out.join("\n");
 }

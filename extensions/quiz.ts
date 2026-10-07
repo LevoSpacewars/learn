@@ -10,7 +10,7 @@ import {
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { plainMath } from "./review/plainmath.ts";
-import { recordCalibration } from "./review/store.ts";
+import { recordCalibration, recordEvent } from "./review/store.ts";
 
 // ────────────────────────────────────────────────────────────────────────────
 // quiz — a GRADED sibling of ask_user_question.
@@ -1049,6 +1049,20 @@ export default function quiz(pi: ExtensionAPI) {
 					return cancelledResult(params.question, mode, correctIndices, context);
 				}
 				const built = buildResult(params.question, context, mode, options, response, correctIndices, explanation, latencyMs);
+				try {
+					recordEvent(ctx.cwd, {
+						source: "quiz",
+						topic: params.topic?.trim().toLowerCase(),
+						prompt: params.question,
+						answer: response.dontKnow ? undefined : response.answers.map((a) => a.label).join(" | "),
+						verdict: response.dontKnow ? "dontKnow" : built.details.correct ? "correct" : "incorrect",
+						firstError: !response.dontKnow && !built.details.correct ? `chose: ${response.answers.map((a) => a.label).join(" | ")}; correct: ${correctIndices.map((i) => options[i - 1]?.label).join(" | ")}` : undefined,
+						confidence: response.dontKnow ? undefined : response.confidence,
+						latencyMs,
+					});
+				} catch {
+					// never block on bookkeeping
+				}
 				if (!response.dontKnow && response.confidence !== undefined) {
 					try {
 						recordCalibration(ctx.cwd, { topic: params.topic?.trim().toLowerCase(), confidence: response.confidence, correct: built.details.correct === true, source: "quiz", latencyMs });

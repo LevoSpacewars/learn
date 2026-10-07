@@ -30,7 +30,7 @@ import { type GradeResult, grade } from "./review/grader.ts";
 import { gradeCard, refreshReviewStatus } from "./review/index.ts";
 import { plainMath } from "./review/plainmath.ts";
 import { type PromptAnswer, setPending } from "./review/prompts.ts";
-import { type CheckKind, recordCalibration } from "./review/store.ts";
+import { type CheckKind, recordCalibration, recordEvent } from "./review/store.ts";
 
 type RecallStatus = "answered" | "hint" | "dontKnow" | "cancelled" | "unavailable";
 type Modality = "typed" | "photo" | "audio";
@@ -91,6 +91,7 @@ const RecallParams = Type.Object({
 	cardId: Type.Optional(Type.String({ description: "Review card id when this answers a due card; the card is graded automatically." })),
 	paper: Type.Optional(Type.Boolean({ description: "Suggest working on paper and sending a photo (default true for 'problem')." })),
 	rubric: Type.Optional(Type.String({ description: "Extra grading guidance for the grader, one line." })),
+	retention: Type.Optional(Type.Boolean({ description: "True when review_due marked this card RETENTION CHECK (unannounced long-delay test). Recorded as the outcome metric." })),
 });
 
 function createEditorTheme(theme: any): EditorTheme {
@@ -128,7 +129,7 @@ interface UiOutcome {
 
 async function askRecall(
 	ctx: any,
-	opts: { kind: CheckKind; prompt: string; paper: boolean; runGrade: (a: PromptAnswer, confidence: number) => Promise<GradeResult> },
+	opts: { kind: CheckKind; prompt: string; paper: boolean; reference: string; runGrade: (a: PromptAnswer, confidence: number) => Promise<GradeResult> },
 ): Promise<UiOutcome> {
 	const startedAt = Date.now();
 	const promptId = `p${startedAt.toString(36)}`;
@@ -290,6 +291,9 @@ async function askRecall(
 					if (graded.firstError) addWrapped(lines, theme.fg("warning", `First error: ${graded.firstError}`), width, " ");
 					lines.push("");
 					addWrapped(lines, theme.fg("text", graded.feedback), width, " ");
+					// Score yourself against the key points: the one thing shown to fix overconfidence.
+					lines.push("");
+					addWrapped(lines, theme.fg("muted", `Key points (reference): ${plainMath(opts.reference)}`), width, " ");
 				}
 				lines.push("");
 				add(theme.fg("dim", " Enter/Esc to continue"));
@@ -365,6 +369,7 @@ export default function recall(pi: ExtensionAPI) {
 				kind,
 				prompt: params.prompt,
 				paper,
+				reference: params.reference,
 				runGrade: (a, confidence) =>
 					grade({
 						cwd: ctx.cwd,
@@ -384,13 +389,22 @@ export default function recall(pi: ExtensionAPI) {
 			const details: RecallDetails = { ...base, status: outcome.status, phase: "done", modality, answerText, photos, latencyMs: outcome.latencyMs };
 
 			if (outcome.status === "cancelled") return result("Learner cancelled the prompt (Esc). Ask what they'd like to do.", details);
+			const logEvent = (verdict: "correct" | "partial" | "incorrect" | "dontKnow" | "hint", extra: Partial<Parameters<typeof recordEvent>[1]> = {}) => {
+				try {
+					recordEvent(ctx.cwd, { source: "recall", topic: params.topic?.trim().toLowerCase(), check: kind, prompt: params.prompt, answer: answerText ?? (photos?.length ? `photo: ${photos.join(", ")}` : undefined), verdict, latencyMs: outcome.latencyMs, cardId: params.cardId, retention: params.retention || undefined, ...extra });
+				} catch {
+					// never block on bookkeeping
+				}
+			};
 			if (outcome.status === "hint") {
+				logEvent("hint");
 				return result(
 					`Learner asked for a HINT before attempting (after ${Math.round(outcome.latencyMs / 1000)}s). No unaided attempt yet. Give one small hint and pose again.`,
 					details,
 				);
 			}
 			if (outcome.status === "dontKnow") {
+				logEvent("dontKnow");
 				if (params.cardId) {
 					const g = gradeCard(ctx.cwd, { id: params.cardId, rating: "again", note: "I don't know", check: kind, modality: "typed", latencyMs: outcome.latencyMs });
 					details.cardRating = g.rating;
@@ -404,6 +418,7 @@ export default function recall(pi: ExtensionAPI) {
 			details.confidence = confidence;
 			if (g) {
 				Object.assign(details, { verdict: g.verdict, score: g.score, reading: g.reading, firstError: g.firstError, feedback: g.feedback });
+				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading, confidence });
 				try {
 					recordCalibration(ctx.cwd, { topic: params.topic, confidence, correct: g.verdict === "correct", source: "recall", check: kind, cardId: params.cardId, latencyMs: outcome.latencyMs });
 				} catch {
