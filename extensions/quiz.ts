@@ -293,6 +293,7 @@ function buildResult(
 		const selectedStr = answers.map((a) => `${a.index}. ${a.label}`).join(", ");
 		text = `User answered ${verdict}.\nSelected: ${selectedStr}\nCorrect: ${correctStr}`;
 		if (note) text += `\nUser's note: ${note}`;
+		if (!correct) text += "\nNEXT STEP (required): say in 1-3 lines why the chosen option is wrong and what the distractor reveals, then EITHER pose a fresh variant of the same idea, OR drill down to the component behind the miss. Do not move on to a different strand until he has had another go.";
 	}
 	if (explanation) text += `\nExplanation: ${explanation}`;
 	if (!dontKnow && response.confidence !== undefined) {

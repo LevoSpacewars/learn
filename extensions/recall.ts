@@ -430,6 +430,9 @@ export default function recall(pi: ExtensionAPI) {
 							g.firstError ? `First error: ${g.firstError}` : "",
 							`Grader feedback (already shown to learner): ${g.feedback}`,
 							g.verdict !== "correct" && confidence >= 70 ? "HIGH-CONFIDENCE MISS: give richer feedback on the mechanism and re-test this soon." : "",
+							g.verdict !== "correct"
+								? "NEXT STEP (required): in 1-3 lines say what went wrong and why, then EITHER pose a fresh variant of the same thing with `recall`, OR drill down: pose the specific component that failed. Do not move on to a different strand until he has had another go at this one."
+								: "",
 						].join("\n")
 					: "Grader unavailable — grade this answer yourself.",
 				details.cardRating ? `Card ${params.cardId} graded ${details.cardRating} (override with review_grade if you disagree).` : "",
