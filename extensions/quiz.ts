@@ -1068,15 +1068,9 @@ export default function quiz(pi: ExtensionAPI) {
 			const options = normalizeOptions(
 				args.options as Array<{ label: string; value?: string; description?: string }> | undefined,
 			);
-			let text = theme.fg("toolTitle", theme.bold("quiz ")) + theme.fg("muted", args.question);
-			if (args.multiSelect) {
-				text += theme.fg("dim", " [multi-select]");
-			}
-			if (options.length > 0) {
-				const noun = options.length === 1 ? "option" : "options";
-				text += theme.fg("dim", ` (${options.length} ${noun})`);
-			}
-			return new Text(text, 0, 0);
+			// Quiet: the question is shown in the prompt itself; don't repeat it here.
+			void options;
+			return new Text(theme.fg("dim", args.multiSelect ? "quiz (multi-select)" : "quiz"), 0, 0);
 		},
 
 		renderResult(result, _options, theme) {

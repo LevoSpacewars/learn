@@ -422,6 +422,9 @@ export default function recall(pi: ExtensionAPI) {
 			].filter(Boolean);
 			return result(lines.join("\n"), details);
 		},
+		renderCall(args: any, theme: any) {
+			return new Text(theme.fg("dim", `recall · ${KIND_LABEL[(args?.kind as CheckKind) ?? "recall"] ?? "recall"}`), 0, 0);
+		},
 		renderResult(res: any, { expanded }: any, theme: any) {
 			const d = res.details as RecallDetails | undefined;
 			if (!d) return new Text(theme.fg("dim", "recall"), 0, 0);

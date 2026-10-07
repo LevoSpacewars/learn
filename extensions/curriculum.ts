@@ -14,6 +14,7 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import {
 	curriculumMap,
@@ -86,6 +87,15 @@ function textResult(text: string, details?: unknown) {
 	return { content: [{ type: "text" as const, text }], details };
 }
 
+function quietCall(label: string) {
+	return (_args: any, theme: any) => new Text(theme.fg("dim", label), 0, 0);
+}
+function quietResult(res: any, _opts: any, theme: any) {
+	const first = res.content?.[0];
+	const text = first?.type === "text" ? first.text : "";
+	return new Text(theme.fg("dim", text.split("\n")[0].slice(0, 120)), 0, 0);
+}
+
 export default function curriculum(pi: ExtensionAPI) {
 	if (process.env.PI_SUBAGENT_AGENT) return;
 
@@ -93,6 +103,8 @@ export default function curriculum(pi: ExtensionAPI) {
 		name: "goal_set",
 		label: "goal",
 		description: "Create or update a goal and its spine of milestones (real tasks in difficulty order, each with the fundamentals it needs). Used by the curriculum setup; also when a goal's spine changes.",
+		renderCall: quietCall("goal"),
+		renderResult: quietResult,
 		parameters: GoalSetParams,
 		async execute(_id, params, _s, _u, ctx) {
 			const g = upsertGoal(ctx.cwd, params);
@@ -104,6 +116,8 @@ export default function curriculum(pi: ExtensionAPI) {
 		name: "goal_progress",
 		label: "milestone",
 		description: "Mark a milestone in_progress when a session starts attempting it, or done when the learner has actually done it (with evidence). Done milestones mark their fundamentals solid.",
+		renderCall: quietCall("milestone"),
+		renderResult: quietResult,
 		parameters: GoalProgressParams,
 		async execute(_id, params, _s, _u, ctx) {
 			if (params.status === "done" && !params.evidence?.trim()) throw new Error("Evidence is required to mark a milestone done.");
@@ -117,6 +131,8 @@ export default function curriculum(pi: ExtensionAPI) {
 		name: "fundamental_set",
 		label: "fundamental",
 		description: "Register or update a fundamental (a shared prerequisite such as 'eigendecomposition' or 'boltzmann-distribution'): its domain, which milestones it serves, and optionally an explicit status after a placement probe.",
+		renderCall: quietCall("fundamental"),
+		renderResult: quietResult,
 		parameters: FundamentalParams,
 		async execute(_id, params, _s, _u, ctx) {
 			const f = upsertFundamental(ctx.cwd, params);
@@ -128,6 +144,8 @@ export default function curriculum(pi: ExtensionAPI) {
 		name: "curriculum_next",
 		label: "next on path",
 		description: "Ask the scheduler what comes next across all goals: attempt a ready milestone, or learn the fundamental that unlocks the nearest one. Returns the top picks with reasons. The pick is the default; the learner's interest can override it.",
+		renderCall: quietCall("next on path"),
+		renderResult: quietResult,
 		parameters: Type.Object({}),
 		async execute(_id, _params, _s, _u, ctx) {
 			const picks = nextOnPath(loadLearner(ctx.cwd));
@@ -147,6 +165,8 @@ export default function curriculum(pi: ExtensionAPI) {
 		label: "place",
 		description:
 			"Place something the learner brought (a paper, idea, question, chapter) into the graph: which goal and milestone it serves, which fundamentals it needs, and optionally a new milestone for it. Records the interest (which boosts that goal in the scheduler for a week) and returns the goal's current state.",
+		renderCall: quietCall("place"),
+		renderResult: quietResult,
 		parameters: PlaceParams,
 		async execute(_id, params, _s, _u, ctx) {
 			if (params.newMilestone && params.goal) {
@@ -172,6 +192,8 @@ export default function curriculum(pi: ExtensionAPI) {
 		name: "curriculum_map",
 		label: "curriculum map",
 		description: "The whole curriculum: every goal, its milestones with status and unmet needs, and all fundamentals with their status.",
+		renderCall: quietCall("curriculum map"),
+		renderResult: quietResult,
 		parameters: Type.Object({}),
 		async execute(_id, _params, _s, _u, ctx) {
 			return textResult(curriculumMap(loadLearner(ctx.cwd)));

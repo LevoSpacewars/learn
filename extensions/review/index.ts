@@ -26,6 +26,7 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -331,6 +332,20 @@ function textResult(text: string, details?: unknown) {
 	return { content: [{ type: "text" as const, text }], details };
 }
 
+// Quiet terminal: the learner reads the lesson in Obsidian, so tool calls
+// render as one dim word and results as one line (never a card's BACK).
+function quietCall(label: string) {
+	return (_args: any, theme: any) => new Text(theme.fg("dim", label), 0, 0);
+}
+function quietResult(summary: (details: any, text: string) => string) {
+	return (res: any, _opts: any, theme: any) => {
+		const first = res.content?.[0];
+		const text = first?.type === "text" ? first.text : "";
+		return new Text(theme.fg("dim", summary(res.details, text)), 0, 0);
+	};
+}
+const firstLine = (_d: any, t: string) => t.split("\n")[0].slice(0, 120);
+
 export interface GradeCardInput {
 	id: string;
 	rating: RatingName;
@@ -411,6 +426,8 @@ export default function review(pi: ExtensionAPI) {
 			"Prefer 'why'/'how' and application over trivia. Use kind 'problem' for skills best shown by working on paper.",
 			"Card quality rubric: the front has exactly one defensible answer; the back states the answer AND the reason; no yes/no fronts; no 'list all…' fronts; fronts don't leak the answer.",
 		],
+		renderCall: quietCall("save cards"),
+		renderResult: quietResult(firstLine),
 		parameters: AddParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const store = load(ctx.cwd);
@@ -454,6 +471,8 @@ export default function review(pi: ExtensionAPI) {
 		label: "review due",
 		description:
 			"Get the spaced-review cards due now, interleaved across topics, each with the CHECK the extension assigned for this session. Includes each card's back (the answer) — for YOUR grading only; never show it before the learner answers. Also lists cards that still need a retry this session.",
+		renderCall: quietCall("review due"),
+		renderResult: quietResult((d) => (d?.due !== undefined ? `${d.due} due${d.retry?.length ? `, ${d.retry.length} to retry` : ""}${d.unaided ? " · unaided" : ""}` : "nothing due")),
 		parameters: DueParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const store = load(ctx.cwd);
@@ -515,6 +534,8 @@ export default function review(pi: ExtensionAPI) {
 		label: "review grade",
 		description:
 			"Record how the learner did on a review card and reschedule it with FSRS. The `recall` tool grades cards automatically when given a cardId; use this to override, or for IMPLICIT credit: when a new lesson leans on an old card's idea and the learner uses it correctly unprompted, grade that card 'good' with modality 'implicit' (find its id with review_search).",
+		renderCall: quietCall("grade"),
+		renderResult: quietResult(firstLine),
 		parameters: GradeParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const r = gradeCard(ctx.cwd, params);
@@ -527,6 +548,8 @@ export default function review(pi: ExtensionAPI) {
 		name: "review_search",
 		label: "review search",
 		description: "Find existing cards by topic or text (ids, fronts, state). Use before adding cards to avoid duplicates, and to find a card for implicit credit.",
+		renderCall: quietCall("search cards"),
+		renderResult: quietResult((_d, t) => `${t.split("\n").length} card(s)`),
 		parameters: SearchParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const store = load(ctx.cwd);
@@ -552,6 +575,8 @@ export default function review(pi: ExtensionAPI) {
 		label: "lesson plan",
 		description:
 			"Register (or replace) a lesson's plan: its nodes in teaching order. Returns the critical-thinking CHECK assigned to each node — the extension decides this, you execute it. Call right after the learner okays the plan, and again if the plan changes.",
+		renderCall: quietCall("lesson plan"),
+		renderResult: quietResult(firstLine),
 		parameters: LessonPlanParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const lesson = upsertLesson(ctx.cwd, params);
@@ -565,6 +590,8 @@ export default function review(pi: ExtensionAPI) {
 		label: "lesson node",
 		description:
 			"Update one node of the current lesson: status (confirmed only after the explain-back lands), hint count, whether an unaided attempt came before any hint, and a one-line note.",
+		renderCall: quietCall("node"),
+		renderResult: quietResult(firstLine),
 		parameters: LessonNodeParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const node = updateNode(ctx.cwd, params.slug, params.id, params);
@@ -576,6 +603,8 @@ export default function review(pi: ExtensionAPI) {
 		name: "lesson_status",
 		label: "lesson status",
 		description: "Mark a lesson paused (with a two-line summary of where to pick up) or done. Call when the learner stops, the time budget runs out, or the goal node is confirmed.",
+		renderCall: quietCall("lesson"),
+		renderResult: quietResult(firstLine),
 		parameters: LessonStatusParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			if (params.status === "paused" && !params.summary?.trim()) throw new Error("A summary is required when pausing.");
@@ -589,6 +618,8 @@ export default function review(pi: ExtensionAPI) {
 		label: "misconception",
 		description:
 			"Log evidence about a wrong model the learner holds (kind 'for') or has just demonstrated they no longer hold (kind 'against'). Entries resolve automatically after two consecutive 'against' demonstrations. Use only for genuine model errors, not slips.",
+		renderCall: quietCall("misconception"),
+		renderResult: quietResult(firstLine),
 		parameters: MisconceptionParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const m = noteMisconception(ctx.cwd, params);
@@ -603,6 +634,8 @@ export default function review(pi: ExtensionAPI) {
 		label: "learner slice",
 		description:
 			"The relevant slice of the learner file: the named lesson's nodes and status, other open lessons, open misconceptions touching the given topics, calibration, due cards. Call when a lesson crosses into a new concept (pass its topics), not every turn.",
+		renderCall: quietCall("learner slice"),
+		renderResult: quietResult(() => "loaded"),
 		parameters: SliceParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			return textResult(learnerSlice(ctx.cwd, { lesson: params.lesson, topics: params.topics, dueByTopic: dueByTopic(ctx.cwd) }));
