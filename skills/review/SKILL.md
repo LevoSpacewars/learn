@@ -7,7 +7,7 @@ description: Run a spaced review session over due review cards — pose each car
 
 Spaced review brings back what was learned in past lessons right before it would be forgotten. Your job is to make each retrieval *effortful and honest*, let the independent grader score it, repair any gap you find — briefly — and keep going until every missed card has been recalled once (successive relearning). Interleaving is built in: cards arrive mixed across topics, and **you never say which topic a card is from** — choosing the method is part of the task.
 
-The first message carries a time budget and may carry a `<learner>` block (open misconceptions, calibration). Read it; then start.
+The session opens with a hidden `<learner>` message (open misconceptions, calibration, cards due) and a first user message with the time budget. Read both; then start.
 
 ## Process
 

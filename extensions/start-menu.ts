@@ -28,7 +28,9 @@ import { beginLearnSession, beginReviewSession, countDue, dueByTopic } from "./r
 import { learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
 
 function today(): string {
-	return new Date().toISOString().slice(0, 10);
+	const d = new Date();
+	const p = (n: number) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 function lessonFile(cwd: string, topic: string): string {
@@ -44,8 +46,15 @@ function budgetLine(min: number | undefined): string {
 	return min ? `Time budget: ${min} min.` : "No fixed time budget.";
 }
 
+// The learner slice is delivered as a hidden custom message (display: false)
+// on the next agent start, so the terminal shows only the one-line prompt.
+// Stashed on globalThis because pi isolates module state per extension file.
+function stashSlice(text: string): string {
+	(globalThis as any).__learnPendingSlice = text;
+	return "";
+}
 function learnerBlock(text: string): string {
-	return `\n\n<learner>\n${text}\n</learner>`;
+	return stashSlice(text);
 }
 
 export default function startMenu(pi: ExtensionAPI) {
@@ -196,6 +205,14 @@ export default function startMenu(pi: ExtensionAPI) {
 			{ expandPromptTemplates: true },
 		);
 	}
+
+	pi.on("before_agent_start", async () => {
+		const g = globalThis as any;
+		const slice = g.__learnPendingSlice as string | undefined;
+		if (!slice) return undefined;
+		g.__learnPendingSlice = undefined;
+		return { message: { customType: "learner-slice", content: `<learner>\n${slice}\n</learner>`, display: false } };
+	});
 
 	pi.on("session_start", async (event, ctx: any) => {
 		if (!ctx.hasUI) return;
