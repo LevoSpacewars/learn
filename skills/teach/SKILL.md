@@ -89,7 +89,7 @@ The session opens with a hidden `<learner>` message (the relevant slice of his l
 
 Read the whole `<learner>` message before anything else.
 
-- **Resuming a lesson** ("Continue …"): don't re-probe confirmed nodes. Re-check the *last confirmed* node with one quick `recall` (a fresh variant) to warm it up, then carry on from the first pending node. The assigned CHECK for each node is in the slice.
+- **Resuming a lesson** ("Continue …"): don't re-probe confirmed nodes. Re-check the *last confirmed* node with one quick `recall` (a fresh variant) to warm it up, then carry on from the first pending node. The assigned CHECK for each node is in the slice. If the lesson has **no nodes yet** (it stopped during the probe or plan), `read` the lesson note (its path is in the slice) to recover exactly what was asked and answered, count those questions against the probe cap, and continue from there — never restart the probe.
 - **New lesson:** the slice tells you which foundations he already holds (confirmed nodes in related lessons, resolved misconceptions) — build from there, don't re-map them. When the lesson later crosses into a concept the slice didn't cover, call `learner_slice` with that topic; don't call it every turn.
 - **Time budget:** plan so the goal (or a clean pause point) fits. When ~5 minutes remain, stop teaching new nodes and close the session (see "Ending a session").
 
@@ -108,7 +108,11 @@ If, reading the finished set cold, you can still tell which is right without kno
 
 You can't teach into his zone of proximal development without knowing where its edges are, and you can't aim the teaching without knowing what he's actually reaching for. Two separate unknowns, two separate tools — keep the boundary clean:
 
-**1a. His current level — this is a mapping job, not a spot-check.** Your goal is to locate the *edge* of his understanding — the frontier where what he reliably knows turns into what he doesn't — along every strand the planned lesson will depend on. Until you've actually found that edge, you cannot teach into it, so this phase gets as long and detailed as it needs to be (within the budget). Use `quiz` for fast bracketing where crisp distractors exist, and `recall` where the honest test is "can he say it" — recognition is easier than recall and inflates the map.
+**1a. His current level — this is a mapping job, not a spot-check.** Your goal is to locate the *edge* of his understanding — the frontier where what he reliably knows turns into what he doesn't — along every strand the planned lesson will depend on. Use `quiz` for fast bracketing where crisp distractors exist, and `recall` where the honest test is "can he say it" — recognition is easier than recall and inflates the map.
+
+**The probe has a hard cap.** At most **six** gradable questions, or a quarter of the time budget (fifteen minutes when there is none), whichever comes first. Then plan with the map you have and keep bracketing *inside* the lesson — every node's check is another probe. A probe that never ends is the single worst failure mode of this skill: it feels like an exam with no teaching, and nothing gets explained. If a strand is still unmapped when the cap hits, say so in the plan and put a check on it early.
+
+**Narrate the phase, always.** One line before each question in this phase: *"Mapping — question 3 of at most 6: this one checks whether the ODE strand holds."* And one line when you move on: *"That's the map; here's the plan."* He must never have to wonder what you're doing or why.
 
 **The edge is only located when it's bracketed.** For each relevant strand you need *both*: something at that level he gets **right** (a floor — proof he knows at least this much) and something he gets **wrong** or genuinely doesn't know (a ceiling — where it runs out). The edge sits between them. One side alone tells you almost nothing.
 
@@ -195,3 +199,5 @@ Everything written in a session is rendered to him through Obsidian, which rende
 - Centered display math: `$$` fenced on its own lines, e.g. `$$\n f(x) \n$$`
 
 If LaTeX can be used, it should be. Write $f(x) = x^2$, not `f(x) = x^2`.
+
+**But prompts are read in the terminal, raw.** Everything inside `quiz` (question, options) and `recall` (prompt) is shown in the terminal and on the phone, not in Obsidian, so keep that LaTeX *simple*: no spacing macros (`\,` `\;` `\!` `\ ` — they show up as stray commas and backslashes), no `\tfrac`/`\dfrac` (use `\frac` or `a/b`), no `\underset`/`\overset`, no `\text{}` for units (write `k = 0.1 s^-1` or `k = 0.1/s`), no `\mathbf`. Products are `k S` or `k \cdot S`, never `k\,S`. Save the full typesetting for the lesson prose.

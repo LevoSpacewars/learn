@@ -9,6 +9,7 @@ import {
 	wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import { plainMath } from "./review/plainmath.ts";
 import { recordCalibration } from "./review/store.ts";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -131,9 +132,9 @@ function normalizeOptions(
 	const seen = new Set<string>();
 	return (options || [])
 		.map((option) => ({
-			label: option.label.trim(),
+			label: plainMath(option.label.trim()),
 			value: option.value?.trim() || option.label.trim(),
-			description: option.description?.trim() || undefined,
+			description: option.description ? plainMath(option.description.trim()) : undefined,
 		}))
 		.filter((option) => {
 			if (option.label.length === 0) return false;
@@ -421,7 +422,7 @@ function renderFeedback(
 	}
 	if (explanation) {
 		lines.push("");
-		addWrapped(lines, theme.fg("text", explanation), width, " ");
+		addWrapped(lines, theme.fg("text", plainMath(explanation)), width, " ");
 	}
 	lines.push("");
 	add(theme.fg("dim", " Enter/Esc to continue"));
@@ -430,10 +431,10 @@ function renderFeedback(
 // Top border + question + optional context. Shared by both components.
 function pushHeader(lines: string[], theme: any, width: number, question: string, context: string | undefined): void {
 	lines.push(truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
-	addWrapped(lines, theme.fg("text", question), width, " ");
+	addWrapped(lines, theme.fg("text", plainMath(question)), width, " ");
 	if (context) {
 		lines.push("");
-		addWrapped(lines, theme.fg("muted", context), width, " ");
+		addWrapped(lines, theme.fg("muted", plainMath(context)), width, " ");
 	}
 }
 

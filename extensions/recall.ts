@@ -28,6 +28,7 @@ import { Type } from "@sinclair/typebox";
 import * as path from "node:path";
 import { type GradeResult, grade } from "./review/grader.ts";
 import { gradeCard, refreshReviewStatus } from "./review/index.ts";
+import { plainMath } from "./review/plainmath.ts";
 import { type PromptAnswer, setPending } from "./review/prompts.ts";
 import { type CheckKind, recordCalibration } from "./review/store.ts";
 
@@ -257,7 +258,7 @@ async function askRecall(
 			add(theme.fg("accent", "─".repeat(width)));
 			add(theme.fg("accent", ` ${KIND_LABEL[opts.kind]}`) + (opts.paper ? theme.fg("dim", "  · work on paper and send a photo from your phone, or type") : ""));
 			lines.push("");
-			addWrapped(lines, theme.fg("text", opts.prompt), width, " ");
+			addWrapped(lines, theme.fg("text", plainMath(opts.prompt)), width, " ");
 			lines.push("");
 			if (phase === "answer") {
 				if (showQr) {

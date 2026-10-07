@@ -29,4 +29,4 @@ Every fifth review session is an **unaided test** (`review_due` says so). No hin
 
 ## Formatting
 
-Same as the teach skill: all math in LaTeX (`$...$`, `$$...$$`), since the session is read in Obsidian.
+Same as the teach skill: all math in LaTeX (`$...$`, `$$...$$`) in prose, since the session is read in Obsidian — but `recall` prompts and `quiz` options are read raw in the terminal and on the phone, so keep their LaTeX simple: no spacing macros (`\,` `\;`), no `\tfrac`, no `\text{}` units, products as `k S` or `k \cdot S`.

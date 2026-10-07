@@ -93,7 +93,7 @@ export default function startMenu(pi: ExtensionAPI) {
 		const BRING = "Bring something (paper, idea, question)";
 		const SETUP = "Set up my goals (one-time)";
 		const continues = open.map((l) => ({
-			label: `Continue: ${l.title} (${l.nodes.filter((n) => n.status === "confirmed").length}/${l.nodes.length})`,
+			label: `Continue: ${l.title} (${l.nodes.length ? `${l.nodes.filter((n) => n.status === "confirmed").length}/${l.nodes.length}` : "still mapping"})`,
 			lesson: l,
 		}));
 		let pick: ReturnType<typeof nextOnPath>[number] | undefined;
@@ -127,6 +127,7 @@ export default function startMenu(pi: ExtensionAPI) {
 				const existing = loadLearner(ctx.cwd).lessons.find((l) => l.slug === slug);
 				const file = existing?.file && fs.existsSync(path.resolve(ctx.cwd, existing.file)) ? path.resolve(ctx.cwd, existing.file) : lessonFile(ctx.cwd, pick.fundamental!.title);
 				openNote(ctx, file, pick.fundamental!.title);
+				upsertLesson(ctx.cwd, { slug, title: pick.fundamental!.title, file: path.relative(ctx.cwd, file) });
 				beginLearnSession(ctx.cwd, slug, budget);
 				const slice = learnerSlice(ctx.cwd, { lesson: slug, topics: [slug, pick.goal.id], dueByTopic: dueByTopic(ctx.cwd) });
 				pi.sendUserMessage(
@@ -138,6 +139,7 @@ export default function startMenu(pi: ExtensionAPI) {
 				const existing = loadLearner(ctx.cwd).lessons.find((l) => l.slug === slug);
 				const file = existing?.file && fs.existsSync(path.resolve(ctx.cwd, existing.file)) ? path.resolve(ctx.cwd, existing.file) : lessonFile(ctx.cwd, `${pick.goal.id} ${pick.milestone.title}`);
 				openNote(ctx, file, pick.milestone.title);
+				upsertLesson(ctx.cwd, { slug, title: pick.milestone.title, file: path.relative(ctx.cwd, file) });
 				beginLearnSession(ctx.cwd, slug, budget);
 				const slice = learnerSlice(ctx.cwd, { lesson: slug, topics: [pick.goal.id, ...pick.milestone.needs], dueByTopic: dueByTopic(ctx.cwd) });
 				pi.sendUserMessage(
@@ -155,6 +157,7 @@ export default function startMenu(pi: ExtensionAPI) {
 			const file = lessonFile(ctx.cwd, text.replace(/^inbox\//, "").replace(/\.[a-z0-9]+$/i, ""));
 			const slug = path.basename(file, ".md");
 			openNote(ctx, file, text);
+			upsertLesson(ctx.cwd, { slug, title: text.slice(0, 80), file: path.relative(ctx.cwd, file) });
 			beginLearnSession(ctx.cwd, slug, budget);
 			const slice = learnerSlice(ctx.cwd, { topics: slug.split("-").filter((w) => w.length > 3), dueByTopic: dueByTopic(ctx.cwd) });
 			pi.sendUserMessage(
@@ -198,6 +201,7 @@ export default function startMenu(pi: ExtensionAPI) {
 		const file = lessonFile(ctx.cwd, topic);
 		const slug = path.basename(file, ".md");
 		openNote(ctx, file, topic);
+		upsertLesson(ctx.cwd, { slug, title: topic, file: path.relative(ctx.cwd, file) });
 		beginLearnSession(ctx.cwd, slug, budget);
 		const slice = learnerSlice(ctx.cwd, { topics: slug.split("-").filter((w) => w.length > 3), dueByTopic: dueByTopic(ctx.cwd) });
 		pi.sendUserMessage(
