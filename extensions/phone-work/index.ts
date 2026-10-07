@@ -152,6 +152,18 @@ function saveImages(cwd: string, images: Array<{ data: string; mimeType: string 
 	});
 }
 
+/** Shared with recall.ts (which can draw the QR inside an open prompt). */
+interface PhoneShared {
+	url?: string;
+	qrLines?: string[];
+	connected: boolean;
+}
+function shared(): PhoneShared {
+	const g = globalThis as any;
+	if (!g.__learnPhone) g.__learnPhone = { connected: false } satisfies PhoneShared;
+	return g.__learnPhone as PhoneShared;
+}
+
 export default function phoneWork(pi: ExtensionAPI) {
 	if (process.env.PI_SUBAGENT_AGENT) return;
 
@@ -159,12 +171,58 @@ export default function phoneWork(pi: ExtensionAPI) {
 	let url: string | undefined;
 	let latestCtx: any;
 	let startError: string | undefined;
+	let widgetShown = false;
+
+	function qrLines(): string[] {
+		const sh = shared();
+		if (sh.qrLines) return sh.qrLines;
+		if (!url) return [];
+		let qr = "";
+		qrcode.generate(url, { small: true }, (q: string) => (qr = q));
+		sh.qrLines = [...qr.split("\n").filter((l) => l.trim()), "Scan with your phone (Tailscale on) or open:", url, "Bookmark it — the link stays the same. Hides once the phone connects. /phone hide to dismiss."];
+		return sh.qrLines;
+	}
+
+	function showWidget(ctx: any) {
+		const lines = qrLines();
+		if (lines.length === 0) return;
+		widgetShown = true;
+		// A component, not a string[]: pi cuts string widgets off at 10
+		// lines, which chops the QR code in half.
+		ctx.ui.setWidget("phone-work", () => ({
+			render: (width: number) =>
+				lines.flatMap((l) => {
+					const w = Math.max(1, width - 1);
+					const out = [];
+					for (let i = 0; i < l.length; i += w) out.push(" " + l.slice(i, i + w));
+					return out.length ? out : [""];
+				}),
+			invalidate: () => {},
+		}));
+	}
+
+	function hideWidget(ctx: any) {
+		if (!widgetShown) return;
+		widgetShown = false;
+		ctx.ui.setWidget("phone-work", undefined);
+	}
+
+	/** The phone reached us: remember it and drop the QR code from the screen. */
+	function phoneSeen() {
+		const sh = shared();
+		const first = !sh.connected;
+		sh.connected = true;
+		if (first && latestCtx) {
+			hideWidget(latestCtx);
+			setStatus();
+		}
+	}
 
 	function setStatus() {
 		const ctx = latestCtx;
 		if (!ctx) return;
 		const theme = ctx.ui.theme;
-		if (url) ctx.ui.setStatus("phone-work", theme.fg("accent", "📱 ") + theme.fg("dim", "phone ready"));
+		if (url) ctx.ui.setStatus("phone-work", theme.fg("accent", "📱 ") + theme.fg("dim", shared().connected ? "phone connected" : "phone ready · type qr in a prompt"));
 		else ctx.ui.setStatus("phone-work", startError ? theme.fg("dim", `📱 ${startError}`) : undefined);
 	}
 
@@ -190,7 +248,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 
 		const answered = answerPending({ source: "phone", text: payload.note?.trim() || undefined, photos: saved.map(({ file, data, mimeType }) => ({ file, data, mimeType })) });
 		if (answered) {
-			ctx.ui.setWidget("phone-work", undefined);
+			hideWidget(ctx);
 			ctx.ui.notify("📱 Photo received as your answer", "info");
 			return json(res, 200, { ok: true, answered: true, files: names });
 		}
@@ -203,7 +261,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 		];
 		const idle = typeof ctx.isIdle === "function" ? ctx.isIdle() : true;
 		pi.sendUserMessage(content, idle ? undefined : { deliverAs: "followUp" });
-		ctx.ui.setWidget("phone-work", undefined);
+		hideWidget(ctx);
 		ctx.ui.notify(`📱 Received ${names.length} photo${names.length > 1 ? "s" : ""}${idle ? "" : " (queued until the agent finishes)"}`, "info");
 		json(res, 200, { ok: true, queued: !idle, files: names });
 	}
@@ -263,8 +321,12 @@ export default function phoneWork(pi: ExtensionAPI) {
 			const u = new URL(req.url ?? "/", "http://x");
 			if (!tokenOk(u.searchParams.get("t"), token)) return send(res, 403, "text/plain", "Forbidden");
 			if (req.method === "GET" && u.pathname === "/") return send(res, 200, "text/html; charset=utf-8", PAGE);
-			if (req.method === "GET" && u.pathname === "/ping") return json(res, 200, { ok: true });
+			if (req.method === "GET" && u.pathname === "/ping") {
+				phoneSeen();
+				return json(res, 200, { ok: true });
+			}
 			if (req.method === "GET" && u.pathname === "/prompt") {
+				phoneSeen();
 				const p = getPending();
 				return json(res, 200, { now: Date.now(), pending: p ? { id: p.id, kind: p.kind, prompt: p.prompt, startedAt: p.startedAt } : null });
 			}
@@ -289,8 +351,12 @@ export default function phoneWork(pi: ExtensionAPI) {
 		});
 		s.listen(PORT, host, () => {
 			url = `http://${host}:${PORT}/?t=${token}`;
+			shared().url = url;
+			shared().qrLines = undefined;
 			startError = undefined;
 			setStatus();
+			// Show the QR code until the phone connects, so it's never needed mid-question.
+			if (latestCtx?.hasUI && !shared().connected) showWidget(latestCtx);
 		});
 	}
 
@@ -312,7 +378,8 @@ export default function phoneWork(pi: ExtensionAPI) {
 		handler: async (args, ctx: any) => {
 			latestCtx = ctx;
 			if (args.trim() === "hide") {
-				ctx.ui.setWidget("phone-work", undefined);
+				widgetShown = true;
+				hideWidget(ctx);
 				return;
 			}
 			start(ctx);
@@ -327,26 +394,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 				);
 				return;
 			}
-			let qr = "";
-			qrcode.generate(url, { small: true }, (q: string) => (qr = q));
-			const lines = [
-				...qr.split("\n").filter((l) => l.trim()),
-				"Scan with your phone (Tailscale on) or open:",
-				url,
-				"Bookmark it — the link stays the same. /phone hide to dismiss.",
-			];
-			// A component, not a string[]: pi cuts string widgets off at 10
-			// lines, which chops the QR code in half.
-			ctx.ui.setWidget("phone-work", () => ({
-				render: (width: number) =>
-					lines.flatMap((l) => {
-						const w = Math.max(1, width - 1);
-						const out = [];
-						for (let i = 0; i < l.length; i += w) out.push(" " + l.slice(i, i + w));
-						return out.length ? out : [""];
-					}),
-				invalidate: () => {},
-			}));
+			showWidget(ctx);
 		},
 	});
 }

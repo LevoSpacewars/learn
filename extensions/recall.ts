@@ -141,6 +141,7 @@ async function askRecall(
 		let gradeError: string | undefined;
 		let cachedLines: string[] | undefined;
 		let cachedWidth = -1;
+		let showQr = false;
 		const editor = new Editor(tui, createEditorTheme(theme));
 		editor.focused = true;
 		editor.disableSubmit = true; // Enter is intercepted below so the buffer isn't cleared
@@ -203,6 +204,13 @@ async function askRecall(
 				if (matchesKey(data, Key.enter)) {
 					const text = editor.getText().trim();
 					if (!text) return;
+					if (/^(qr|phone)$/i.test(text)) {
+						// Show the answer-pad QR code inside the prompt (the phone may not be connected yet).
+						showQr = !showQr;
+						editor.setText("");
+						refresh();
+						return;
+					}
 					if (text === "?") return void receive({ source: "tui", hint: true });
 					if (/^(idk|i don'?t know)$/i.test(text)) return void receive({ source: "tui", dontKnow: true });
 					receive({ source: "tui", text });
@@ -252,9 +260,15 @@ async function askRecall(
 			addWrapped(lines, theme.fg("text", opts.prompt), width, " ");
 			lines.push("");
 			if (phase === "answer") {
+				if (showQr) {
+					const sh = (globalThis as any).__learnPhone as { url?: string; qrLines?: string[] } | undefined;
+					const qr = sh?.qrLines ?? (sh?.url ? [sh.url] : ["Phone server not running (is Tailscale on?)"]);
+					for (const l of qr) add(" " + l);
+					lines.push("");
+				}
 				for (const l of editor.render(Math.max(1, width - 2))) lines.push(l);
 				lines.push("");
-				add(theme.fg("dim", " Enter submit · Ctrl+J newline · ? = hint · idk = I don't know · 📱 photo answers too · Esc cancel"));
+				add(theme.fg("dim", " Enter submit · Ctrl+J newline · ? = hint · idk = I don't know · qr = phone link · Esc cancel"));
 			} else if (phase === "confidence") {
 				const filled = Math.round(confidence / 5);
 				const bar = "█".repeat(filled) + "░".repeat(20 - filled);
