@@ -1,0 +1,1405 @@
+{
+	"version": 1,
+	"lessons": [
+		{
+			"slug": "let-s-continue-from-the-last-lesson",
+			"title": "HDX kinetics math (rates, Markov chains, first-order decay)",
+			"nodes": [
+				{
+					"id": "R1",
+					"label": "rate = prob k·dt per tiny dt, memoryless (definition)",
+					"kind": "foundation",
+					"check": "predict",
+					"status": "pending",
+					"hints": 0
+				},
+				{
+					"id": "D1",
+					"label": "bookkeeping → dS/dt = −kS → S = e^(−kt)",
+					"kind": "derived",
+					"check": "explain",
+					"status": "pending",
+					"hints": 0
+				},
+				{
+					"id": "D2",
+					"label": "consequences: 1−e^(−kt), density k e^(−kt), mean 1/k",
+					"kind": "derived",
+					"check": "boundary",
+					"status": "pending",
+					"hints": 0
+				},
+				{
+					"id": "R2",
+					"label": "next distribution = current mixed through rows of P",
+					"kind": "foundation",
+					"check": "predict",
+					"status": "pending",
+					"hints": 0
+				},
+				{
+					"id": "D3",
+					"label": "two-step propagation + stationary = balanced flows",
+					"kind": "derived",
+					"check": "flaw",
+					"status": "pending",
+					"hints": 0
+				},
+				{
+					"id": "D4",
+					"label": "tiny time step: P ≈ I + Q dt → generator Q",
+					"kind": "derived",
+					"check": "explain",
+					"status": "pending",
+					"hints": 0
+				},
+				{
+					"id": "G",
+					"label": "C ⇌ O → X as rate matrix Q + master equation",
+					"kind": "goal",
+					"check": "transfer",
+					"status": "pending",
+					"hints": 0
+				}
+			],
+			"status": "open",
+			"created": "2026-10-07T01:30:46.204Z",
+			"updated": "2026-10-08T03:12:50.347Z",
+			"file": "lessons/let-s-continue-from-the-last-lesson.md",
+			"goal": "Understand the math behind the HDX application: rates, first-order decay, transition matrices, generator Q; end by writing C⇌O→X as a rate matrix + master equation.",
+			"summary": "Stopped during the probe (no plan yet). Mapped so far (see this note and lessons/i-had-ai-build-an-application-for-me-and-i-wanted-.md): rate meaning = open misconception; 2x2 transition matrix correct, two-step propagation unclear; row-vector times matrix correct; first-order decay dS/dt = -kS was read as dS/dt = -k (linear vs exponential). Next: finish the probe quickly (at most 2 more questions), present the plan, start teaching from first-order decay.",
+			"plan": "graph TD\n  R1[\"R1: rate = prob k·dt per tiny dt, memoryless\"]\n  R2[\"R2: next distribution = current mixed through rows of P\"]\n  D1[\"D1: bookkeeping → dS/dt = −kS → S = e^(−kt)\"]\n  D2[\"D2: consequences: 1−e^(−kt), density k·e^(−kt), mean 1/k\"]\n  D3[\"D3: two-step propagation + stationary = balanced flows\"]\n  D4[\"D4: tiny time step: P ≈ I + Q·dt → generator Q\"]\n  G[\"G: C ⇌ O → X as rate matrix Q + master equation\"]\n  R1 --> D1 --> D2\n  R2 --> D3\n  R1 --> D4\n  D3 --> D4\n  D2 --> G\n  D4 --> G"
+		}
+	],
+	"misconceptions": [
+		{
+			"id": "mmuxe4lzk7w88",
+			"topic": "i-had-ai-build-an-application-for-me-and-i-wanted-",
+			"claim": "A rate k (s^-1) is the probability of the event happening in one unit of time (e.g. k=0.1/s means a 10% chance per second).",
+			"truth": "A rate is probability per unit time only in the dt→0 limit (hazard): P(event in dt) = k dt. Over a finite interval Δt the probability is 1-e^{-kΔt}, which is ≈ kΔt only when kΔt ≪ 1.",
+			"evidence": [
+				{
+					"at": "2026-10-07T00:49:53.744Z",
+					"kind": "for",
+					"note": "Picked 'probability exactly 0.1 per 1 s' at 100% confidence during probe."
+				}
+			],
+			"status": "open",
+			"created": "2026-10-07T00:49:53.744Z",
+			"updated": "2026-10-07T00:49:53.744Z"
+		}
+	],
+	"calibration": [
+		{
+			"at": "2026-10-02T04:43:27.479Z",
+			"topic": "boltzmann-partition",
+			"confidence": 30,
+			"correct": false,
+			"source": "quiz",
+			"latencyMs": 3208640
+		},
+		{
+			"at": "2026-10-02T04:47:47.591Z",
+			"topic": "boltzmann-partition",
+			"confidence": 100,
+			"correct": false,
+			"source": "recall",
+			"check": "explain",
+			"latencyMs": 184287
+		},
+		{
+			"at": "2026-10-02T04:49:05.198Z",
+			"topic": "taylor-series-error",
+			"confidence": 50,
+			"correct": true,
+			"source": "quiz",
+			"latencyMs": 69616
+		},
+		{
+			"at": "2026-10-07T00:46:49.948Z",
+			"topic": "i-had-ai-build-an-application-for-me-and-i-wanted-",
+			"confidence": 30,
+			"correct": false,
+			"source": "recall",
+			"check": "recall",
+			"latencyMs": 176173
+		},
+		{
+			"at": "2026-10-07T00:49:48.448Z",
+			"topic": "i-had-ai-build-an-application-for-me-and-i-wanted-",
+			"confidence": 100,
+			"correct": false,
+			"source": "quiz",
+			"latencyMs": 170613
+		},
+		{
+			"at": "2026-10-07T00:54:23.417Z",
+			"topic": "i-had-ai-build-an-application-for-me-and-i-wanted-",
+			"confidence": 50,
+			"correct": false,
+			"source": "recall",
+			"check": "predict",
+			"latencyMs": 148341
+		},
+		{
+			"at": "2026-10-07T01:04:05.857Z",
+			"topic": "i-had-ai-build-an-application-for-me-and-i-wanted-",
+			"confidence": 0,
+			"correct": false,
+			"source": "recall",
+			"check": "recall",
+			"latencyMs": 551456
+		},
+		{
+			"at": "2026-10-07T01:15:56.926Z",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"confidence": 10,
+			"correct": false,
+			"source": "recall",
+			"check": "recall",
+			"latencyMs": 218709
+		},
+		{
+			"at": "2026-10-07T01:19:14.171Z",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"confidence": 100,
+			"correct": false,
+			"source": "recall",
+			"check": "recall",
+			"latencyMs": 149887
+		},
+		{
+			"at": "2026-10-07T01:25:05.239Z",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"confidence": 70,
+			"correct": false,
+			"source": "recall",
+			"check": "recall",
+			"latencyMs": 266854
+		}
+	],
+	"sessions": [
+		{
+			"id": "smuxdunazbbwy",
+			"at": "2026-10-07T00:42:08.891Z",
+			"kind": "learn",
+			"lesson": "i-had-ai-build-an-application-for-me-and-i-wanted-",
+			"ended": "2026-10-07T00:42:08.891Z"
+		},
+		{
+			"id": "smuxevhtrllgc",
+			"at": "2026-10-07T01:10:48.063Z",
+			"kind": "learn",
+			"lesson": "let-s-continue-from-the-last-lesson",
+			"ended": "2026-10-07T01:10:48.063Z"
+		},
+		{
+			"id": "smuyymg7eusct",
+			"at": "2026-10-08T03:11:24.554Z",
+			"kind": "learn",
+			"lesson": "let-s-continue-from-the-last-lesson"
+		}
+	],
+	"goals": [
+		{
+			"id": "math",
+			"title": "Mathematical toolkit",
+			"weight": 3,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "approx-craft",
+					"title": "Approximation craft: expand in the right small parameter and know when it fails",
+					"kind": "derive",
+					"description": "Done = with explicit remainders/orders, derive the EX2 limit, the harmonic approximation of a potential well, and Verlet's local/global error order; say when each breaks.",
+					"needs": [
+						"taylor-series-error",
+						"asymptotic-orders"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "laplace-saddle",
+					"title": "Derive Stirling and the thermodynamic limit by Laplace's method",
+					"kind": "derive",
+					"description": "Done = Stirling with first correction derived; explain why free energy is dominated by the saddle.",
+					"needs": [
+						"gaussian-integrals",
+						"m:approx-craft"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "spectral-svd",
+					"title": "Derive PCA as SVD of centered data and run it on a trajectory",
+					"kind": "derive",
+					"description": "Done = spectral theorem stated/proved for symmetric matrices, PCA = SVD derived, applied to real MD coordinates.",
+					"needs": [
+						"eigendecomposition",
+						"svd"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "matrix-calc",
+					"title": "Derive gradients of matrix expressions",
+					"kind": "derive",
+					"description": "Done = linear-layer backprop, softmax Jacobian, least-squares normal equations derived and checked numerically.",
+					"needs": [
+						"matrix-calculus"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "gen-functions",
+					"title": "Prove the CLT via cumulant generating functions; isotope envelope as example",
+					"kind": "derive",
+					"description": "Done = CLT via cumulants; isotope envelope computed via generating functions and its Gaussian limit.",
+					"needs": [
+						"moment-generating-functions"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "bayes",
+					"title": "Bayesian inference from scratch: conjugacy, Metropolis MCMC, hierarchical models, evidence",
+					"kind": "build",
+					"description": "Done = Metropolis sampler written and validated; a hierarchical model fit; two models compared by evidence/Laplace approximation.",
+					"needs": [
+						"bayes-posteriors",
+						"mcmc-metropolis"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "markov",
+					"title": "Markov chains and Markov reward processes",
+					"kind": "derive",
+					"description": "Done = detailed balance, stationary distribution, spectral gap -> relaxation times; Bellman equation derived and value iteration implemented.",
+					"needs": [
+						"markov-chains",
+						"bellman-equation"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "langevin-fp",
+					"title": "Derive Fokker-Planck from Langevin and show Boltzmann is stationary",
+					"kind": "derive",
+					"description": "Done = Ornstein-Uhlenbeck solved, FP derived, Itô vs Stratonovich explained.",
+					"needs": [
+						"langevin-equation",
+						"ito-calculus"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "info-theory",
+					"title": "Derive Boltzmann as maximum entropy; KL, Gibbs inequality, mutual information",
+					"kind": "derive",
+					"description": "Done = max-ent derivation with Lagrange multipliers; KL >= 0 proved; MI computed for a toy.",
+					"needs": [
+						"kl-divergence",
+						"lagrange-multipliers"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "optimization",
+					"title": "Convexity, duality, and gradient-descent stability",
+					"kind": "derive",
+					"description": "Done = Lagrange dual of a simple problem; GD step-size bound from Hessian eigenvalues derived and demonstrated.",
+					"needs": [
+						"convexity-duality",
+						"eigendecomposition"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "ldt",
+					"title": "Large deviations: Cramér via Chernoff, rate function as Legendre transform, Gärtner-Ellis",
+					"kind": "derive",
+					"description": "Done = rate function of a sample mean derived; Legendre/SCGF link explained; connection to free energy made.",
+					"needs": [
+						"legendre-transform",
+						"moment-generating-functions",
+						"m:laplace-saddle"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "fluct-theorems",
+					"title": "Derive Jarzynski and Crooks and the LDT view of work distributions",
+					"kind": "derive",
+					"description": "Done = both derived; explain why exponential averages converge poorly using LDT.",
+					"needs": [
+						"m:ldt"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "groups",
+					"title": "Groups and representations for equivariant networks",
+					"kind": "derive",
+					"description": "Done = SO(3) irreps, spherical harmonics, tensor products / Clebsch-Gordan at the level used by e3nn.",
+					"needs": [
+						"group-representations"
+					],
+					"status": "locked"
+				}
+			],
+			"created": "2026-10-02T03:48:57.770Z",
+			"updated": "2026-10-02T03:48:57.770Z",
+			"why": "I can derive what frontier papers in my fields use: spectral methods, Bayesian inference, stochastic processes, information theory, large deviations, and controlled approximations."
+		},
+		{
+			"id": "md",
+			"title": "Molecular dynamics",
+			"weight": 3,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "dissect-setup",
+					"title": "Dissect one of your own OpenMM/Amber setups and defend every choice",
+					"kind": "critique",
+					"description": "Done = for FF, water, PME/cutoff, timestep/HMR/constraints, thermostat, barostat, equilibration: what it does and what breaks if wrong.",
+					"needs": [
+						"boltzmann-partition"
+					],
+					"status": "ready"
+				},
+				{
+					"id": "integrator",
+					"title": "Build velocity-Verlet + Langevin (BAOAB) in numpy",
+					"kind": "build",
+					"description": "Done = energy drift vs timestep shown with error order; sampled distribution matches Boltzmann.",
+					"needs": [
+						"symplectic-integrators",
+						"langevin-equation",
+						"taylor-series-error"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "validate-traj",
+					"title": "Validate a production trajectory with honest error bars",
+					"kind": "do",
+					"description": "Done = equilibration detection, autocorrelation time, effective sample size, block averages on a real trajectory.",
+					"needs": [
+						"autocorrelation-ess"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "forcefield-pme",
+					"title": "Derive the force-field form and Ewald/PME; critique a ligand parameterization",
+					"kind": "derive",
+					"description": "Done = Ewald split derived; GAFF/OpenFF parameters for a ligand critiqued.",
+					"needs": [
+						"ewald-summation",
+						"fourier-transform-convolution"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "pca-msm",
+					"title": "Build PCA + a Markov state model with implied timescales",
+					"kind": "build",
+					"description": "Done = PCA via SVD and an MSM (deeptime) on a trajectory; implied timescales from eigenvalues interpreted.",
+					"needs": [
+						"svd",
+						"markov-chains",
+						"eigendecomposition"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "enhanced-sampling",
+					"title": "Get a PMF with umbrella sampling or metadynamics + MBAR",
+					"kind": "do",
+					"description": "Done = converged PMF with uncertainty on a toy/peptide system.",
+					"needs": [
+						"importance-sampling"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "ml-potential",
+					"title": "Train/run an ML potential (MACE/ANI) and critique its stability",
+					"kind": "do",
+					"description": "Done = MLP trained or fine-tuned on a small system, stability/extrapolation failures diagnosed.",
+					"needs": [
+						"group-representations",
+						"gradient-descent"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "method-prototype",
+					"title": "Prototype your own method idea",
+					"kind": "critique",
+					"description": "Done = a written proposal plus a minimal prototype with a test.",
+					"needs": [
+						"m:pca-msm",
+						"m:enhanced-sampling"
+					],
+					"status": "locked"
+				}
+			],
+			"created": "2026-10-02T03:48:57.771Z",
+			"updated": "2026-10-02T03:48:57.771Z",
+			"why": "I can set up, run and validate production protein MD and defend every choice, understand the theory deeply, and develop new methods (enhanced sampling, ML potentials)."
+		},
+		{
+			"id": "fep",
+			"title": "Free energy perturbation (FEP)",
+			"weight": 2,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "rbfe-cycle",
+					"title": "Draw the RBFE thermodynamic cycle for two of your HPK ligands",
+					"kind": "derive",
+					"description": "Done = cycle drawn, why the alchemical leg is computable, ddG <-> IC50 fold-change conversion.",
+					"needs": [
+						"boltzmann-partition",
+						"thermodynamic-cycles"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "zwanzig",
+					"title": "Derive Zwanzig (EXP) and its cumulant expansion; test on harmonic oscillators",
+					"kind": "derive",
+					"description": "Done = EXP derived, 2nd-order cumulant shown and when it fails, variance blowup with shrinking overlap demonstrated vs analytic answer.",
+					"needs": [
+						"importance-sampling",
+						"taylor-series-error"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "ti-mbar",
+					"title": "Implement TI and BAR/MBAR on the toy and compare with pymbar",
+					"kind": "build",
+					"description": "Done = TI, BAR, MBAR implemented, matched to pymbar and analytic result.",
+					"needs": [
+						"maximum-likelihood"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "noneq-switching",
+					"title": "Nonequilibrium switching: Jarzynski, Crooks, BAR on work distributions",
+					"kind": "derive",
+					"description": "Done = forward/reverse work distributions on the toy; Crooks crossing and BAR estimate.",
+					"needs": [
+						"m:zwanzig",
+						"m:ti-mbar"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "run-edge",
+					"title": "Run one RBFE edge in OpenFE",
+					"kind": "do",
+					"description": "Done = hybrid topology, soft-core, lambda schedule, HREX set up and run; result with uncertainty.",
+					"needs": [
+						"m:ti-mbar"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "diagnose-edge",
+					"title": "Diagnose and fix a bad edge",
+					"kind": "do",
+					"description": "Done = overlap matrix, forward/reverse convergence, cycle closure used to diagnose; fix applied.",
+					"needs": [
+						"autocorrelation-ess",
+						"m:run-edge"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "network-benchmark",
+					"title": "Run an RBFE network on a congeneric series and benchmark it",
+					"kind": "do",
+					"description": "Done = RMSE, Kendall tau, MLE network correction vs experiment.",
+					"needs": [
+						"m:diagnose-edge"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "fep-limits",
+					"title": "Critique where FEP fails: ABFE, charge changes, protonation, binding-mode changes",
+					"kind": "critique",
+					"description": "Done = Mey 2020 LiveCoMS read; a pharma retrospective critiqued.",
+					"needs": [
+						"m:network-benchmark"
+					],
+					"status": "locked"
+				}
+			],
+			"created": "2026-10-02T03:48:57.771Z",
+			"updated": "2026-10-02T03:48:57.771Z",
+			"why": "I can run and diagnose pharma-style relative binding FEP on a ligand series and explain the estimators from first principles."
+		},
+		{
+			"id": "hdx",
+			"title": "HDX: exchange physics and structural interpretation",
+			"weight": 2,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "ll-as-markov",
+					"title": "Write Linderstrøm-Lang as a 3-state Markov chain and derive EX1/EX2",
+					"kind": "derive",
+					"description": "Done = closed<->open->exchanged as a generator matrix; k_obs, EX2 and EX1 limits derived with the small parameter explicit.",
+					"needs": [
+						"first-order-kinetics",
+						"markov-chains"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "bleed-forward-model",
+					"title": "Derive the bleed.py forward model: CTMC + killing -> occupation times -> Poisson-binomial envelope, and get EX1/EX2 out of the spectrum",
+					"kind": "derive",
+					"description": "Done when you can derive, unaided, P(env|t) = ∫ρ(τ|t) PB({1-e^{-Σ k_is τ_s}}) dτ from a generator Q and rates k_is, prove the Feynman–Kac survival identity, and show which spectral regime gives a unimodal vs bimodal envelope.",
+					"needs": [
+						"markov-chains",
+						"matrix-exponential-linear-odes",
+						"eigendecomposition",
+						"m:ll-as-markov"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "intrinsic-rates",
+					"title": "Compute intrinsic exchange rates by hand (Bai 1993 / Nguyen 2018)",
+					"kind": "do",
+					"description": "Done = k_int for a peptide incl. pH, temperature, neighbor effects; PF extracted from an uptake curve.",
+					"needs": [
+						"arrhenius-ph-rates"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "dg-op",
+					"title": "Native-state HDX: protection factors to ΔG_op; foldons",
+					"kind": "read",
+					"description": "Done = PF -> ΔG_op derived from Boltzmann populations; Bai/Englander 1995 read and explained.",
+					"needs": [
+						"boltzmann-partition"
+					],
+					"status": "ready"
+				},
+				{
+					"id": "pf-models",
+					"title": "Critique phenomenological PF models and how HX-ESP used them",
+					"kind": "critique",
+					"description": "Done = Best-Vendruscolo, Persson-Halle assumptions laid out and critiqued, incl. HX-ESP.",
+					"needs": [
+						"m:dg-op"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "residue-bayes",
+					"title": "Bayesian residue-level inference from overlapping peptides",
+					"kind": "build",
+					"description": "Done = ill-posed inverse problem framed; MCMC posterior over PFs; identifiability discussed vs exPfact/PIGEON-FEATHER.",
+					"needs": [
+						"ill-posed-inverse-problems",
+						"bayes-posteriors",
+						"mcmc-metropolis"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "ensemble-reweight",
+					"title": "Max-ent reweighting of MD ensembles to HDX (HDXer) vs HX-ESP selection",
+					"kind": "do",
+					"description": "Done = max-ent reweighting done/derived and compared to ensemble selection.",
+					"needs": [
+						"kl-divergence",
+						"lagrange-multipliers"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "paper-critique",
+					"title": "Critique a recent HDX paper against the Masson 2019 recommendations",
+					"kind": "critique",
+					"description": "Done = written critique: back-exchange, statistics, EX1 handling, significance testing.",
+					"needs": [
+						"hypothesis-testing-fdr"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "msm-exchange-method",
+					"title": "Original method: MSM rates -> exchange kinetics",
+					"kind": "build",
+					"description": "Done = proposal + prototype mapping MSM eigenmodes to predicted uptake.",
+					"needs": [
+						"eigendecomposition",
+						"m:ensemble-reweight"
+					],
+					"status": "locked"
+				}
+			],
+			"created": "2026-10-02T03:48:57.771Z",
+			"updated": "2026-10-07T00:42:28.524Z",
+			"why": "I own the field's formal frameworks and history, connect them to my Markov-state view, critique HDX papers, and do original method work.",
+			"lastTouched": "2026-10-07T00:42:28.524Z"
+		},
+		{
+			"id": "ms",
+			"title": "Mass-spec data analysis",
+			"weight": 2,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "isotope-envelope",
+					"title": "Compute a peptide isotope envelope by convolution and compare to your library",
+					"kind": "do",
+					"description": "Done = envelope from elemental composition via convolution/generating functions; compared with your library and a measured spectrum.",
+					"needs": [
+						"discrete-convolution-generating-functions"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "orbitrap-physics",
+					"title": "Derive Orbitrap frequency, the FT step, and resolution vs transient length",
+					"kind": "derive",
+					"description": "Done = omega ∝ sqrt(z/m) derived; resolution from transient length and FT explained.",
+					"needs": [
+						"fourier-transform-convolution"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "envelope-fit",
+					"title": "Fit deuterated envelopes with uncertainties (least squares and Bayesian)",
+					"kind": "build",
+					"description": "Done = peak picking/charge deconvolution; deuterium distribution fit with honest uncertainty, two ways.",
+					"needs": [
+						"nonlinear-least-squares",
+						"bayes-posteriors"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "fragmentation",
+					"title": "Fragmentation: CID/HCD vs ETD/ECD, scrambling, residue-level HDX",
+					"kind": "read",
+					"description": "Done = ion types and mechanisms explained; why ETD avoids scrambling.",
+					"needs": [],
+					"status": "ready"
+				},
+				{
+					"id": "search-fdr",
+					"title": "Build a toy database search with target-decoy FDR",
+					"kind": "build",
+					"description": "Done = scoring + target-decoy FDR implemented and its assumptions stated.",
+					"needs": [
+						"hypothesis-testing-fdr"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "lfq-stats",
+					"title": "Label-free quant statistics: normalization, missingness, linear models",
+					"kind": "do",
+					"description": "Done = normalization, MNAR handling, limma-style linear model applied to a dataset.",
+					"needs": [
+						"linear-models"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "critique-own-library",
+					"title": "Critique and redesign your own HDX-MS library",
+					"kind": "critique",
+					"description": "Done = written critique of your paper/library with a redesign plan.",
+					"needs": [
+						"m:envelope-fit"
+					],
+					"status": "locked"
+				}
+			],
+			"created": "2026-10-02T03:48:57.772Z",
+			"updated": "2026-10-02T03:48:57.772Z",
+			"why": "I can reason from first principles about MS data (isotopes, Orbitrap, deconvolution, fragmentation, identification, quantification) and build and critique analysis software."
+		},
+		{
+			"id": "ai",
+			"title": "Theoretical AI / ML architectures",
+			"weight": 3,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "micrograd",
+					"title": "Build scalar autograd and train a tiny MLP; gradient-check it",
+					"kind": "build",
+					"description": "Done = micrograd-style engine written; gradients match finite differences; MLP fits a toy dataset.",
+					"needs": [
+						"chain-rule-jacobians"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "mlp-lm",
+					"title": "Derive cross-entropy as max likelihood; train an MLP language model in PyTorch",
+					"kind": "build",
+					"description": "Done = makemore MLP trained; loss derived; learning-rate/initialization issues diagnosed.",
+					"needs": [
+						"maximum-likelihood",
+						"gradient-descent",
+						"matrix-calculus"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "gpt",
+					"title": "Build a GPT from scratch, deriving attention",
+					"kind": "build",
+					"description": "Done = nanoGPT-scale model trained; attention, residuals, layernorm explained.",
+					"needs": [
+						"linear-maps-matrix-products",
+						"m:mlp-lm"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "why-it-works",
+					"title": "Generalization, double descent, and a mini scaling-law reproduction",
+					"kind": "do",
+					"description": "Done = bias-variance and double descent explained; small scaling law fit on own runs.",
+					"needs": [
+						"bias-variance",
+						"m:gpt"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "diffusion",
+					"title": "Derive the DDPM loss and implement it on 2D data",
+					"kind": "derive",
+					"description": "Done = ELBO -> noise-prediction loss derived; sampler works; link to Langevin/score explained.",
+					"needs": [
+						"kl-divergence",
+						"langevin-equation"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "rl-bellman",
+					"title": "Derive the Bellman equation; implement value iteration and policy gradient",
+					"kind": "build",
+					"description": "Done = MRP/MDP formalism, value iteration and REINFORCE implemented on a toy.",
+					"needs": [
+						"bellman-equation",
+						"gradient-descent"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "equivariant-gnn",
+					"title": "Build an E(3)-equivariant GNN and test its equivariance",
+					"kind": "build",
+					"description": "Done = EGNN implemented; equivariance verified numerically; link to ML potentials.",
+					"needs": [
+						"group-representations",
+						"m:mlp-lm"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "ssm",
+					"title": "Derive SSMs/Mamba: discretization, linear recurrence vs attention",
+					"kind": "derive",
+					"description": "Done = continuous SSM discretized (ZOH), convolutional/recurrent views, selectivity explained.",
+					"needs": [
+						"matrix-exponential-linear-odes",
+						"eigendecomposition"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "critique-apply",
+					"title": "Critique a new architecture paper in an afternoon; prototype an HDX/MS predictor",
+					"kind": "critique",
+					"description": "Done = written critique of a fresh arXiv paper; a small model predicting an HDX/MS quantity.",
+					"needs": [
+						"m:gpt",
+						"m:equivariant-gnn"
+					],
+					"status": "locked"
+				}
+			],
+			"created": "2026-10-02T03:48:57.772Z",
+			"updated": "2026-10-02T03:48:57.772Z",
+			"why": "I can derive, implement, critique and eventually design ML architectures, and apply them to my science."
+		},
+		{
+			"id": "linux",
+			"title": "Linux OS, networking and HPC",
+			"weight": 2,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "strace",
+					"title": "strace a Python script and explain every syscall",
+					"kind": "do",
+					"description": "Done = fork/exec, file descriptors, mmap, open/read explained from a real trace.",
+					"needs": [
+						"processes-syscalls"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "memory",
+					"title": "Explain RSS vs VSZ, page faults and the OOM killer from /proc",
+					"kind": "do",
+					"description": "Done = measured on a real process; page tables and overcommit explained.",
+					"needs": [
+						"virtual-memory"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "vm-admin",
+					"title": "Build and harden a VM: users, systemd service, journald, SSH, firewall, LVM",
+					"kind": "do",
+					"description": "Done = VM running a custom systemd service, hardened SSH, firewall rules, LVM volume.",
+					"needs": [
+						"m:strace"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "network",
+					"title": "Read a DNS lookup and TCP handshake in tcpdump; subnetting and routing",
+					"kind": "do",
+					"description": "Done = capture annotated; routing table and CIDR explained; ss/ip used to debug.",
+					"needs": [
+						"tcp-ip-layers",
+						"cidr-subnetting"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "slow-job",
+					"title": "Diagnose a slow Slurm job: affinity, NUMA, I/O, perf",
+					"kind": "do",
+					"description": "Done = a real job profiled and the bottleneck located with roofline reasoning.",
+					"needs": [
+						"memory-hierarchy-cache",
+						"roofline-amdahl"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "mpi-rdma",
+					"title": "Run MPI over InfiniBand/RDMA with OSU benchmarks; explain with alpha-beta",
+					"kind": "do",
+					"description": "Done = latency/bandwidth curves measured and fitted to the alpha-beta model; collectives explained.",
+					"needs": [
+						"latency-bandwidth-model"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "containers",
+					"title": "Container internals: namespaces, cgroups, Apptainer vs Docker, GPUs",
+					"kind": "do",
+					"description": "Done = namespaces/cgroups demonstrated by hand; why HPC uses Apptainer explained.",
+					"needs": [
+						"m:strace"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "cluster-critique",
+					"title": "Critique an HPC cluster design or product spec from work",
+					"kind": "critique",
+					"description": "Done = written critique of a real design.",
+					"needs": [
+						"m:slow-job",
+						"m:mpi-rdma"
+					],
+					"status": "locked"
+				}
+			],
+			"created": "2026-10-02T03:48:57.773Z",
+			"updated": "2026-10-02T03:48:57.773Z",
+			"why": "I can administer Linux, understand OS internals and networking from the ground up, reason about HPC performance, and talk credibly with infra engineers."
+		},
+		{
+			"id": "wafer-optics",
+			"title": "Wafer defect inspection & optics",
+			"weight": 1,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "resolution",
+					"title": "Estimate resolution, pixel size and depth of focus from λ and NA",
+					"kind": "do",
+					"description": "Done = numbers for a DUV tool; why sub-resolution defects are still detectable.",
+					"needs": [
+						"diffraction-limit-abbe"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "darkfield",
+					"title": "Explain darkfield vs brightfield via Rayleigh scattering",
+					"kind": "derive",
+					"description": "Done = d^6/λ^4 scaling derived/used to estimate signal for a 20 nm particle.",
+					"needs": [
+						"rayleigh-scattering"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "fourier-imaging",
+					"title": "Imaging as convolution: pupil/OTF, coherent vs incoherent, spatial filtering",
+					"kind": "derive",
+					"description": "Done = coherent/incoherent transfer functions explained; why Fourier filtering suppresses pattern.",
+					"needs": [
+						"fourier-transform-convolution"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "detection",
+					"title": "Die-to-die subtraction, noise, thresholds, ROC and nuisance rate",
+					"kind": "do",
+					"description": "Done = SNR threshold set on simulated images; ROC drawn; nuisance trade-off explained.",
+					"needs": [
+						"signal-detection-roc"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "throughput",
+					"title": "Estimate full-wafer data rate and FLOPs and map to HPC hardware",
+					"kind": "do",
+					"description": "Done = pixels/s, bytes/s, FLOPs for FFT/conv estimated; roofline placement.",
+					"needs": [
+						"roofline-amdahl"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "ml-classification",
+					"title": "ML defect classification and nuisance filtering (review paper)",
+					"kind": "read",
+					"description": "Done = review read and summarized; tied to detection milestone.",
+					"needs": [
+						"m:detection"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "ebeam",
+					"title": "E-beam vs optical; inspection vs metrology",
+					"kind": "read",
+					"description": "Done = trade-offs explained in conversation terms.",
+					"needs": [],
+					"status": "ready"
+				}
+			],
+			"created": "2026-10-02T03:48:57.773Z",
+			"updated": "2026-10-02T03:48:57.773Z",
+			"why": "I can follow and contribute to discussions with KLA's optics/physics and algorithm engineers, including where the compute goes."
+		},
+		{
+			"id": "finance",
+			"title": "Personal finance (survey)",
+			"weight": 1,
+			"status": "active",
+			"milestones": [
+				{
+					"id": "cashflow",
+					"title": "Build a one-page cash flow, savings rate and emergency fund",
+					"kind": "do",
+					"description": "Done = own numbers on one page.",
+					"needs": [
+						"compound-growth-pv"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "accounts",
+					"title": "Order account priorities: 401k match, HSA, Roth vs traditional, mega-backdoor",
+					"kind": "do",
+					"description": "Done = priority list with reasons from marginal tax rates.",
+					"needs": [
+						"marginal-vs-effective-tax"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "allocation",
+					"title": "Choose an asset allocation; index funds and fees",
+					"kind": "do",
+					"description": "Done = allocation justified by diversification and risk tolerance.",
+					"needs": [
+						"diversification-correlation"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "equity-comp",
+					"title": "Decide on KLA RSUs/ESPP and concentration risk",
+					"kind": "do",
+					"description": "Done = sell-at-vest / ESPP logic applied to own grants.",
+					"needs": [
+						"m:allocation"
+					],
+					"status": "locked"
+				},
+				{
+					"id": "map-unknowns",
+					"title": "Map the rest: insurance, mortgage, estate",
+					"kind": "read",
+					"description": "Done = list of known unknowns with one source each.",
+					"needs": [],
+					"status": "ready"
+				}
+			],
+			"created": "2026-10-02T03:48:57.773Z",
+			"updated": "2026-10-02T03:48:57.773Z",
+			"why": "I know what I don't know about personal finance and can judge advice critically."
+		}
+	],
+	"fundamentals": [
+		{
+			"slug": "taylor-series-error",
+			"title": "Taylor series with remainder; choosing the expansion point and small parameter",
+			"updated": "2026-10-02T03:49:46.373Z",
+			"domain": "math"
+		},
+		{
+			"slug": "asymptotic-orders",
+			"title": "Orders of magnitude, O/o notation, convergent vs asymptotic series",
+			"updated": "2026-10-02T03:49:46.374Z",
+			"domain": "math"
+		},
+		{
+			"slug": "gaussian-integrals",
+			"title": "Gaussian integrals and completing the square (1D and multivariate)",
+			"updated": "2026-10-02T03:49:46.374Z",
+			"domain": "math"
+		},
+		{
+			"slug": "eigendecomposition",
+			"title": "Eigendecomposition of symmetric matrices (spectral theorem)",
+			"updated": "2026-10-02T03:49:46.375Z",
+			"domain": "math"
+		},
+		{
+			"slug": "svd",
+			"title": "Singular value decomposition and low-rank approximation",
+			"updated": "2026-10-02T03:49:46.375Z",
+			"domain": "math"
+		},
+		{
+			"slug": "matrix-calculus",
+			"title": "Matrix calculus: gradients of scalar functions of vectors/matrices",
+			"updated": "2026-10-02T03:49:46.376Z",
+			"domain": "math"
+		},
+		{
+			"slug": "moment-generating-functions",
+			"title": "Moment and cumulant generating functions",
+			"updated": "2026-10-02T03:49:46.376Z",
+			"domain": "math"
+		},
+		{
+			"slug": "lagrange-multipliers",
+			"title": "Constrained optimization with Lagrange multipliers",
+			"updated": "2026-10-02T03:49:46.377Z",
+			"domain": "math"
+		},
+		{
+			"slug": "convexity-duality",
+			"title": "Convex functions and Lagrange duality",
+			"updated": "2026-10-02T03:49:46.377Z",
+			"domain": "math"
+		},
+		{
+			"slug": "legendre-transform",
+			"title": "Legendre-Fenchel transform",
+			"updated": "2026-10-02T03:49:46.377Z",
+			"domain": "math"
+		},
+		{
+			"slug": "group-representations",
+			"title": "Group representations: SO(3)/E(3), irreps, equivariance",
+			"updated": "2026-10-02T03:49:46.378Z",
+			"domain": "math"
+		},
+		{
+			"slug": "matrix-exponential-linear-odes",
+			"title": "Linear ODE systems and the matrix exponential",
+			"updated": "2026-10-02T03:49:46.378Z",
+			"domain": "math"
+		},
+		{
+			"slug": "linear-maps-matrix-products",
+			"title": "Matrices as linear maps; matrix products, projections, dot-product similarity",
+			"updated": "2026-10-02T03:49:46.378Z",
+			"domain": "math"
+		},
+		{
+			"slug": "chain-rule-jacobians",
+			"title": "Multivariable chain rule, Jacobians, reverse-mode autodiff",
+			"updated": "2026-10-02T03:49:46.379Z",
+			"domain": "math"
+		},
+		{
+			"slug": "discrete-convolution-generating-functions",
+			"title": "Convolution of discrete distributions via polynomial generating functions",
+			"updated": "2026-10-02T03:49:46.379Z",
+			"domain": "math"
+		},
+		{
+			"slug": "fourier-transform-convolution",
+			"title": "Fourier transform, convolution theorem, sampling and frequency resolution",
+			"updated": "2026-10-02T03:49:46.379Z",
+			"domain": "math"
+		},
+		{
+			"slug": "ill-posed-inverse-problems",
+			"title": "Ill-posed inverse problems, identifiability, regularization",
+			"updated": "2026-10-02T03:49:46.380Z",
+			"domain": "math"
+		},
+		{
+			"slug": "markov-chains",
+			"title": "Markov chains: transition matrices/generators, stationary distribution, detailed balance",
+			"updated": "2026-10-02T03:49:46.380Z",
+			"domain": "math"
+		},
+		{
+			"slug": "bellman-equation",
+			"title": "Markov reward processes and the Bellman equation",
+			"updated": "2026-10-02T03:49:46.380Z",
+			"domain": "math"
+		},
+		{
+			"slug": "ito-calculus",
+			"title": "Itô calculus basics: Wiener process, Itô's lemma",
+			"updated": "2026-10-02T03:49:46.381Z",
+			"domain": "math"
+		},
+		{
+			"slug": "bayes-posteriors",
+			"title": "Bayes' theorem, priors, likelihoods, posteriors, conjugacy",
+			"updated": "2026-10-02T03:49:46.381Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "mcmc-metropolis",
+			"title": "Metropolis-Hastings MCMC and why it samples the target",
+			"updated": "2026-10-02T03:49:46.381Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "maximum-likelihood",
+			"title": "Maximum likelihood estimation (and cross-entropy as negative log-likelihood)",
+			"updated": "2026-10-02T03:49:46.382Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "kl-divergence",
+			"title": "Entropy and KL divergence",
+			"updated": "2026-10-02T03:49:46.382Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "importance-sampling",
+			"title": "Importance sampling and the variance of reweighting estimators",
+			"updated": "2026-10-02T03:49:46.382Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "autocorrelation-ess",
+			"title": "Autocorrelation time, effective sample size, block averaging",
+			"updated": "2026-10-02T03:49:46.383Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "hypothesis-testing-fdr",
+			"title": "Hypothesis tests, p-values, multiple testing and false discovery rate",
+			"updated": "2026-10-02T03:49:46.383Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "nonlinear-least-squares",
+			"title": "Nonlinear least squares and parameter uncertainties (covariance from the Jacobian)",
+			"updated": "2026-10-02T03:49:46.383Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "linear-models",
+			"title": "Linear models / regression with design matrices",
+			"updated": "2026-10-02T03:49:46.384Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "bias-variance",
+			"title": "Bias-variance decomposition and generalization",
+			"updated": "2026-10-02T03:49:46.384Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "signal-detection-roc",
+			"title": "Signal detection theory, thresholds, ROC curves",
+			"updated": "2026-10-02T03:49:46.384Z",
+			"domain": "stats"
+		},
+		{
+			"slug": "langevin-equation",
+			"title": "Langevin equation: friction, noise, fluctuation-dissipation",
+			"updated": "2026-10-02T03:49:46.385Z",
+			"domain": "physics"
+		},
+		{
+			"slug": "boltzmann-partition",
+			"title": "Boltzmann weights, partition functions, free energy as -kT ln Z",
+			"updated": "2026-10-02T04:47:51.421Z",
+			"domain": "physics",
+			"status": "shaky",
+			"note": "Placement: computed e^{-ΔE/kT} but dropped degeneracy (picked 0.14 not 0.41). Remembers Z as 'normalizer' and microstate counting but cannot write p_i = e^{-E_i/kT}/Z or link ΔF to population ratios. Fragments present, so this is a quick relearn."
+		},
+		{
+			"slug": "thermodynamic-cycles",
+			"title": "Thermodynamic cycles and state functions",
+			"updated": "2026-10-02T03:49:46.386Z",
+			"domain": "physics"
+		},
+		{
+			"slug": "symplectic-integrators",
+			"title": "Hamiltonian dynamics and symplectic (Verlet) integrators",
+			"updated": "2026-10-02T03:49:46.386Z",
+			"domain": "physics"
+		},
+		{
+			"slug": "ewald-summation",
+			"title": "Ewald summation and particle-mesh Ewald",
+			"updated": "2026-10-02T03:49:46.386Z",
+			"domain": "physics"
+		},
+		{
+			"slug": "first-order-kinetics",
+			"title": "First-order and two-state kinetics; steady-state and pre-equilibrium approximations",
+			"updated": "2026-10-02T03:49:46.387Z",
+			"domain": "chemistry"
+		},
+		{
+			"slug": "arrhenius-ph-rates",
+			"title": "Arrhenius temperature dependence and acid/base catalysis (pH dependence) of rates",
+			"updated": "2026-10-02T03:49:46.387Z",
+			"domain": "chemistry"
+		},
+		{
+			"slug": "diffraction-limit-abbe",
+			"title": "Abbe/Rayleigh resolution limit, NA, depth of focus",
+			"updated": "2026-10-02T03:49:46.387Z",
+			"domain": "optics"
+		},
+		{
+			"slug": "rayleigh-scattering",
+			"title": "Rayleigh scattering cross-section (d^6/λ^4) and Mie regime",
+			"updated": "2026-10-02T03:49:46.388Z",
+			"domain": "optics"
+		},
+		{
+			"slug": "gradient-descent",
+			"title": "Gradient descent, step size and stability, SGD/Adam",
+			"updated": "2026-10-02T03:49:46.388Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "processes-syscalls",
+			"title": "Processes, fork/exec, file descriptors, system calls",
+			"updated": "2026-10-02T03:49:46.389Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "virtual-memory",
+			"title": "Virtual memory, page tables, page faults",
+			"updated": "2026-10-02T03:49:46.389Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "tcp-ip-layers",
+			"title": "TCP/IP layering, TCP handshake and state machine, DNS",
+			"updated": "2026-10-02T03:49:46.389Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "cidr-subnetting",
+			"title": "IP addressing, CIDR subnetting, routing tables",
+			"updated": "2026-10-02T03:49:46.390Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "memory-hierarchy-cache",
+			"title": "Memory hierarchy, cache lines, NUMA",
+			"updated": "2026-10-02T03:49:46.390Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "roofline-amdahl",
+			"title": "Amdahl's law and the roofline model (arithmetic intensity)",
+			"updated": "2026-10-02T03:49:46.390Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "latency-bandwidth-model",
+			"title": "Alpha-beta latency/bandwidth model of communication",
+			"updated": "2026-10-02T03:49:46.391Z",
+			"domain": "cs"
+		},
+		{
+			"slug": "compound-growth-pv",
+			"title": "Compound growth, present value, real vs nominal returns",
+			"updated": "2026-10-02T03:49:46.391Z",
+			"domain": "finance"
+		},
+		{
+			"slug": "marginal-vs-effective-tax",
+			"title": "Marginal vs effective tax rates; tax-deferred vs tax-free growth",
+			"updated": "2026-10-02T03:49:46.391Z",
+			"domain": "finance"
+		},
+		{
+			"slug": "diversification-correlation",
+			"title": "Diversification, correlation, expected return vs volatility",
+			"updated": "2026-10-02T03:49:46.392Z",
+			"domain": "finance"
+		}
+	],
+	"interests": [
+		{
+			"at": "2026-10-07T00:42:28.524Z",
+			"text": "bleed.py math: conformational CTMC (generator Q) + state-dependent exchange rates k_{i,s} -> occupation times tau -> Feynman–Kac / uniformization -> Poisson-binomial envelopes; metastability/aggregation for EX1/EX2; renewal kernels. 11-topic reading list (Norris, Moler–Van Loan, Sericola, Yin–Zhang).",
+			"goal": "hdx",
+			"milestone": "bleed-forward-model",
+			"fundamentals": [
+				"first-order-kinetics",
+				"markov-chains",
+				"matrix-exponential-linear-odes",
+				"eigendecomposition"
+			]
+		}
+	]
+}

@@ -1,0 +1,14 @@
+# secrets and scratch
+.learn/phone-token
+.learn/tmp/
+# device-specific Obsidian state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+# large or private inputs (papers you drop in); remove this line to version them
+inbox/
+# recordings are transcribed on arrival; the transcript lives in events.jsonl
+work/audio-*
+# dependencies (reinstalled by bin/setup)
+node_modules/
+# OS
+.DS_Store
