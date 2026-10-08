@@ -215,7 +215,14 @@ export default function phoneWork(pi: ExtensionAPI) {
 		if (!url) return [];
 		let qr = "";
 		qrcode.generate(url, { small: true }, (q: string) => (qr = q));
-		sh.qrLines = [...qr.split("\n").filter((l) => l.trim()), "Scan with your phone or iPad (Tailscale on), or open:", url, `On this Mac: ${sh.localUrl ?? ""}`, "Bookmark it — the link stays the same. Hides once a device connects. /phone hide to dismiss."];
+		sh.qrLines = [
+			...qr.split("\n").filter((l) => l.trim()),
+			"Scan with your phone or iPad (Tailscale on), or open:",
+			url,
+			`On this Mac (viewer): ${sh.localUrl ?? ""}&mode=viewer`,
+			`iPad as scratchpad: ${url}&mode=scratch`,
+			"Bookmark it — the link stays the same. Hides once a device connects. /phone hide to dismiss.",
+		];
 		return sh.qrLines;
 	}
 

@@ -80,11 +80,29 @@ canvas.page { width:100%; aspect-ratio: 4/3; background:#fff; border:1px solid v
 .result .v { font-weight:700; } .result .m { color:var(--muted); font-size:14px; } .result p { margin:6px 0 0; }
 .small { font-size:13px; color:var(--muted); text-align:center; }
 .hidden { display:none !important; }
+/* device roles */
+.modeSel { display:flex; gap:4px; } .modeSel button { min-height:30px; padding:0 10px; font-size:12px; border-radius:8px; }
+.modeSel button.on { background:var(--soft); border-color:var(--accent); color:var(--accent); }
+body.role-viewer main { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+body.role-viewer .modes, body.role-viewer #draw, body.role-viewer #photo, body.role-viewer #voice, body.role-viewer #freephoto { display:none !important; }
+body.role-viewer #text { display:block !important; }
+body.role-scratch main { grid-template-columns: 1fr; height: calc(100% - 56px); }
+body.role-scratch #lesson, body.role-scratch .tabs, body.role-scratch .modes, body.role-scratch #text, body.role-scratch #photo, body.role-scratch #voice, body.role-scratch #freephoto, body.role-scratch #hint, body.role-scratch #idk { display:none !important; }
+body.role-scratch #pad { display:flex !important; padding:8px 10px; gap:8px; }
+body.role-scratch #qcard { padding:8px 12px; } body.role-scratch .prompt { font-size:15px; max-height:30vh; overflow:auto; }
+body.role-scratch #answer { display:flex !important; flex:1; min-height:0; }
+body.role-scratch #draw { display:flex !important; flex:1; min-height:0; }
+body.role-scratch .pages { flex:1; min-height:0; overflow:auto; }
+body.role-scratch canvas.page { aspect-ratio:auto; height: calc(100vh - 230px); min-height:300px; }
+body.role-scratch #result { position:fixed; left:10px; right:10px; bottom:90px; z-index:6; box-shadow:0 8px 30px rgba(0,0,0,.25); }
+body.role-scratch #quiz { display:none !important; }
+body.role-scratch #actions { grid-template-columns: 1fr; }
 </style>
 </head><body class="view-pad">
 <header>
   <h1 id="title">learn</h1>
   <div class="tabs"><button id="tabLesson">Lesson</button><button id="tabPad" class="on">Answer</button></div>
+  <div class="modeSel"><button id="roleFull" title="Lesson and answers on this device">Both</button><button id="roleViewer" title="Lesson + questions; answers typed or on another device">Viewer</button><button id="roleScratch" title="Full-screen drawing pad; the question shows at the top">Scratchpad</button></div>
   <div id="conn" class="conn">Connecting…</div>
 </header>
 <main>
@@ -193,6 +211,26 @@ async function pollLesson() {
 }
 setInterval(pollLesson, 2000); pollLesson();
 
+// ---------- device role: both | viewer | scratch ----------
+let role = "full";
+function setRole(r, save) {
+  role = r; document.body.classList.remove("role-viewer", "role-scratch");
+  if (r !== "full") document.body.classList.add("role-" + r);
+  for (const [id, k] of [["roleFull", "full"], ["roleViewer", "viewer"], ["roleScratch", "scratch"]]) $(id).classList.toggle("on", k === r);
+  if (save) { try { localStorage.setItem("learn.role", r); } catch {} }
+  if (r === "scratch") { setMode("draw"); ensurePage(); document.body.classList.add("view-pad"); }
+  if (r === "viewer") setMode("type");
+  if (r === "full" && matchMedia("(min-width: 900px)").matches) document.body.className = "view-pad view-lesson";
+  updateButtons();
+}
+$("roleFull").onclick = () => setRole("full", true); $("roleViewer").onclick = () => setRole("viewer", true); $("roleScratch").onclick = () => setRole("scratch", true);
+(function initRole() {
+  const q = new URLSearchParams(location.search).get("mode");
+  let saved = null; try { saved = localStorage.getItem("learn.role"); } catch {}
+  const r = ["full", "viewer", "scratch"].includes(q) ? q : (["full", "viewer", "scratch"].includes(saved) ? saved : "full");
+  setTimeout(() => setRole(r, !!q), 0);
+})();
+
 // ---------- tabs (phone) ----------
 $("tabLesson").onclick = () => { document.body.className = "view-lesson"; $("tabLesson").classList.add("on"); $("tabPad").classList.remove("on"); };
 $("tabPad").onclick = () => { document.body.className = "view-pad"; $("tabPad").classList.add("on"); $("tabLesson").classList.remove("on"); };
@@ -203,13 +241,15 @@ function fmt(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return String(M
 const KIND = { recall: "Recall", explain: "Explain it back", predict: "Predict", boundary: "Boundary", flaw: "Find the flaw", transfer: "Transfer", problem: "Problem", quiz: "Quiz" };
 function hasAnswer() {
   if (!pending) return false;
-  if (pending.kind === "quiz") return selected.size > 0;
+  if (pending.kind === "quiz") return role !== "scratch" && selected.size > 0;
   if (mode === "draw") return pages.some((p) => p.strokes.length);
   return !!(files.length || audio || $("text").value.trim());
 }
 function updateButtons() {
   const q = pending && pending.kind === "quiz";
-  $("send").disabled = !pending || busy || !hasAnswer();
+  const scratchFree = role === "scratch" && !pending && pages.some((p) => p.strokes.length);
+  $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer());
+  $("send").textContent = pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
   for (const id of ["hint", "idk", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
   $("hint").classList.toggle("hidden", !!q);
   $("freesend").disabled = freefiles.length === 0 || busy;
@@ -228,14 +268,17 @@ function showPrompt(p) {
     }
   } else {
     $("quiz").classList.add("hidden"); $("answer").classList.remove("hidden");
-    setMode(p.paper && pointerPenCapable ? "draw" : "type");
+    setMode(role === "scratch" ? "draw" : role === "viewer" ? "type" : (p.paper && pointerPenCapable ? "draw" : "type"));
   }
+  if (role === "scratch" && p.kind === "quiz") { $("answer").classList.remove("hidden"); setMode("draw"); }
   resetAnswer(); setStatus("");
   try { navigator.vibrate && navigator.vibrate(80); } catch {}
 }
 function hidePrompt() {
   pending = null; $("idle").classList.remove("hidden"); $("prompt").classList.add("hidden"); $("kind").classList.add("hidden"); $("timer").textContent = "";
   $("quiz").classList.add("hidden"); $("answer").classList.add("hidden"); $("confrow").classList.add("hidden"); $("actions").classList.add("hidden"); $("freephoto").classList.remove("hidden");
+  if (role === "scratch") { $("answer").classList.remove("hidden"); $("actions").classList.remove("hidden"); $("idle").textContent = "No open question — you can still draw and send it to the tutor."; }
+  else $("idle").textContent = "No open question. When the tutor asks something, it appears here.";
   updateButtons();
 }
 function showResult(r) {
@@ -253,6 +296,7 @@ function showResult(r) {
   if (r.explanation) html += "<p>" + renderMd(r.explanation) + "</p>";
   if (r.reference) html += '<p class="m">Key points: ' + renderMd(r.reference) + "</p>";
   el.innerHTML = html; el.classList.remove("hidden");
+  if (role === "scratch") setTimeout(() => { if (el.innerHTML === html) el.classList.add("hidden"); }, 9000);
 }
 async function poll() {
   try {
@@ -377,8 +421,14 @@ async function submit(body, label) {
   catch (e) { setStatus("Failed: " + e.message, "err"); }
   busy = false; updateButtons();
 }
-$("send").onclick = () => {
-  if (!pending) return;
+$("send").onclick = async () => {
+  if (!pending) {
+    if (role !== "scratch") return;
+    const images = exportPages(); if (!images.length) return;
+    busy = true; updateButtons(); setStatus("Sending to tutor…");
+    try { await post("/upload", { note: "", images }); clearPages(); setStatus("Sent ✓ (as a message — no question was open)", "ok"); } catch (e) { setStatus("Failed: " + e.message, "err"); }
+    busy = false; updateButtons(); return;
+  }
   const confidence = Number($("conf").value);
   if (pending.kind === "quiz") return submit({ choices: [...selected], confidence });
   const images = mode === "draw" ? exportPages() : files.map((f) => ({ data: f.data, mimeType: f.mimeType }));
