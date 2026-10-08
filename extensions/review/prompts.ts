@@ -11,9 +11,13 @@
 
 export interface PendingPrompt {
 	id: string;
-	kind: string;
+	kind: string; // recall kinds, or "quiz"
 	prompt: string;
 	startedAt: number;
+	paper?: boolean;
+	options?: Array<{ index: number; label: string }>; // quiz only
+	multi?: boolean; // quiz multi-select
+	context?: string;
 	/** Deliver an answer from any surface. Returns false if already answered. */
 	answer(a: PromptAnswer): boolean;
 }
@@ -26,6 +30,26 @@ export interface PromptAnswer {
 	confidence?: number;
 	dontKnow?: boolean;
 	hint?: boolean;
+	choices?: number[]; // quiz: 1-based option indices
+}
+
+/** What the web surface shows after a prompt resolves (feedback mirror). */
+export interface LastResult {
+	id: string;
+	at: number;
+	kind: string;
+	prompt: string;
+	verdict?: string; // correct | partial | incorrect | dontKnow | hint | cancelled
+	score?: number;
+	feedback?: string;
+	reading?: string;
+	firstError?: string;
+	reference?: string;
+	explanation?: string;
+	chosen?: string[];
+	correct?: string[];
+	confidence?: number;
+	latencyMs?: number;
 }
 
 // pi loads each extension file with its own module instance, so module-level
@@ -34,11 +58,20 @@ export interface PromptAnswer {
 interface Registry {
 	pending: PendingPrompt | undefined;
 	listeners: Set<(p: PendingPrompt | undefined) => void>;
+	lastResult?: LastResult;
 }
 function registry(): Registry {
 	const g = globalThis as any;
 	if (!g.__learnPromptRegistry) g.__learnPromptRegistry = { pending: undefined, listeners: new Set() } satisfies Registry;
 	return g.__learnPromptRegistry as Registry;
+}
+
+export function setLastResult(r: LastResult): void {
+	registry().lastResult = r;
+}
+
+export function getLastResult(): LastResult | undefined {
+	return registry().lastResult;
 }
 
 export function setPending(p: PendingPrompt | undefined): void {

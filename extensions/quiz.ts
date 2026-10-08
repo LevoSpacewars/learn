@@ -10,6 +10,7 @@ import {
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { plainMath } from "./review/plainmath.ts";
+import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import { recordCalibration, recordEvent } from "./review/store.ts";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -494,6 +495,39 @@ async function askSingleChoice(
 			let chosen: OptionAnswer | null = null;
 			let dontKnow = false;
 			const editor = makeNoteEditor(tui, theme);
+			const finish = (r: QuizResponse | null) => {
+				setPending(undefined);
+				done(r);
+			};
+			// Mirror to the web surface: a choice sent from there answers this quiz.
+			setPending({
+				id: `q${Date.now().toString(36)}`,
+				kind: "quiz",
+				prompt: question,
+				context,
+				startedAt: Date.now(),
+				options: allOptions.map((o) => ({ index: o.index, label: o.label })),
+				answer: (a: PromptAnswer) => {
+					if (phase !== "select") return false;
+					if (a.dontKnow) {
+						dontKnow = true;
+						chosen = null;
+					} else {
+						const sel = allOptions.find((o) => o.index === a.choices?.[0]);
+						if (!sel) return false;
+						chosen = { label: sel.label, value: sel.value, index: sel.index };
+						dontKnow = false;
+					}
+					if (typeof a.confidence === "number") conf.confidence = a.confidence;
+					// Answered from the phone/iPad: show feedback here briefly, then continue without a keypress.
+					setTimeout(() => { if (phase === "feedback") finish(response()); }, 6000);
+					phase = dontKnow || typeof a.confidence === "number" ? "feedback" : "confidence";
+					focus = "options";
+					editor.focused = false;
+					refresh();
+					return true;
+				},
+			});
 			let cachedLines: string[] | undefined;
 			let cachedWidth = -1;
 
@@ -529,7 +563,7 @@ async function askSingleChoice(
 				}
 				if (phase === "feedback") {
 					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
-						done(response());
+						finish(response());
 					}
 					return;
 				}
@@ -580,7 +614,7 @@ async function askSingleChoice(
 					return;
 				}
 				if (matchesKey(data, Key.escape)) {
-					done(null);
+					finish(null);
 				}
 			}
 
@@ -695,6 +729,10 @@ async function askMultiChoice(
 			const conf: ConfState = { confidence: 70, digits: "" };
 			let focus: "options" | "note" = "options";
 			const editor = makeNoteEditor(tui, theme);
+			const finish = (r: QuizResponse | null) => {
+				setPending(undefined);
+				done(r);
+			};
 			let cachedLines: string[] | undefined;
 			let cachedWidth = -1;
 			const selected = new Map<string, OptionAnswer>();
@@ -716,6 +754,35 @@ async function askMultiChoice(
 			}
 
 			const choseDontKnow = () => selected.has(DONT_KNOW_ID);
+			setPending({
+				id: `q${Date.now().toString(36)}`,
+				kind: "quiz",
+				prompt: question,
+				context,
+				startedAt: Date.now(),
+				multi: true,
+				options: choiceItems.map((o) => ({ index: o.index, label: o.label })),
+				answer: (a: PromptAnswer) => {
+					if (phase !== "select") return false;
+					selected.clear();
+					if (a.dontKnow) selected.set(DONT_KNOW_ID, { label: dontKnowItem.label, value: dontKnowItem.value, index: dontKnowItem.index });
+					else {
+						for (const idx of a.choices ?? []) {
+							const it = choiceItems.find((o) => o.index === idx);
+							if (it) selected.set(it.id, { label: it.label, value: it.value, index: it.index });
+						}
+						if (selected.size === 0) return false;
+					}
+					if (typeof a.confidence === "number") conf.confidence = a.confidence;
+					// Answered from the phone/iPad: show feedback here briefly, then continue without a keypress.
+					setTimeout(() => { if (phase === "feedback") finish(response()); }, 6000);
+					phase = choseDontKnow() || typeof a.confidence === "number" ? "feedback" : "confidence";
+					focus = "options";
+					editor.focused = false;
+					refresh();
+					return true;
+				},
+			});
 			const realAnswers = () =>
 				sortAnswers(Array.from(selected.values()).filter((a) => a.index !== DONT_KNOW_INDEX));
 
@@ -762,7 +829,7 @@ async function askMultiChoice(
 				}
 				if (phase === "feedback") {
 					if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
-						done(response());
+						finish(response());
 					}
 					return;
 				}
@@ -817,7 +884,7 @@ async function askMultiChoice(
 				}
 
 				if (matchesKey(data, Key.escape)) {
-					done(null);
+					finish(null);
 				}
 			}
 
@@ -1049,6 +1116,18 @@ export default function quiz(pi: ExtensionAPI) {
 					return cancelledResult(params.question, mode, correctIndices, context);
 				}
 				const built = buildResult(params.question, context, mode, options, response, correctIndices, explanation, latencyMs);
+				setLastResult({
+					id: `q${t0.toString(36)}`,
+					at: Date.now(),
+					kind: "quiz",
+					prompt: params.question,
+					verdict: response.dontKnow ? "dontKnow" : built.details.correct ? "correct" : "incorrect",
+					explanation,
+					chosen: response.answers.map((a) => a.label),
+					correct: correctIndices.map((i) => options[i - 1]?.label ?? String(i)),
+					confidence: response.dontKnow ? undefined : response.confidence,
+					latencyMs,
+				});
 				try {
 					recordEvent(ctx.cwd, {
 						source: "quiz",

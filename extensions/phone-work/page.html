@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>learn</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"></script>
+<style>
+:root { --bg:#f6f5f2; --fg:#1d1d1f; --muted:#6e6e73; --card:#fff; --line:#e3e1dc; --accent:#2f6fde; --ok:#1f8a4c; --err:#c0392b; --warn:#b7791f; --soft:#eef2fb; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141416; --fg:#f2f2f4; --muted:#9a9aa1; --card:#1f1f23; --line:#2e2e34; --accent:#5b8ff0; --ok:#3fbf73; --err:#e5675a; --warn:#e0a83a; --soft:#242838; color-scheme: dark; } }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 -apple-system, system-ui, sans-serif; }
+header { display:flex; align-items:center; gap:12px; padding: max(10px, env(safe-area-inset-top)) 16px 10px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:5; }
+header h1 { font-size:16px; margin:0; font-weight:700; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.conn { font-size:12px; color:var(--muted); white-space:nowrap; }
+.conn.ok::before { content:"● "; color:var(--ok); } .conn.bad::before { content:"● "; color:var(--err); }
+.tabs { display:none; gap:6px; }
+.tabs button { min-height:34px; padding:0 12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-weight:600; }
+.tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+main { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr); gap:0; height: calc(100% - 56px); }
+#lesson { overflow:auto; padding:18px 22px 60px; border-right:1px solid var(--line); }
+#pad { overflow:auto; padding:14px 16px max(24px, env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:12px; }
+@media (max-width: 899px) {
+  main { grid-template-columns: 1fr; }
+  .tabs { display:flex; }
+  #lesson, #pad { display:none; border:0; }
+  body.view-lesson #lesson { display:block; } body.view-pad #pad { display:flex; }
+}
+/* lesson rendering */
+#lesson h1 { font-size:24px; margin:0 0 12px; } #lesson h2 { font-size:19px; margin:22px 0 8px; } #lesson h3 { font-size:17px; margin:18px 0 6px; }
+#lesson p { margin:0 0 10px; } #lesson img { max-width:100%; border-radius:10px; border:1px solid var(--line); }
+#lesson pre { background:var(--soft); padding:10px 12px; border-radius:10px; overflow:auto; font-size:14px; }
+#lesson code { font-size:0.93em; }
+.callout { border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:10px; padding:10px 14px; margin:12px 0; background:var(--card); }
+.callout .ct { font-weight:700; font-size:13px; letter-spacing:.03em; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
+.callout.c-quote { border-left-color:var(--muted); } .callout.c-quote .ct { color:var(--muted); }
+.callout.c-abstract { border-left-color:var(--accent); }
+.callout.c-question { border-left-color:var(--warn); } .callout.c-question .ct { color:var(--warn); }
+.callout.c-success { border-left-color:var(--ok); } .callout.c-success .ct { color:var(--ok); }
+.callout.c-failure { border-left-color:var(--err); } .callout.c-failure .ct { color:var(--err); }
+.callout.c-warning { border-left-color:var(--warn); } .callout.c-warning .ct { color:var(--warn); }
+.callout.c-note, .callout.c-example { border-left-color:var(--muted); } .callout.c-note .ct, .callout.c-example .ct { color:var(--muted); }
+.callout.c-note { opacity:.75; font-size:14px; }
+.callout .cb p:last-child { margin-bottom:0; }
+.mermaid { background:var(--card); border-radius:10px; padding:8px; }
+/* pad */
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+.kind { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--accent); }
+.timer { float:right; font-variant-numeric:tabular-nums; color:var(--muted); font-size:14px; }
+.prompt { margin-top:8px; font-size:17px; } .prompt p { margin:0 0 8px; } .prompt p:last-child { margin:0; }
+.idle { color:var(--muted); text-align:center; padding:18px 0; }
+.opts { display:flex; flex-direction:column; gap:8px; }
+.opts button { text-align:left; justify-content:flex-start; min-height:48px; padding:10px 12px; }
+.opts button.sel { border-color:var(--accent); background:var(--soft); }
+textarea { width:100%; min-height:100px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; padding:12px; resize:vertical; }
+.modes { display:flex; gap:6px; } .modes button { flex:1; min-height:40px; }
+.modes button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.conf { display:flex; align-items:center; gap:12px; } .conf label { color:var(--muted); font-size:14px; white-space:nowrap; }
+.conf input { flex:1; accent-color:var(--accent); } .conf output { min-width:3.2em; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+.btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+label.btn, button { display:flex; align-items:center; justify-content:center; min-height:46px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-weight:600; cursor:pointer; }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; grid-column:1 / -1; font-size:17px; }
+button.rec.on { border-color:var(--err); color:var(--err); } button:disabled { opacity:.45; }
+input[type=file] { display:none; }
+.grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; } .grid:empty { display:none; }
+.thumb { position:relative; aspect-ratio:3/4; border-radius:10px; overflow:hidden; background:var(--card); border:1px solid var(--line); }
+.thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.thumb button { position:absolute; top:4px; right:4px; min-height:0; width:28px; height:28px; border-radius:50%; padding:0; background:rgba(0,0,0,.6); color:#fff; border:0; font-size:16px; }
+/* drawing */
+.draw { display:none; flex-direction:column; gap:8px; } .draw.on { display:flex; }
+.tools { display:flex; gap:6px; flex-wrap:wrap; } .tools button { min-height:36px; padding:0 12px; flex:1; } .tools button.on { background:var(--soft); border-color:var(--accent); }
+.pages { display:flex; flex-direction:column; gap:8px; }
+canvas.page { width:100%; aspect-ratio: 4/3; background:#fff; border:1px solid var(--line); border-radius:10px; touch-action:none; display:block; }
+.status { min-height:1.4em; font-size:15px; text-align:center; } .status.ok { color:var(--ok); } .status.err { color:var(--err); }
+.result { border-left:4px solid var(--muted); } .result.correct { border-left-color:var(--ok); } .result.partial { border-left-color:var(--warn); } .result.incorrect { border-left-color:var(--err); }
+.result .v { font-weight:700; } .result .m { color:var(--muted); font-size:14px; } .result p { margin:6px 0 0; }
+.small { font-size:13px; color:var(--muted); text-align:center; }
+.hidden { display:none !important; }
+</style>
+</head><body class="view-pad">
+<header>
+  <h1 id="title">learn</h1>
+  <div class="tabs"><button id="tabLesson">Lesson</button><button id="tabPad" class="on">Answer</button></div>
+  <div id="conn" class="conn">Connecting…</div>
+</header>
+<main>
+  <section id="lesson"><div class="idle">No lesson open yet.</div></section>
+  <section id="pad">
+    <div id="qcard" class="card">
+      <span id="kind" class="kind"></span><span id="timer" class="timer"></span>
+      <div id="prompt" class="prompt"></div>
+      <div id="idle" class="idle">No open question. When the tutor asks something, it appears here.</div>
+    </div>
+    <div id="result" class="card result hidden"></div>
+    <div id="quiz" class="opts hidden"></div>
+    <div id="answer" class="hidden" style="display:flex; flex-direction:column; gap:10px;">
+      <div class="modes"><button id="mType" class="on">Type</button><button id="mDraw">Draw</button><button id="mPhoto">Photo</button><button id="mVoice">Voice</button></div>
+      <textarea id="text" placeholder="Type your answer…"></textarea>
+      <div id="draw" class="draw">
+        <div class="tools"><button id="pen" class="on">Pen</button><button id="eraser">Eraser</button><button id="undo">Undo</button><button id="clear">Clear</button><button id="addPage">+ Page</button></div>
+        <div id="pages" class="pages"></div>
+        <div class="small">Apple Pencil works with pressure; palm touches are ignored once a pen is seen. Drawings are sent as images.</div>
+      </div>
+      <div id="photo" class="hidden" style="display:flex; flex-direction:column; gap:8px;">
+        <div class="btns"><label class="btn">📷 Take photo<input id="cam" type="file" accept="image/*" capture="environment"></label><label class="btn">🖼 Choose<input id="pick" type="file" accept="image/*" multiple></label></div>
+        <div id="grid" class="grid"></div>
+      </div>
+      <div id="voice" class="hidden" style="display:flex; flex-direction:column; gap:8px;">
+        <button id="rec" class="rec">🎙 Record</button><div id="audioline" class="small"></div>
+      </div>
+    </div>
+    <div id="confrow" class="conf hidden"><label for="conf">Confidence</label><input id="conf" type="range" min="0" max="100" step="5" value="70"><output id="confv">70%</output></div>
+    <div id="actions" class="btns hidden">
+      <button id="hint">? Hint</button><button id="idk">I don't know</button>
+      <button id="send" class="primary" disabled>Send answer</button>
+    </div>
+    <div id="status" class="status" role="status"></div>
+    <div id="freephoto" class="card">
+      <div class="small">No question open? You can still send a photo to the tutor as a message.</div>
+      <div class="btns" style="margin-top:8px"><label class="btn">📷 Photo<input id="freecam" type="file" accept="image/*" capture="environment"></label><button id="freesend" disabled>Send to tutor</button></div>
+      <div id="freegrid" class="grid"></div>
+    </div>
+  </section>
+</main>
+<script>
+const token = new URLSearchParams(location.search).get("t");
+const $ = (id) => document.getElementById(id);
+const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(token);
+let pending = null, last = null, lastShownId = null, skew = 0, busy = false, mode = "type";
+const files = [], freefiles = []; let audio = null, recorder = null, chunks = [];
+let selected = new Set();
+const MAX = 2000;
+
+// ---------- markdown + math + callouts ----------
+function esc(t) { return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]); }
+function renderMd(src) {
+  const spans = [];
+  let s = src
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => { spans.push({ m, d: true }); return "@@M" + (spans.length - 1) + "@@"; })
+    .replace(/\$([^$\n]+?)\$/g, (_, m) => { spans.push({ m, d: false }); return "@@M" + (spans.length - 1) + "@@"; });
+  // mermaid fences -> pre.mermaid (kept raw)
+  const mer = [];
+  s = s.replace(/```mermaid\n([\s\S]*?)```/g, (_, body) => { mer.push(body); return "@@MER" + (mer.length - 1) + "@@"; });
+  let html;
+  try { html = window.marked ? marked.parse(s, { breaks: false }) : esc(s).replace(/\n/g, "<br>"); } catch { html = esc(s).replace(/\n/g, "<br>"); }
+  html = html.replace(/@@M(\d+)@@/g, (_, i) => { const x = spans[+i]; try { return window.katex ? katex.renderToString(x.m, { displayMode: x.d, throwOnError: false }) : esc(x.m); } catch { return esc(x.m); } });
+  html = html.replace(/(?:<p>)?@@MER(\d+)@@(?:<\/p>)?/g, (_, i) => '<pre class="mermaid">' + esc(mer[+i]) + "</pre>");
+  return html;
+}
+// Obsidian callouts: "> [!type] Title" + following "> " lines
+function splitCallouts(md) {
+  const lines = md.split("\n"); const out = []; let i = 0;
+  while (i < lines.length) {
+    const m = lines[i].match(/^> \[!(\w+)\]\s*(.*)$/);
+    if (!m) { out.push({ md: lines[i] }); i++; continue; }
+    const body = []; i++;
+    while (i < lines.length && lines[i].startsWith(">")) { body.push(lines[i].replace(/^> ?/, "")); i++; }
+    // YOU / PI blocks are followed by their text as plain lines until the next blank-blank or callout
+    out.push({ type: m[1].toLowerCase(), title: m[2], body: body.join("\n") });
+  }
+  return out;
+}
+function renderLesson(md) {
+  const parts = splitCallouts(md); let html = ""; let buf = [];
+  const flush = () => { if (buf.length) { html += renderMd(buf.join("\n")); buf = []; } };
+  for (const p of parts) {
+    if (p.type === undefined) { buf.push(p.md); continue; }
+    flush();
+    html += '<div class="callout c-' + p.type + '"><div class="ct">' + esc(p.title) + '</div><div class="cb">' + renderMd(p.body) + "</div></div>";
+  }
+  flush();
+  return html;
+}
+let lessonMtime = 0, lessonFile = null;
+async function pollLesson() {
+  try {
+    const r = await fetch(api("/lesson"), { cache: "no-store" }); if (!r.ok) return;
+    const j = await r.json();
+    if (!j.file) return;
+    if (j.file !== lessonFile) { lessonFile = j.file; $("title").textContent = j.title.replace(/-/g, " "); }
+    if (j.mtime === lessonMtime) return;
+    lessonMtime = j.mtime;
+    const el = $("lesson");
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    el.innerHTML = renderLesson(j.markdown.replace(/#w=\d+\)/g, ")"));
+    try { if (window.mermaid) { mermaid.initialize({ startOnLoad: false, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" }); await mermaid.run({ nodes: el.querySelectorAll("pre.mermaid") }); } } catch {}
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+  } catch {}
+}
+setInterval(pollLesson, 2000); pollLesson();
+
+// ---------- tabs (phone) ----------
+$("tabLesson").onclick = () => { document.body.className = "view-lesson"; $("tabLesson").classList.add("on"); $("tabPad").classList.remove("on"); };
+$("tabPad").onclick = () => { document.body.className = "view-pad"; $("tabPad").classList.add("on"); $("tabLesson").classList.remove("on"); };
+
+// ---------- prompt ----------
+function setStatus(msg, cls) { $("status").textContent = msg || ""; $("status").className = "status " + (cls || ""); }
+function fmt(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
+const KIND = { recall: "Recall", explain: "Explain it back", predict: "Predict", boundary: "Boundary", flaw: "Find the flaw", transfer: "Transfer", problem: "Problem", quiz: "Quiz" };
+function hasAnswer() {
+  if (!pending) return false;
+  if (pending.kind === "quiz") return selected.size > 0;
+  if (mode === "draw") return pages.some((p) => p.strokes.length);
+  return !!(files.length || audio || $("text").value.trim());
+}
+function updateButtons() {
+  const q = pending && pending.kind === "quiz";
+  $("send").disabled = !pending || busy || !hasAnswer();
+  for (const id of ["hint", "idk", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
+  $("hint").classList.toggle("hidden", !!q);
+  $("freesend").disabled = freefiles.length === 0 || busy;
+}
+function showPrompt(p) {
+  $("kind").textContent = KIND[p.kind] || p.kind; $("prompt").innerHTML = renderMd(p.prompt + (p.context ? "\n\n" + p.context : ""));
+  $("idle").classList.add("hidden"); $("prompt").classList.remove("hidden"); $("kind").classList.remove("hidden");
+  $("result").classList.add("hidden");
+  $("confrow").classList.remove("hidden"); $("actions").classList.remove("hidden"); $("freephoto").classList.add("hidden");
+  if (p.kind === "quiz") {
+    $("answer").classList.add("hidden"); $("quiz").classList.remove("hidden"); $("quiz").innerHTML = ""; selected = new Set();
+    for (const o of p.options || []) {
+      const b = document.createElement("button"); b.innerHTML = o.index + ". " + renderMd(o.label).replace(/^<p>|<\/p>\s*$/g, "");
+      b.onclick = () => { if (p.multi) { selected.has(o.index) ? selected.delete(o.index) : selected.add(o.index); } else { selected = new Set([o.index]); } [...$("quiz").children].forEach((c, i) => c.classList.toggle("sel", selected.has((p.options[i] || {}).index))); updateButtons(); };
+      $("quiz").appendChild(b);
+    }
+  } else {
+    $("quiz").classList.add("hidden"); $("answer").classList.remove("hidden");
+    setMode(p.paper && pointerPenCapable ? "draw" : "type");
+  }
+  resetAnswer(); setStatus("");
+  try { navigator.vibrate && navigator.vibrate(80); } catch {}
+}
+function hidePrompt() {
+  pending = null; $("idle").classList.remove("hidden"); $("prompt").classList.add("hidden"); $("kind").classList.add("hidden"); $("timer").textContent = "";
+  $("quiz").classList.add("hidden"); $("answer").classList.add("hidden"); $("confrow").classList.add("hidden"); $("actions").classList.add("hidden"); $("freephoto").classList.remove("hidden");
+  updateButtons();
+}
+function showResult(r) {
+  const el = $("result"); const v = r.verdict || "ungraded";
+  el.className = "card result " + v;
+  const mark = v === "correct" ? "✓" : v === "partial" ? "◐" : v === "incorrect" ? "✗" : "";
+  let html = '<div class="v">' + mark + " " + esc(v) + (r.score !== undefined ? " (" + Math.round(r.score * 100) + "%)" : "") + '</div>';
+  const meta = []; if (r.confidence !== undefined) meta.push("confidence " + r.confidence + "%"); if (r.latencyMs) meta.push(Math.round(r.latencyMs / 1000) + "s");
+  if (meta.length) html += '<div class="m">' + meta.join(" · ") + "</div>";
+  if (r.chosen && r.chosen.length) html += "<p><b>You chose:</b> " + esc(r.chosen.join(" | ")) + "</p>";
+  if (r.correct && r.correct.length && v !== "correct") html += "<p><b>Correct:</b> " + esc(r.correct.join(" | ")) + "</p>";
+  if (r.reading) html += '<p class="m">Read as: ' + esc(r.reading) + "</p>";
+  if (r.firstError) html += "<p><b>First error:</b> " + esc(r.firstError) + "</p>";
+  if (r.feedback) html += "<p>" + renderMd(r.feedback) + "</p>";
+  if (r.explanation) html += "<p>" + renderMd(r.explanation) + "</p>";
+  if (r.reference) html += '<p class="m">Key points: ' + renderMd(r.reference) + "</p>";
+  el.innerHTML = html; el.classList.remove("hidden");
+}
+async function poll() {
+  try {
+    const r = await fetch(api("/prompt"), { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json(); skew = Date.now() - j.now;
+    $("conn").textContent = "Connected"; $("conn").className = "conn ok";
+    const p = j.pending;
+    if (p && (!pending || pending.id !== p.id)) { pending = p; showPrompt(p); }
+    else if (!p && pending) hidePrompt();
+    if (j.last && j.last.id !== lastShownId && (!p || p.id !== j.last.id) && Date.now() - skew - j.last.at < 10 * 60 * 1000) { lastShownId = j.last.id; showResult(j.last); }
+  } catch (e) { $("conn").textContent = "Can't reach your Mac — is Tailscale on?"; $("conn").className = "conn bad"; }
+}
+setInterval(poll, 1500); poll();
+setInterval(() => { if (pending) $("timer").textContent = fmt(Date.now() - skew - pending.startedAt); }, 500);
+
+// ---------- answer modes ----------
+function setMode(m) {
+  mode = m;
+  for (const [id, k] of [["mType", "type"], ["mDraw", "draw"], ["mPhoto", "photo"], ["mVoice", "voice"]]) $(id).classList.toggle("on", k === m);
+  $("text").classList.toggle("hidden", m !== "type"); $("draw").classList.toggle("on", m === "draw"); $("photo").classList.toggle("hidden", m !== "photo"); $("voice").classList.toggle("hidden", m !== "voice");
+  if (m === "draw") ensurePage();
+  updateButtons();
+}
+$("mType").onclick = () => setMode("type"); $("mDraw").onclick = () => setMode("draw"); $("mPhoto").onclick = () => setMode("photo"); $("mVoice").onclick = () => setMode("voice");
+function resetAnswer() { files.length = 0; audio = null; $("text").value = ""; $("audioline").textContent = ""; renderGrid($("grid"), files); $("conf").value = 70; $("confv").textContent = "70%"; clearPages(); updateButtons(); }
+$("text").oninput = updateButtons; $("conf").oninput = () => { $("confv").textContent = $("conf").value + "%"; };
+
+// ---------- drawing (Apple Pencil aware) ----------
+let pointerPenCapable = false, penSeen = false, tool = "pen";
+const pages = [];
+function ensurePage() { if (pages.length === 0) addPage(); }
+function addPage() {
+  const c = document.createElement("canvas"); c.className = "page"; $("pages").appendChild(c);
+  const page = { canvas: c, strokes: [], current: null, dpr: Math.max(1, window.devicePixelRatio || 1) };
+  const size = () => { const w = c.clientWidth; const h = Math.round(w * 0.75); c.width = Math.round(w * page.dpr); c.height = Math.round(h * page.dpr); c.style.height = h + "px"; redraw(page); };
+  requestAnimationFrame(size); window.addEventListener("resize", size);
+  c.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "pen") { penSeen = true; pointerPenCapable = true; }
+    if (e.pointerType === "touch" && penSeen) return; // palm rejection
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    c.setPointerCapture(e.pointerId);
+    const r = c.getBoundingClientRect();
+    page.current = { tool, points: [[(e.clientX - r.left) * page.dpr, (e.clientY - r.top) * page.dpr, e.pressure || 0.5]] };
+    e.preventDefault();
+  });
+  c.addEventListener("pointermove", (e) => {
+    if (!page.current) return; const r = c.getBoundingClientRect();
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of evs) page.current.points.push([(ev.clientX - r.left) * page.dpr, (ev.clientY - r.top) * page.dpr, ev.pressure || 0.5]);
+    drawStroke(page, page.current, true); e.preventDefault();
+  });
+  const end = () => { if (!page.current) return; page.strokes.push(page.current); page.current = null; redraw(page); updateButtons(); };
+  c.addEventListener("pointerup", end); c.addEventListener("pointercancel", end); c.addEventListener("pointerleave", end);
+  pages.push(page);
+}
+function drawStroke(page, s, partial) {
+  const ctx = page.canvas.getContext("2d"); const pts = s.points; if (pts.length < 1) return;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.globalCompositeOperation = s.tool === "eraser" ? "destination-out" : "source-over";
+  ctx.strokeStyle = "#1b2a6b";
+  const base = (s.tool === "eraser" ? 18 : 2.2) * page.dpr;
+  const from = partial ? Math.max(1, pts.length - 2) : 1;
+  for (let i = from; i < pts.length; i++) {
+    ctx.lineWidth = base * (s.tool === "eraser" ? 1 : 0.6 + pts[i][2] * 1.2);
+    ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
+  }
+  if (pts.length === 1) { ctx.lineWidth = base; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[0][0] + 0.1, pts[0][1]); ctx.stroke(); }
+}
+function redraw(page) { const ctx = page.canvas.getContext("2d"); ctx.globalCompositeOperation = "source-over"; ctx.clearRect(0, 0, page.canvas.width, page.canvas.height); for (const s of page.strokes) drawStroke(page, s, false); }
+function clearPages() { for (const p of pages) { p.strokes = []; redraw(p); } }
+$("pen").onclick = () => { tool = "pen"; $("pen").classList.add("on"); $("eraser").classList.remove("on"); };
+$("eraser").onclick = () => { tool = "eraser"; $("eraser").classList.add("on"); $("pen").classList.remove("on"); };
+$("undo").onclick = () => { const p = [...pages].reverse().find((p) => p.strokes.length); if (p) { p.strokes.pop(); redraw(p); updateButtons(); } };
+$("clear").onclick = () => { clearPages(); updateButtons(); };
+$("addPage").onclick = () => addPage();
+function exportPages() {
+  return pages.filter((p) => p.strokes.length).map((p) => {
+    const c = document.createElement("canvas"); c.width = p.canvas.width; c.height = p.canvas.height;
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(p.canvas, 0, 0);
+    const url = c.toDataURL("image/png"); return { data: url.split(",")[1], mimeType: "image/png" };
+  });
+}
+
+// ---------- photos ----------
+function renderGrid(grid, list) {
+  grid.innerHTML = "";
+  list.forEach((f, i) => { const d = document.createElement("div"); d.className = "thumb"; const img = document.createElement("img"); img.src = f.preview; d.appendChild(img);
+    const x = document.createElement("button"); x.textContent = "×"; x.onclick = () => { list.splice(i, 1); renderGrid(grid, list); updateButtons(); }; d.appendChild(x); grid.appendChild(d); });
+}
+async function shrink(file) {
+  let src; try { src = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch { src = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); }); }
+  const w = src.width, h = src.height, s = Math.min(1, MAX / Math.max(w, h));
+  const c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s); c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+  const url = c.toDataURL("image/jpeg", 0.85); return { preview: url, data: url.split(",")[1], mimeType: "image/jpeg" };
+}
+async function addFiles(list, into, grid) { for (const f of list) { try { into.push(await shrink(f)); } catch { setStatus("Couldn't read that image.", "err"); } } renderGrid(grid, into); updateButtons(); }
+$("cam").onchange = (e) => { addFiles([...e.target.files], files, $("grid")); e.target.value = ""; };
+$("pick").onchange = (e) => { addFiles([...e.target.files], files, $("grid")); e.target.value = ""; };
+$("freecam").onchange = (e) => { addFiles([...e.target.files], freefiles, $("freegrid")); e.target.value = ""; };
+
+// ---------- voice ----------
+$("rec").onclick = async () => {
+  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); chunks = [];
+    recorder.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
+    recorder.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); const blob = new Blob(chunks, { type: recorder.mimeType || mime || "audio/webm" });
+      const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.readAsDataURL(blob); });
+      audio = { data: b64, mimeType: blob.type }; $("rec").textContent = "🎙 Record"; $("rec").classList.remove("on"); $("audioline").textContent = "Recorded " + Math.round(blob.size / 1024) + " KB — transcribed on send."; updateButtons(); };
+    recorder.start(); $("rec").textContent = "■ Stop"; $("rec").classList.add("on"); setStatus("");
+  } catch (e) { setStatus("Microphone unavailable: " + e.message, "err"); }
+};
+
+// ---------- send ----------
+async function post(path, body) { const r = await fetch(api(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ("HTTP " + r.status)); return j; }
+async function submit(body, label) {
+  busy = true; updateButtons(); setStatus(label || "Sending…");
+  try { const j = await post("/answer", { id: pending && pending.id, ...body }); setStatus(j.transcript ? "Sent ✓ — heard: “" + j.transcript + "”" : "Sent ✓", "ok"); resetAnswer(); }
+  catch (e) { setStatus("Failed: " + e.message, "err"); }
+  busy = false; updateButtons();
+}
+$("send").onclick = () => {
+  if (!pending) return;
+  const confidence = Number($("conf").value);
+  if (pending.kind === "quiz") return submit({ choices: [...selected], confidence });
+  const images = mode === "draw" ? exportPages() : files.map((f) => ({ data: f.data, mimeType: f.mimeType }));
+  submit({ text: mode === "type" ? $("text").value : "", confidence, images, audio: mode === "voice" ? audio : null }, audio ? "Transcribing on the Mac…" : "Sending…");
+};
+$("hint").onclick = () => submit({ hint: true });
+$("idk").onclick = () => submit({ dontKnow: true });
+$("freesend").onclick = async () => { busy = true; updateButtons(); setStatus("Sending…"); try { await post("/upload", { note: "", images: freefiles.map((f) => ({ data: f.data, mimeType: f.mimeType })) }); freefiles.length = 0; renderGrid($("freegrid"), freefiles); setStatus("Sent ✓", "ok"); } catch (e) { setStatus("Failed: " + e.message, "err"); } busy = false; updateButtons(); };
+if (matchMedia("(min-width: 900px)").matches) document.body.className = "view-pad view-lesson";
+hidePrompt();
+</script>
+</body></html>

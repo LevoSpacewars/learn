@@ -29,7 +29,7 @@ import * as path from "node:path";
 import { type GradeResult, grade } from "./review/grader.ts";
 import { gradeCard, refreshReviewStatus } from "./review/index.ts";
 import { plainMath } from "./review/plainmath.ts";
-import { type PromptAnswer, setPending } from "./review/prompts.ts";
+import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import { type CheckKind, recordCalibration, recordEvent } from "./review/store.ts";
 
 type RecallStatus = "answered" | "hint" | "dontKnow" | "cancelled" | "unavailable";
@@ -120,6 +120,7 @@ function ratingFor(r: GradeResult, latencyMs: number): "again" | "hard" | "good"
 }
 
 interface UiOutcome {
+	promptId?: string;
 	status: RecallStatus;
 	answer?: PromptAnswer;
 	confidence?: number;
@@ -154,7 +155,7 @@ async function askRecall(
 		}
 		function finish(r: UiOutcome) {
 			setPending(undefined);
-			done(r);
+			done({ ...r, promptId });
 		}
 		function receive(a: PromptAnswer): boolean {
 			if (phase !== "answer") return false;
@@ -191,11 +192,15 @@ async function askRecall(
 				})
 				.finally(() => {
 					phase = "feedback";
+					// Publish for the web surface as soon as grading is done (not when Enter is pressed here).
+					setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: graded?.verdict ?? "ungraded", score: graded?.score, feedback: graded?.feedback ?? gradeError, reading: graded?.reading, firstError: graded?.firstError, reference: opts.reference, confidence, latencyMs });
 					refresh();
+					// Answered from the phone/iPad: the result is on that screen, so don't wait for a keypress here.
+					if (answer?.source !== "tui") setTimeout(() => { if (phase === "feedback") finish({ status: "answered", answer, confidence, latencyMs, graded }); }, 8000);
 				});
 		}
 
-		setPending({ id: promptId, kind: opts.kind, prompt: opts.prompt, startedAt, answer: receive });
+		setPending({ id: promptId, kind: opts.kind, prompt: opts.prompt, paper: opts.paper, startedAt, answer: receive });
 
 		function handleInput(data: string) {
 			if (phase === "answer") {
@@ -365,6 +370,7 @@ export default function recall(pi: ExtensionAPI) {
 
 			onUpdate?.({ content: [{ type: "text", text: "asked" }], details: { ...base, phase: "asked" } });
 
+			const promptStarted = Date.now();
 			const outcome = await withUILock(() => askRecall(ctx, {
 				kind,
 				prompt: params.prompt,
@@ -388,6 +394,7 @@ export default function recall(pi: ExtensionAPI) {
 			const answerText = outcome.answer?.text ?? outcome.answer?.audio?.transcript;
 			const details: RecallDetails = { ...base, status: outcome.status, phase: "done", modality, answerText, photos, latencyMs: outcome.latencyMs };
 
+			if (outcome.status !== "answered") setLastResult({ id: outcome.promptId ?? `p${promptStarted.toString(36)}`, at: Date.now(), kind, prompt: params.prompt, verdict: outcome.status, latencyMs: outcome.latencyMs });
 			if (outcome.status === "cancelled") return result("Learner cancelled the prompt (Esc). Ask what they'd like to do.", details);
 			const logEvent = (verdict: "correct" | "partial" | "incorrect" | "dontKnow" | "hint", extra: Partial<Parameters<typeof recordEvent>[1]> = {}) => {
 				try {
@@ -416,6 +423,7 @@ export default function recall(pi: ExtensionAPI) {
 			const g = outcome.graded;
 			const confidence = outcome.confidence ?? 50;
 			details.confidence = confidence;
+
 			if (g) {
 				Object.assign(details, { verdict: g.verdict, score: g.score, reading: g.reading, firstError: g.firstError, feedback: g.feedback });
 				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading, confidence });

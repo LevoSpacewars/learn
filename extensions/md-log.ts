@@ -43,6 +43,11 @@ const RECALL_LABEL: Record<string, string> = {
 
 export default function mdLog(pi: ExtensionAPI) {
 	let logFile: string | null = null;
+	// Shared with the web viewer (phone-work) via globalThis: pi isolates module state per extension.
+	const setLog = (v: string | null) => {
+		logFile = v;
+		(globalThis as any).__learnLogFile = v;
+	};
 
 	// --- State restoration on session restart ---
 
@@ -54,11 +59,11 @@ export default function mdLog(pi: ExtensionAPI) {
 			}
 		}
 		if (lastLinkData?.file) {
-			logFile = lastLinkData.file;
+			setLog(lastLinkData.file);
 			const theme = ctx.ui.theme;
 			ctx.ui.setStatus(
 				"md-log",
-				theme.fg("accent", "🗒 ") + theme.fg("dim", path.basename(logFile)),
+				theme.fg("accent", "🗒 ") + theme.fg("dim", path.basename(lastLinkData.file)),
 			);
 		}
 	});
@@ -375,7 +380,7 @@ export default function mdLog(pi: ExtensionAPI) {
 				return;
 			}
 
-			logFile = resolved;
+			setLog(resolved);
 			pi.appendEntry("md-log", { file: resolved });
 
 			// Backfill the active branch.
@@ -395,7 +400,7 @@ export default function mdLog(pi: ExtensionAPI) {
 	pi.events.on("md-log:link", (data: any) => {
 		const { file, ctx } = data ?? {};
 		if (!file || !ctx || !fs.existsSync(file)) return;
-		logFile = file;
+		setLog(file);
 		pi.appendEntry("md-log", { file });
 		backfill(ctx);
 		const theme = ctx.ui.theme;
@@ -410,7 +415,7 @@ export default function mdLog(pi: ExtensionAPI) {
 				return;
 			}
 			const name = path.basename(logFile);
-			logFile = null;
+			setLog(null);
 			pi.appendEntry("md-log", { file: null });
 			ctx.ui.setStatus("md-log", undefined);
 			ctx.ui.notify(`Unlinked: ${name}`, "info");

@@ -1,5 +1,6 @@
 /**
- * phone-work — the answer pad: your phone as the answering surface.
+ * phone-work — the learn web surface: lesson viewer + answer pad, for
+ * phone, iPad and laptop (any device on the tailnet, plus this Mac).
  *
  * A tiny HTTP server serves a mobile page that mirrors whatever prompt the
  * tutor is waiting on (a `recall` question), with a running timer, an answer
@@ -32,8 +33,9 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import qrcode from "qrcode-terminal";
-import { answerPending, getPending } from "../review/prompts.ts";
+import { answerPending, getLastResult, getPending } from "../review/prompts.ts";
 
 const PORT = Number(process.env.PI_PHONE_PORT) || 8787;
 const MAX_BODY = 60 * 1024 * 1024;
@@ -42,6 +44,39 @@ const MIME_EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "pn
 const AUDIO_EXT: Record<string, string> = { "audio/webm": "webm", "audio/mp4": "m4a", "audio/mpeg": "mp3", "audio/ogg": "ogg", "audio/wav": "wav", "audio/x-m4a": "m4a", "audio/aac": "aac" };
 const WHISPER_MODEL = process.env.PI_WHISPER_MODEL || path.join(os.homedir(), ".cache", "whisper", "ggml-medium.en.bin");
 const WHISPER_BIN = process.env.PI_WHISPER_BIN || "whisper-cli";
+
+const PAGE_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "page.html");
+function pageHtml(): string {
+	try {
+		return fs.readFileSync(PAGE_FILE, "utf8");
+	} catch (e: any) {
+		return `<!doctype html><meta charset="utf-8"><p>page.html missing next to phone-work/index.ts (${String(e?.message ?? e)})</p>`;
+	}
+}
+
+/** Files the viewer may fetch: images and audio under these vault folders only. */
+const SERVABLE_DIRS = ["work", "viz", "inbox", "knowledge", "lessons"];
+const SERVE_MIME: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml", ".pdf": "application/pdf", ".md": "text/markdown; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".m4a": "audio/mp4", ".webm": "audio/webm", ".mp3": "audio/mpeg" };
+
+function serveVaultFile(cwd: string, rel: string, res: http.ServerResponse) {
+	const clean = rel.replace(/^\/+/, "");
+	const abs = path.resolve(cwd, clean);
+	const top = clean.split("/")[0];
+	if (!SERVABLE_DIRS.includes(top) || !abs.startsWith(path.resolve(cwd) + path.sep) || abs.includes("..")) return send(res, 403, "text/plain", "Forbidden");
+	if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return send(res, 404, "text/plain", "Not found");
+	const type = SERVE_MIME[path.extname(abs).toLowerCase()] ?? "application/octet-stream";
+	res.writeHead(200, { "content-type": type, "cache-control": "no-store" });
+	fs.createReadStream(abs).pipe(res);
+}
+
+/** Resolve an Obsidian embed name (work-….jpg) to a vault-relative path. */
+function findEmbed(cwd: string, name: string): string | undefined {
+	for (const d of SERVABLE_DIRS) {
+		const p = path.join(cwd, d, name);
+		if (fs.existsSync(p)) return `${d}/${name}`;
+	}
+	return undefined;
+}
 
 function tailscaleIPv4(): string | undefined {
 	for (const addrs of Object.values(os.networkInterfaces())) {
@@ -155,6 +190,7 @@ function saveImages(cwd: string, images: Array<{ data: string; mimeType: string 
 /** Shared with recall.ts (which can draw the QR inside an open prompt). */
 interface PhoneShared {
 	url?: string;
+	localUrl?: string;
 	qrLines?: string[];
 	connected: boolean;
 }
@@ -179,7 +215,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 		if (!url) return [];
 		let qr = "";
 		qrcode.generate(url, { small: true }, (q: string) => (qr = q));
-		sh.qrLines = [...qr.split("\n").filter((l) => l.trim()), "Scan with your phone (Tailscale on) or open:", url, "Bookmark it — the link stays the same. Hides once the phone connects. /phone hide to dismiss."];
+		sh.qrLines = [...qr.split("\n").filter((l) => l.trim()), "Scan with your phone or iPad (Tailscale on), or open:", url, `On this Mac: ${sh.localUrl ?? ""}`, "Bookmark it — the link stays the same. Hides once a device connects. /phone hide to dismiss."];
 		return sh.qrLines;
 	}
 
@@ -320,7 +356,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 		const s = http.createServer((req, res) => {
 			const u = new URL(req.url ?? "/", "http://x");
 			if (!tokenOk(u.searchParams.get("t"), token)) return send(res, 403, "text/plain", "Forbidden");
-			if (req.method === "GET" && u.pathname === "/") return send(res, 200, "text/html; charset=utf-8", PAGE);
+			if (req.method === "GET" && u.pathname === "/") return send(res, 200, "text/html; charset=utf-8", pageHtml());
 			if (req.method === "GET" && u.pathname === "/ping") {
 				phoneSeen();
 				return json(res, 200, { ok: true });
@@ -328,7 +364,28 @@ export default function phoneWork(pi: ExtensionAPI) {
 			if (req.method === "GET" && u.pathname === "/prompt") {
 				phoneSeen();
 				const p = getPending();
-				return json(res, 200, { now: Date.now(), pending: p ? { id: p.id, kind: p.kind, prompt: p.prompt, startedAt: p.startedAt } : null });
+				const last = getLastResult();
+				return json(res, 200, {
+					now: Date.now(),
+					pending: p ? { id: p.id, kind: p.kind, prompt: p.prompt, context: p.context, startedAt: p.startedAt, paper: p.paper, options: p.options, multi: p.multi } : null,
+					last: last ?? null,
+				});
+			}
+			if (req.method === "GET" && u.pathname === "/lesson") {
+				// The live lesson note (md-log's file), with embeds resolved to servable paths.
+				const file = (globalThis as any).__learnLogFile as string | null | undefined;
+				const cwd = latestCtx?.cwd ?? process.cwd();
+				if (!file || !fs.existsSync(file)) return json(res, 200, { file: null, markdown: "", mtime: 0 });
+				const raw = fs.readFileSync(file, "utf8");
+				const markdown = raw.replace(/!\[\[([^\]|]+)(?:\|(\d+))?\]\]/g, (m, name: string, w?: string) => {
+					const rel = findEmbed(cwd, name.trim());
+					return rel ? `![${name}](/file?p=${encodeURIComponent(rel)}&t=${encodeURIComponent(token)}${w ? `#w=${w}` : ""})` : m;
+				});
+				return json(res, 200, { file: path.relative(cwd, file), title: path.basename(file, ".md"), markdown, mtime: fs.statSync(file).mtimeMs });
+			}
+			if (req.method === "GET" && u.pathname === "/file") {
+				const p = u.searchParams.get("p") ?? "";
+				return serveVaultFile(latestCtx?.cwd ?? process.cwd(), p, res);
 			}
 			if (req.method === "POST" && u.pathname === "/upload") {
 				handleUpload(req, res).catch((e) => json(res, 500, { error: String(e?.message ?? e) }));
@@ -340,6 +397,11 @@ export default function phoneWork(pi: ExtensionAPI) {
 			}
 			send(res, 404, "text/plain", "Not found");
 		});
+		// Also reachable from this Mac's own browser.
+		const local = http.createServer((req, res) => s.emit("request", req, res));
+		local.on("error", () => {});
+		local.listen(PORT, "127.0.0.1");
+		s.on("close", () => local.close());
 		// Claim the slot before listen() resolves so a quick /phone can't start a second server.
 		server = s;
 		s.on("error", (e: any) => {
@@ -352,6 +414,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 		s.listen(PORT, host, () => {
 			url = `http://${host}:${PORT}/?t=${token}`;
 			shared().url = url;
+			shared().localUrl = `http://127.0.0.1:${PORT}/?t=${token}`;
 			shared().qrLines = undefined;
 			startError = undefined;
 			setStatus();
@@ -398,199 +461,3 @@ export default function phoneWork(pi: ExtensionAPI) {
 		},
 	});
 }
-
-const PAGE = `<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>Answer pad</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-<style>
-:root { --bg:#f6f5f2; --fg:#1d1d1f; --muted:#6e6e73; --card:#fff; --line:#e3e1dc; --accent:#2f6fde; --ok:#1f8a4c; --err:#c0392b; --warn:#b7791f; color-scheme: light; }
-@media (prefers-color-scheme: dark) { :root { --bg:#141416; --fg:#f2f2f4; --muted:#9a9aa1; --card:#1f1f23; --line:#2e2e34; --accent:#5b8ff0; --ok:#3fbf73; --err:#e5675a; --warn:#e0a83a; color-scheme: dark; } }
-* { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.45 -apple-system, system-ui, sans-serif; padding: max(12px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
-main { max-width: 560px; margin: 0 auto; display:flex; flex-direction:column; gap:12px; }
-.top { display:flex; justify-content:space-between; align-items:baseline; }
-h1 { font-size: 20px; margin: 0; }
-.conn { font-size: 13px; color: var(--muted); }
-.conn.ok::before { content:"● "; color: var(--ok); }
-.conn.bad::before { content:"● "; color: var(--err); }
-.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
-.kind { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--accent); }
-.timer { float:right; font-variant-numeric: tabular-nums; color:var(--muted); font-size:14px; }
-.prompt { margin-top:8px; font-size:17px; }
-.prompt p { margin: 0 0 8px; }
-.idle { color:var(--muted); text-align:center; padding:18px 0; }
-textarea { width:100%; min-height:110px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; padding:12px; resize:vertical; }
-.conf { display:flex; align-items:center; gap:12px; }
-.conf label { color:var(--muted); font-size:14px; white-space:nowrap; }
-.conf input { flex:1; accent-color: var(--accent); }
-.conf output { min-width:3.2em; text-align:right; font-variant-numeric: tabular-nums; font-weight:600; }
-.btns { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-label.btn, button { display:flex; align-items:center; justify-content:center; min-height:50px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-weight:600; cursor:pointer; }
-button.primary { background:var(--accent); border-color:var(--accent); color:#fff; grid-column: 1 / -1; font-size:17px; }
-button.rec.on { border-color: var(--err); color: var(--err); }
-button:disabled { opacity:.45; }
-input[type=file] { display:none; }
-.grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
-.grid:empty { display:none; }
-.thumb { position:relative; aspect-ratio: 3/4; border-radius:10px; overflow:hidden; background:var(--card); border:1px solid var(--line); }
-.thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-.thumb button { position:absolute; top:4px; right:4px; min-height:0; width:28px; height:28px; border-radius:50%; padding:0; background:rgba(0,0,0,.6); color:#fff; border:0; font-size:16px; }
-.status { min-height: 1.4em; font-size: 15px; text-align:center; }
-.status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); }
-.small { font-size:13px; color:var(--muted); text-align:center; }
-</style>
-</head><body><main>
-<div class="top"><h1>Answer pad</h1><div id="conn" class="conn">Connecting…</div></div>
-
-<section id="qcard" class="card">
-  <span id="kind" class="kind"></span><span id="timer" class="timer"></span>
-  <div id="prompt" class="prompt"></div>
-  <div id="idle" class="idle">No open question. When the tutor asks something, it appears here.</div>
-</section>
-
-<textarea id="text" placeholder="Type your answer… (or use photo / voice)"></textarea>
-<div id="audioline" class="small"></div>
-<div class="conf"><label for="conf">Confidence</label><input id="conf" type="range" min="0" max="100" step="5" value="70"><output id="confv">70%</output></div>
-<div id="grid" class="grid"></div>
-<div class="btns">
-  <label class="btn">📷 Photo<input id="cam" type="file" accept="image/*" capture="environment"></label>
-  <button id="rec" class="rec">🎙 Record</button>
-  <button id="hint">? Hint</button>
-  <button id="idk">I don't know</button>
-  <button id="send" class="primary" disabled>Send answer</button>
-</div>
-<div id="status" class="status" role="status"></div>
-<div class="small">Photos and voice are saved into the vault. Voice is transcribed on the Mac.</div>
-</main>
-<script>
-const token = new URLSearchParams(location.search).get("t");
-const $ = (id) => document.getElementById(id);
-const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(token);
-const files = [];
-let pending = null, audio = null, recorder = null, chunks = [], skew = 0, busy = false;
-const MAX = 2000;
-
-function setStatus(msg, cls) { $("status").textContent = msg || ""; $("status").className = "status " + (cls || ""); }
-function fmt(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
-function esc(t) { return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]); }
-function renderPrompt(p) {
-  const el = $("prompt");
-  // Set the math aside BEFORE markdown runs (marked mangles backslashes and
-  // underscores inside $...$), then render each span with KaTeX directly.
-  const spans = [];
-  const src = p.prompt
-    .replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => { spans.push({ m, d: true }); return "@@M" + (spans.length - 1) + "@@"; })
-    .replace(/\$([^$\n]+?)\$/g, (_, m) => { spans.push({ m, d: false }); return "@@M" + (spans.length - 1) + "@@"; });
-  let html;
-  try { html = window.marked ? marked.parse(src) : esc(src).replace(/\n/g, "<br>"); } catch { html = esc(src).replace(/\n/g, "<br>"); }
-  html = html.replace(/@@M(\d+)@@/g, (_, i) => {
-    const s = spans[+i];
-    try { return window.katex ? katex.renderToString(s.m, { displayMode: s.d, throwOnError: false }) : esc(s.m); } catch { return esc(s.m); }
-  });
-  el.innerHTML = html;
-  $("kind").textContent = ({recall:"Recall", explain:"Explain it back", predict:"Predict", boundary:"Boundary", flaw:"Find the flaw", transfer:"Transfer", problem:"Problem"})[p.kind] || p.kind;
-}
-function updateButtons() {
-  const has = files.length || audio || $("text").value.trim();
-  $("send").disabled = !pending || busy || !has;
-  for (const id of ["hint","idk","rec","cam"]) $(id).disabled = !pending || busy;
-}
-function resetAnswer() { files.length = 0; audio = null; $("text").value = ""; $("audioline").textContent = ""; renderGrid(); $("conf").value = 70; $("confv").textContent = "70%"; updateButtons(); }
-
-async function poll() {
-  try {
-    const r = await fetch(api("/prompt"), { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const j = await r.json();
-    skew = Date.now() - j.now;
-    $("conn").textContent = "Connected"; $("conn").className = "conn ok";
-    const p = j.pending;
-    if (p && (!pending || pending.id !== p.id)) {
-      pending = p; renderPrompt(p); $("idle").style.display = "none"; $("prompt").style.display = ""; $("kind").style.display = "";
-      resetAnswer(); setStatus("");
-      try { navigator.vibrate && navigator.vibrate(80); } catch {}
-    } else if (!p && pending) {
-      pending = null; $("idle").style.display = ""; $("prompt").style.display = "none"; $("kind").style.display = "none"; $("timer").textContent = "";
-      updateButtons();
-    } else if (!p) { $("idle").style.display = ""; $("prompt").style.display = "none"; $("kind").style.display = "none"; }
-  } catch (e) {
-    $("conn").textContent = "Can't reach your Mac — is Tailscale on?"; $("conn").className = "conn bad";
-  }
-}
-setInterval(poll, 1500); poll();
-setInterval(() => { if (pending) $("timer").textContent = fmt(Date.now() - skew - pending.startedAt); }, 500);
-
-function renderGrid() {
-  $("grid").innerHTML = "";
-  files.forEach((f, i) => {
-    const d = document.createElement("div"); d.className = "thumb";
-    const img = document.createElement("img"); img.src = f.preview; d.appendChild(img);
-    const x = document.createElement("button"); x.textContent = "×"; x.setAttribute("aria-label", "Remove photo");
-    x.onclick = () => { files.splice(i, 1); renderGrid(); updateButtons(); };
-    d.appendChild(x); $("grid").appendChild(d);
-  });
-}
-async function shrink(file) {
-  let src;
-  try { src = await createImageBitmap(file, { imageOrientation: "from-image" }); }
-  catch { src = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); }); }
-  const w = src.width, h = src.height, s = Math.min(1, MAX / Math.max(w, h));
-  const c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s);
-  c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
-  const url = c.toDataURL("image/jpeg", 0.85);
-  return { preview: url, data: url.split(",")[1], mimeType: "image/jpeg" };
-}
-$("cam").onchange = async (e) => {
-  for (const f of [...e.target.files]) { try { files.push(await shrink(f)); } catch { setStatus("Couldn't read that image.", "err"); } }
-  e.target.value = ""; renderGrid(); updateButtons();
-};
-$("text").oninput = updateButtons;
-$("conf").oninput = () => { $("confv").textContent = $("conf").value + "%"; };
-
-$("rec").onclick = async () => {
-  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
-    recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); chunks = [];
-    recorder.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
-    recorder.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop());
-      const blob = new Blob(chunks, { type: recorder.mimeType || mime || "audio/webm" });
-      const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.readAsDataURL(blob); });
-      audio = { data: b64, mimeType: blob.type };
-      $("rec").textContent = "🎙 Record"; $("rec").classList.remove("on");
-      $("audioline").textContent = "Voice answer recorded (" + Math.round(blob.size / 1024) + " KB) — will be transcribed on send.";
-      updateButtons();
-    };
-    recorder.start(); $("rec").textContent = "■ Stop"; $("rec").classList.add("on"); setStatus("");
-  } catch (e) { setStatus("Microphone unavailable: " + e.message, "err"); }
-};
-
-async function post(path, body) {
-  const r = await fetch(api(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
-  return j;
-}
-async function submit(body, label) {
-  busy = true; updateButtons(); setStatus(label || "Sending…");
-  try {
-    const j = await post("/answer", { id: pending && pending.id, ...body });
-    setStatus(j.transcript ? "Sent ✓ — heard: “" + j.transcript + "”" : "Sent ✓", "ok");
-    resetAnswer();
-  } catch (e) { setStatus("Failed: " + e.message, "err"); }
-  busy = false; updateButtons();
-}
-$("send").onclick = () => submit({ text: $("text").value, confidence: Number($("conf").value), images: files.map((f) => ({ data: f.data, mimeType: f.mimeType })), audio }, audio ? "Transcribing on the Mac…" : "Sending…");
-$("hint").onclick = () => submit({ hint: true });
-$("idk").onclick = () => submit({ dontKnow: true });
-updateButtons();
-</script>
-</body></html>`;
