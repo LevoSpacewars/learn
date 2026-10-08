@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"></script>
+<script>document.write('<script src="/scratch.js?t=' + encodeURIComponent(new URLSearchParams(location.search).get("t") || "") + '"><\/script>');</script>
 <style>
 :root { --bg:#f6f5f2; --fg:#1d1d1f; --muted:#6e6e73; --card:#fff; --line:#e3e1dc; --accent:#2f6fde; --ok:#1f8a4c; --err:#c0392b; --warn:#b7791f; --soft:#eef2fb; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root { --bg:#141416; --fg:#f2f2f4; --muted:#9a9aa1; --card:#1f1f23; --line:#2e2e34; --accent:#5b8ff0; --ok:#3fbf73; --err:#e5675a; --warn:#e0a83a; --soft:#242838; color-scheme: dark; } }
@@ -70,11 +71,14 @@ input[type=file] { display:none; }
 .thumb { position:relative; aspect-ratio:3/4; border-radius:10px; overflow:hidden; background:var(--card); border:1px solid var(--line); }
 .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .thumb button { position:absolute; top:4px; right:4px; min-height:0; width:28px; height:28px; border-radius:50%; padding:0; background:rgba(0,0,0,.6); color:#fff; border:0; font-size:16px; }
-/* drawing */
+/* drawing (vector scratchpad engine in scratch.js) */
 .draw { display:none; flex-direction:column; gap:8px; } .draw.on { display:flex; }
-.tools { display:flex; gap:6px; flex-wrap:wrap; } .tools button { min-height:36px; padding:0 12px; flex:1; } .tools button.on { background:var(--soft); border-color:var(--accent); }
-.pages { display:flex; flex-direction:column; gap:8px; }
-canvas.page { width:100%; aspect-ratio: 4/3; background:#fff; border:1px solid var(--line); border-radius:10px; touch-action:none; display:block; }
+.tools { display:flex; gap:6px; flex-wrap:wrap; align-items:center; } .tools button { min-height:36px; padding:0 10px; font-size:14px; } .tools button.on { background:var(--soft); border-color:var(--accent); color:var(--accent); }
+.tools .sc-sizes, .tools .sc-colors { display:inline-flex; gap:4px; }
+.tools .sc-color { width:30px; min-height:30px; padding:0; border-radius:50%; border:2px solid transparent; } .tools .sc-color.on { border-color:var(--accent); box-shadow:0 0 0 2px var(--card); }
+.scratch-host { position:relative; width:100%; height:62vh; min-height:320px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fbfaf7; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.scratch-host canvas { position:absolute; inset:0; touch-action:none; }
+.sc-live { z-index:2; }
 .status { min-height:1.4em; font-size:15px; text-align:center; } .status.ok { color:var(--ok); } .status.err { color:var(--err); }
 .result { border-left:4px solid var(--muted); } .result.correct { border-left-color:var(--ok); } .result.partial { border-left-color:var(--warn); } .result.incorrect { border-left-color:var(--err); }
 .result .v { font-weight:700; } .result .m { color:var(--muted); font-size:14px; } .result p { margin:6px 0 0; }
@@ -92,8 +96,7 @@ body.role-scratch #pad { display:flex !important; padding:8px 10px; gap:8px; }
 body.role-scratch #qcard { padding:8px 12px; } body.role-scratch .prompt { font-size:15px; max-height:30vh; overflow:auto; }
 body.role-scratch #answer { display:flex !important; flex:1; min-height:0; }
 body.role-scratch #draw { display:flex !important; flex:1; min-height:0; }
-body.role-scratch .pages { flex:1; min-height:0; overflow:auto; }
-body.role-scratch canvas.page { aspect-ratio:auto; height: calc(100vh - 230px); min-height:300px; }
+body.role-scratch .scratch-host { flex:1; min-height:0; height:auto; }
 body.role-scratch #result { position:fixed; left:10px; right:10px; bottom:90px; z-index:6; box-shadow:0 8px 30px rgba(0,0,0,.25); }
 body.role-scratch #quiz { display:none !important; }
 body.role-scratch #actions { grid-template-columns: 1fr; }
@@ -119,9 +122,9 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
       <div class="modes"><button id="mType" class="on">Type</button><button id="mDraw">Draw</button><button id="mPhoto">Photo</button><button id="mVoice">Voice</button></div>
       <textarea id="text" placeholder="Type your answer…"></textarea>
       <div id="draw" class="draw">
-        <div class="tools"><button id="pen" class="on">Pen</button><button id="eraser">Eraser</button><button id="undo">Undo</button><button id="clear">Clear</button><button id="addPage">+ Page</button></div>
-        <div id="pages" class="pages"></div>
-        <div class="small">Apple Pencil works with pressure; palm touches are ignored once a pen is seen. Drawings are sent as images.</div>
+        <div id="sctools" class="tools"></div>
+        <div id="schost"></div>
+        <div class="small">Pencil draws · one finger scrolls · pinch zooms · two-finger tap undoes · the eraser removes whole strokes. Sent as images, then the sheet clears.</div>
       </div>
       <div id="photo" class="hidden" style="display:flex; flex-direction:column; gap:8px;">
         <div class="btns"><label class="btn">📷 Take photo<input id="cam" type="file" accept="image/*" capture="environment"></label><label class="btn">🖼 Choose<input id="pick" type="file" accept="image/*" multiple></label></div>
@@ -324,61 +327,13 @@ $("mType").onclick = () => setMode("type"); $("mDraw").onclick = () => setMode("
 function resetAnswer() { files.length = 0; audio = null; $("text").value = ""; $("audioline").textContent = ""; renderGrid($("grid"), files); $("conf").value = 70; $("confv").textContent = "70%"; clearPages(); updateButtons(); }
 $("text").oninput = updateButtons; $("conf").oninput = () => { $("confv").textContent = $("conf").value + "%"; };
 
-// ---------- drawing (Apple Pencil aware) ----------
-let pointerPenCapable = false, penSeen = false, tool = "pen";
-const pages = [];
-function ensurePage() { if (pages.length === 0) addPage(); }
-function addPage() {
-  const c = document.createElement("canvas"); c.className = "page"; $("pages").appendChild(c);
-  const page = { canvas: c, strokes: [], current: null, dpr: Math.max(1, window.devicePixelRatio || 1) };
-  const size = () => { const w = c.clientWidth; const h = Math.round(w * 0.75); c.width = Math.round(w * page.dpr); c.height = Math.round(h * page.dpr); c.style.height = h + "px"; redraw(page); };
-  requestAnimationFrame(size); window.addEventListener("resize", size);
-  c.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "pen") { penSeen = true; pointerPenCapable = true; }
-    if (e.pointerType === "touch" && penSeen) return; // palm rejection
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    c.setPointerCapture(e.pointerId);
-    const r = c.getBoundingClientRect();
-    page.current = { tool, points: [[(e.clientX - r.left) * page.dpr, (e.clientY - r.top) * page.dpr, e.pressure || 0.5]] };
-    e.preventDefault();
-  });
-  c.addEventListener("pointermove", (e) => {
-    if (!page.current) return; const r = c.getBoundingClientRect();
-    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    for (const ev of evs) page.current.points.push([(ev.clientX - r.left) * page.dpr, (ev.clientY - r.top) * page.dpr, ev.pressure || 0.5]);
-    drawStroke(page, page.current, true); e.preventDefault();
-  });
-  const end = () => { if (!page.current) return; page.strokes.push(page.current); page.current = null; redraw(page); updateButtons(); };
-  c.addEventListener("pointerup", end); c.addEventListener("pointercancel", end); c.addEventListener("pointerleave", end);
-  pages.push(page);
-}
-function drawStroke(page, s, partial) {
-  const ctx = page.canvas.getContext("2d"); const pts = s.points; if (pts.length < 1) return;
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.globalCompositeOperation = s.tool === "eraser" ? "destination-out" : "source-over";
-  ctx.strokeStyle = "#1b2a6b";
-  const base = (s.tool === "eraser" ? 18 : 2.2) * page.dpr;
-  const from = partial ? Math.max(1, pts.length - 2) : 1;
-  for (let i = from; i < pts.length; i++) {
-    ctx.lineWidth = base * (s.tool === "eraser" ? 1 : 0.6 + pts[i][2] * 1.2);
-    ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
-  }
-  if (pts.length === 1) { ctx.lineWidth = base; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[0][0] + 0.1, pts[0][1]); ctx.stroke(); }
-}
-function redraw(page) { const ctx = page.canvas.getContext("2d"); ctx.globalCompositeOperation = "source-over"; ctx.clearRect(0, 0, page.canvas.width, page.canvas.height); for (const s of page.strokes) drawStroke(page, s, false); }
-function clearPages() { for (const p of pages) { p.strokes = []; redraw(p); } }
-$("pen").onclick = () => { tool = "pen"; $("pen").classList.add("on"); $("eraser").classList.remove("on"); };
-$("eraser").onclick = () => { tool = "eraser"; $("eraser").classList.add("on"); $("pen").classList.remove("on"); };
-$("undo").onclick = () => { const p = [...pages].reverse().find((p) => p.strokes.length); if (p) { p.strokes.pop(); redraw(p); updateButtons(); } };
-$("clear").onclick = () => { clearPages(); updateButtons(); };
-$("addPage").onclick = () => addPage();
-function exportPages() {
-  return pages.filter((p) => p.strokes.length).map((p) => {
-    const c = document.createElement("canvas"); c.width = p.canvas.width; c.height = p.canvas.height;
-    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(p.canvas, 0, 0);
-    const url = c.toDataURL("image/png"); return { data: url.split(",")[1], mimeType: "image/png" };
-  });
-}
+// ---------- drawing: vector scratchpad (scratch.js) ----------
+let pointerPenCapable = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+let pad = null;
+function ensurePage() { if (!pad && window.Scratch) { pad = Scratch.mount($("schost"), $("sctools")); $("schost").addEventListener("pointerup", updateButtons); $("schost").addEventListener("pointercancel", updateButtons); $("sctools").addEventListener("click", () => setTimeout(updateButtons, 0)); } }
+const pages = { some: (f) => !!(pad && pad.hasInk() && f({ strokes: [1] })) };
+function exportPages() { ensurePage(); return pad ? pad.exportImages() : []; }
+function clearPages() { if (pad) pad.clear(); }
 
 // ---------- photos ----------
 function renderGrid(grid, list) {

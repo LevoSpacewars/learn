@@ -364,6 +364,13 @@ export default function phoneWork(pi: ExtensionAPI) {
 			const u = new URL(req.url ?? "/", "http://x");
 			if (!tokenOk(u.searchParams.get("t"), token)) return send(res, 403, "text/plain", "Forbidden");
 			if (req.method === "GET" && u.pathname === "/") return send(res, 200, "text/html; charset=utf-8", pageHtml());
+			if (req.method === "GET" && u.pathname === "/scratch.js") {
+				try {
+					return send(res, 200, "application/javascript; charset=utf-8", fs.readFileSync(path.join(path.dirname(PAGE_FILE), "scratch.js"), "utf8"));
+				} catch {
+					return send(res, 404, "text/plain", "scratch.js missing");
+				}
+			}
 			if (req.method === "GET" && u.pathname === "/ping") {
 				phoneSeen();
 				return json(res, 200, { ok: true });
