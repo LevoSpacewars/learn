@@ -40,6 +40,7 @@ const GoalSetParams = Type.Object({
 			Type.Object({
 				id: Type.String({ description: "Short id unique within the goal, e.g. 'uptake-curve'." }),
 				title: Type.String({ description: "A real task, phrased as something you DO: analyze, derive, build, critique, reproduce." }),
+				short: Type.Optional(Type.String({ description: "2-3 word name for the knowledge map, e.g. 'Uptake curves', 'BAOAB integrator'." })),
 				kind: MilestoneKind,
 				description: Type.Optional(Type.String({ description: "What counts as done, in one or two lines." })),
 				needs: Type.Optional(Type.Array(Type.String(), { description: "Fundamental slugs it depends on, or 'm:<milestoneId>' for an earlier milestone of this goal. Keep to the few that are genuinely required." })),
@@ -60,6 +61,7 @@ const GoalProgressParams = Type.Object({
 const FundamentalParams = Type.Object({
 	slug: Type.String({ description: "Slug; the lesson that teaches it uses the same slug." }),
 	title: Type.Optional(Type.String()),
+	short: Type.Optional(Type.String({ description: "1-3 word name for the knowledge map." })),
 	domain: Type.Optional(Type.String({ description: "math | physics | chemistry | cs | stats | optics | …" })),
 	status: Type.Optional(Type.Union([Type.Literal("unknown"), Type.Literal("shaky"), Type.Literal("solid")], { description: "Explicit status, e.g. after a placement probe. Omit to derive it from lessons." })),
 	note: Type.Optional(Type.String()),

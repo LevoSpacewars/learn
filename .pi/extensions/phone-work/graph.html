@@ -91,16 +91,28 @@ function draw() {
     ctx.lineWidth = (n === hover || n === pinned ? 3 : 1.2) / transform.k; ctx.strokeStyle = n === hover || n === pinned ? "#ffffff" : t.stroke; ctx.stroke();
     if (n.status === "done" || n.status === "solid" || n.status === "confirmed") { ctx.beginPath(); ctx.arc(n.x, n.y, r * 0.35, 0, Math.PI * 2); ctx.fillStyle = dark ? "#fff" : "#222"; ctx.fill(); }
   }
-  if (showLabels && transform.k > 0.6) {
-    ctx.fillStyle = dark ? "#e6e6ea" : "#2a2a2e"; ctx.textBaseline = "middle";
-    for (const n of nodes) { if (!showPlan && n.type === "plan") continue; if (n.type === "plan" && transform.k < 1.6) continue; if (n.type === "milestone" && transform.k < 0.9) continue; ctx.font = (n.type === "goal" ? "bold 13px" : n.type === "plan" ? "10px" : "11px") + " system-ui"; ctx.fillText(n.label.length > 42 ? n.label.slice(0, 41) + "…" : n.label, n.x + TYPE[n.type].r + 4, n.y); }
+  if (showLabels) {
+    // Obsidian-style: short names, fading in with zoom; goals always; the hovered/pinned node and its neighbours always.
+    const focus = pinned || hover; const near = new Set();
+    if (focus) { near.add(focus.id); for (const l of links) { if (l.source === focus) near.add(l.target.id); if (l.target === focus) near.add(l.source.id); } }
+    const k = transform.k; const ramp = (from, to) => Math.max(0, Math.min(1, (k - from) / (to - from)));
+    const alphaFor = (n) => n.type === "goal" ? 1 : n.type === "milestone" ? ramp(0.7, 1.1) : n.type === "concept" ? ramp(0.55, 0.95) * (0.6 + Math.min(1, (n.count || 0) / 6) * 0.4) : ramp(1.5, 2.2);
+    ctx.textBaseline = "middle";
+    for (const n of nodes) {
+      if (!showPlan && n.type === "plan") continue;
+      let a = alphaFor(n); if (near.has(n.id)) a = 1; if (a <= 0.02) continue;
+      const px = n.type === "goal" ? 13 : n.type === "plan" ? 10 : 11;
+      ctx.font = (n.type === "goal" || near.has(n.id) ? "bold " : "") + (px / k) * Math.min(k, 1.6) + "px system-ui";
+      ctx.fillStyle = (dark ? "rgba(230,230,234," : "rgba(42,42,46,") + a + ")";
+      ctx.fillText(n.short || n.label, n.x + TYPE[n.type].r + 4 / k, n.y);
+    }
   }
 }
 function nodeAt(px, py) { const [x, y] = transform.invert([px, py]); let best = null, bd = Infinity; for (const n of nodes) { if (!showPlan && n.type === "plan") continue; const d = Math.hypot(n.x - x, n.y - y); const r = TYPE[n.type].r + 6 / transform.k; if (d < r && d < bd) { best = n; bd = d; } } return best; }
 function describe(n) {
   const days = n.last ? Math.round((Date.now() - new Date(n.last).getTime()) / 86400000) : null;
   const when = n.last ? (days === 0 ? "today" : days === 1 ? "yesterday" : days + " days ago") : "never";
-  return '<b>' + n.label + '</b><div class="m">' + n.type + (n.status ? " · " + n.status : "") + " · last " + when + " · " + (n.count || 0) + " times</div>" + (n.url ? '<div class="m">' + n.url + "</div>" : "");
+  return '<b>' + n.label + '</b>' + (n.short && n.short !== n.label ? '<div class="m">map name: ' + n.short + '</div>' : '') + '<div class="m">' + n.type + (n.status ? " · " + n.status : "") + " · last " + when + " · " + (n.count || 0) + " times</div>" + (n.url ? '<div class="m">' + n.url + "</div>" : "");
 }
 function showDetail(n) { $("detail").innerHTML = n ? describe(n) : '<span class="small">Hover a node for details; click to pin.</span>'; }
 async function load() {

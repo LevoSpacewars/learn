@@ -7,7 +7,7 @@
 			"nodes": [
 				{
 					"id": "R1",
-					"label": "rate = prob k·dt per tiny dt, memoryless (definition)",
+					"label": "rate = prob k\u00b7dt per tiny dt, memoryless (definition)",
 					"kind": "foundation",
 					"check": "predict",
 					"status": "pending",
@@ -15,7 +15,7 @@
 				},
 				{
 					"id": "D1",
-					"label": "bookkeeping → dS/dt = −kS → S = e^(−kt)",
+					"label": "bookkeeping \u2192 dS/dt = \u2212kS \u2192 S = e^(\u2212kt)",
 					"kind": "derived",
 					"check": "explain",
 					"status": "pending",
@@ -23,7 +23,7 @@
 				},
 				{
 					"id": "D2",
-					"label": "consequences: 1−e^(−kt), density k e^(−kt), mean 1/k",
+					"label": "consequences: 1\u2212e^(\u2212kt), density k e^(\u2212kt), mean 1/k",
 					"kind": "derived",
 					"check": "boundary",
 					"status": "pending",
@@ -47,7 +47,7 @@
 				},
 				{
 					"id": "D4",
-					"label": "tiny time step: P ≈ I + Q dt → generator Q",
+					"label": "tiny time step: P \u2248 I + Q dt \u2192 generator Q",
 					"kind": "derived",
 					"check": "explain",
 					"status": "pending",
@@ -55,7 +55,7 @@
 				},
 				{
 					"id": "G",
-					"label": "C ⇌ O → X as rate matrix Q + master equation",
+					"label": "C \u21cc O \u2192 X as rate matrix Q + master equation",
 					"kind": "goal",
 					"check": "transfer",
 					"status": "pending",
@@ -66,9 +66,9 @@
 			"created": "2026-10-07T01:30:46.204Z",
 			"updated": "2026-10-08T03:12:50.347Z",
 			"file": "lessons/let-s-continue-from-the-last-lesson.md",
-			"goal": "Understand the math behind the HDX application: rates, first-order decay, transition matrices, generator Q; end by writing C⇌O→X as a rate matrix + master equation.",
+			"goal": "Understand the math behind the HDX application: rates, first-order decay, transition matrices, generator Q; end by writing C\u21ccO\u2192X as a rate matrix + master equation.",
 			"summary": "Stopped during the probe (no plan yet). Mapped so far (see this note and lessons/i-had-ai-build-an-application-for-me-and-i-wanted-.md): rate meaning = open misconception; 2x2 transition matrix correct, two-step propagation unclear; row-vector times matrix correct; first-order decay dS/dt = -kS was read as dS/dt = -k (linear vs exponential). Next: finish the probe quickly (at most 2 more questions), present the plan, start teaching from first-order decay.",
-			"plan": "graph TD\n  R1[\"R1: rate = prob k·dt per tiny dt, memoryless\"]\n  R2[\"R2: next distribution = current mixed through rows of P\"]\n  D1[\"D1: bookkeeping → dS/dt = −kS → S = e^(−kt)\"]\n  D2[\"D2: consequences: 1−e^(−kt), density k·e^(−kt), mean 1/k\"]\n  D3[\"D3: two-step propagation + stationary = balanced flows\"]\n  D4[\"D4: tiny time step: P ≈ I + Q·dt → generator Q\"]\n  G[\"G: C ⇌ O → X as rate matrix Q + master equation\"]\n  R1 --> D1 --> D2\n  R2 --> D3\n  R1 --> D4\n  D3 --> D4\n  D2 --> G\n  D4 --> G"
+			"plan": "graph TD\n  R1[\"R1: rate = prob k\u00b7dt per tiny dt, memoryless\"]\n  R2[\"R2: next distribution = current mixed through rows of P\"]\n  D1[\"D1: bookkeeping \u2192 dS/dt = \u2212kS \u2192 S = e^(\u2212kt)\"]\n  D2[\"D2: consequences: 1\u2212e^(\u2212kt), density k\u00b7e^(\u2212kt), mean 1/k\"]\n  D3[\"D3: two-step propagation + stationary = balanced flows\"]\n  D4[\"D4: tiny time step: P \u2248 I + Q\u00b7dt \u2192 generator Q\"]\n  G[\"G: C \u21cc O \u2192 X as rate matrix Q + master equation\"]\n  R1 --> D1 --> D2\n  R2 --> D3\n  R1 --> D4\n  D3 --> D4\n  D2 --> G\n  D4 --> G"
 		}
 	],
 	"misconceptions": [
@@ -76,7 +76,7 @@
 			"id": "mmuxe4lzk7w88",
 			"topic": "i-had-ai-build-an-application-for-me-and-i-wanted-",
 			"claim": "A rate k (s^-1) is the probability of the event happening in one unit of time (e.g. k=0.1/s means a 10% chance per second).",
-			"truth": "A rate is probability per unit time only in the dt→0 limit (hazard): P(event in dt) = k dt. Over a finite interval Δt the probability is 1-e^{-kΔt}, which is ≈ kΔt only when kΔt ≪ 1.",
+			"truth": "A rate is probability per unit time only in the dt\u21920 limit (hazard): P(event in dt) = k dt. Over a finite interval \u0394t the probability is 1-e^{-k\u0394t}, which is \u2248 k\u0394t only when k\u0394t \u226a 1.",
 			"evidence": [
 				{
 					"at": "2026-10-07T00:49:53.744Z",
@@ -216,7 +216,8 @@
 						"taylor-series-error",
 						"asymptotic-orders"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Approximation craft"
 				},
 				{
 					"id": "laplace-saddle",
@@ -227,7 +228,8 @@
 						"gaussian-integrals",
 						"m:approx-craft"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Laplace method"
 				},
 				{
 					"id": "spectral-svd",
@@ -238,7 +240,8 @@
 						"eigendecomposition",
 						"svd"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "PCA via SVD"
 				},
 				{
 					"id": "matrix-calc",
@@ -248,7 +251,8 @@
 					"needs": [
 						"matrix-calculus"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Matrix calculus"
 				},
 				{
 					"id": "gen-functions",
@@ -258,7 +262,8 @@
 					"needs": [
 						"moment-generating-functions"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Cumulant gen. functions"
 				},
 				{
 					"id": "bayes",
@@ -269,7 +274,8 @@
 						"bayes-posteriors",
 						"mcmc-metropolis"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Bayesian inference"
 				},
 				{
 					"id": "markov",
@@ -280,18 +286,20 @@
 						"markov-chains",
 						"bellman-equation"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Markov chains"
 				},
 				{
 					"id": "langevin-fp",
 					"title": "Derive Fokker-Planck from Langevin and show Boltzmann is stationary",
 					"kind": "derive",
-					"description": "Done = Ornstein-Uhlenbeck solved, FP derived, Itô vs Stratonovich explained.",
+					"description": "Done = Ornstein-Uhlenbeck solved, FP derived, It\u00f4 vs Stratonovich explained.",
 					"needs": [
 						"langevin-equation",
 						"ito-calculus"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Fokker-Planck"
 				},
 				{
 					"id": "info-theory",
@@ -302,7 +310,8 @@
 						"kl-divergence",
 						"lagrange-multipliers"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Max entropy"
 				},
 				{
 					"id": "optimization",
@@ -313,11 +322,12 @@
 						"convexity-duality",
 						"eigendecomposition"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Convex optimization"
 				},
 				{
 					"id": "ldt",
-					"title": "Large deviations: Cramér via Chernoff, rate function as Legendre transform, Gärtner-Ellis",
+					"title": "Large deviations: Cram\u00e9r via Chernoff, rate function as Legendre transform, G\u00e4rtner-Ellis",
 					"kind": "derive",
 					"description": "Done = rate function of a sample mean derived; Legendre/SCGF link explained; connection to free energy made.",
 					"needs": [
@@ -325,7 +335,8 @@
 						"moment-generating-functions",
 						"m:laplace-saddle"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Large deviations"
 				},
 				{
 					"id": "fluct-theorems",
@@ -335,7 +346,8 @@
 					"needs": [
 						"m:ldt"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Jarzynski-Crooks"
 				},
 				{
 					"id": "groups",
@@ -345,7 +357,8 @@
 					"needs": [
 						"group-representations"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Group reps"
 				}
 			],
 			"created": "2026-10-02T03:48:57.770Z",
@@ -366,7 +379,8 @@
 					"needs": [
 						"boltzmann-partition"
 					],
-					"status": "ready"
+					"status": "ready",
+					"short": "MD setup critique"
 				},
 				{
 					"id": "integrator",
@@ -378,7 +392,8 @@
 						"langevin-equation",
 						"taylor-series-error"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "BAOAB integrator"
 				},
 				{
 					"id": "validate-traj",
@@ -388,7 +403,8 @@
 					"needs": [
 						"autocorrelation-ess"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Trajectory validation"
 				},
 				{
 					"id": "forcefield-pme",
@@ -399,7 +415,8 @@
 						"ewald-summation",
 						"fourier-transform-convolution"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Force field & PME"
 				},
 				{
 					"id": "pca-msm",
@@ -411,7 +428,8 @@
 						"markov-chains",
 						"eigendecomposition"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "PCA + MSM"
 				},
 				{
 					"id": "enhanced-sampling",
@@ -421,7 +439,8 @@
 					"needs": [
 						"importance-sampling"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Umbrella sampling"
 				},
 				{
 					"id": "ml-potential",
@@ -432,7 +451,8 @@
 						"group-representations",
 						"gradient-descent"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "ML potential"
 				},
 				{
 					"id": "method-prototype",
@@ -443,7 +463,8 @@
 						"m:pca-msm",
 						"m:enhanced-sampling"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Method prototype"
 				}
 			],
 			"created": "2026-10-02T03:48:57.771Z",
@@ -465,7 +486,8 @@
 						"boltzmann-partition",
 						"thermodynamic-cycles"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "RBFE cycle"
 				},
 				{
 					"id": "zwanzig",
@@ -476,7 +498,8 @@
 						"importance-sampling",
 						"taylor-series-error"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Zwanzig EXP"
 				},
 				{
 					"id": "ti-mbar",
@@ -486,7 +509,8 @@
 					"needs": [
 						"maximum-likelihood"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "TI/BAR/MBAR"
 				},
 				{
 					"id": "noneq-switching",
@@ -497,7 +521,8 @@
 						"m:zwanzig",
 						"m:ti-mbar"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Noneq switching"
 				},
 				{
 					"id": "run-edge",
@@ -507,7 +532,8 @@
 					"needs": [
 						"m:ti-mbar"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "RBFE edge run"
 				},
 				{
 					"id": "diagnose-edge",
@@ -518,7 +544,8 @@
 						"autocorrelation-ess",
 						"m:run-edge"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Edge diagnosis"
 				},
 				{
 					"id": "network-benchmark",
@@ -528,7 +555,8 @@
 					"needs": [
 						"m:diagnose-edge"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "RBFE benchmark"
 				},
 				{
 					"id": "fep-limits",
@@ -538,7 +566,8 @@
 					"needs": [
 						"m:network-benchmark"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "FEP limits"
 				}
 			],
 			"created": "2026-10-02T03:48:57.771Z",
@@ -553,27 +582,29 @@
 			"milestones": [
 				{
 					"id": "ll-as-markov",
-					"title": "Write Linderstrøm-Lang as a 3-state Markov chain and derive EX1/EX2",
+					"title": "Write Linderstr\u00f8m-Lang as a 3-state Markov chain and derive EX1/EX2",
 					"kind": "derive",
 					"description": "Done = closed<->open->exchanged as a generator matrix; k_obs, EX2 and EX1 limits derived with the small parameter explicit.",
 					"needs": [
 						"first-order-kinetics",
 						"markov-chains"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Linderstr\u00f8m-Lang"
 				},
 				{
 					"id": "bleed-forward-model",
 					"title": "Derive the bleed.py forward model: CTMC + killing -> occupation times -> Poisson-binomial envelope, and get EX1/EX2 out of the spectrum",
 					"kind": "derive",
-					"description": "Done when you can derive, unaided, P(env|t) = ∫ρ(τ|t) PB({1-e^{-Σ k_is τ_s}}) dτ from a generator Q and rates k_is, prove the Feynman–Kac survival identity, and show which spectral regime gives a unimodal vs bimodal envelope.",
+					"description": "Done when you can derive, unaided, P(env|t) = \u222b\u03c1(\u03c4|t) PB({1-e^{-\u03a3 k_is \u03c4_s}}) d\u03c4 from a generator Q and rates k_is, prove the Feynman\u2013Kac survival identity, and show which spectral regime gives a unimodal vs bimodal envelope.",
 					"needs": [
 						"markov-chains",
 						"matrix-exponential-linear-odes",
 						"eigendecomposition",
 						"m:ll-as-markov"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Bleed forward model"
 				},
 				{
 					"id": "intrinsic-rates",
@@ -583,17 +614,19 @@
 					"needs": [
 						"arrhenius-ph-rates"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Intrinsic rates"
 				},
 				{
 					"id": "dg-op",
-					"title": "Native-state HDX: protection factors to ΔG_op; foldons",
+					"title": "Native-state HDX: protection factors to \u0394G_op; foldons",
 					"kind": "read",
-					"description": "Done = PF -> ΔG_op derived from Boltzmann populations; Bai/Englander 1995 read and explained.",
+					"description": "Done = PF -> \u0394G_op derived from Boltzmann populations; Bai/Englander 1995 read and explained.",
 					"needs": [
 						"boltzmann-partition"
 					],
-					"status": "ready"
+					"status": "ready",
+					"short": "\u0394G_op foldons"
 				},
 				{
 					"id": "pf-models",
@@ -603,7 +636,8 @@
 					"needs": [
 						"m:dg-op"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "PF model critique"
 				},
 				{
 					"id": "residue-bayes",
@@ -615,7 +649,8 @@
 						"bayes-posteriors",
 						"mcmc-metropolis"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Residue-level Bayes"
 				},
 				{
 					"id": "ensemble-reweight",
@@ -626,7 +661,8 @@
 						"kl-divergence",
 						"lagrange-multipliers"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Max-ent reweighting"
 				},
 				{
 					"id": "paper-critique",
@@ -636,7 +672,8 @@
 					"needs": [
 						"hypothesis-testing-fdr"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "HDX paper critique"
 				},
 				{
 					"id": "msm-exchange-method",
@@ -647,7 +684,8 @@
 						"eigendecomposition",
 						"m:ensemble-reweight"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "MSM exchange rates"
 				}
 			],
 			"created": "2026-10-02T03:48:57.771Z",
@@ -669,17 +707,19 @@
 					"needs": [
 						"discrete-convolution-generating-functions"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Isotope envelope"
 				},
 				{
 					"id": "orbitrap-physics",
 					"title": "Derive Orbitrap frequency, the FT step, and resolution vs transient length",
 					"kind": "derive",
-					"description": "Done = omega ∝ sqrt(z/m) derived; resolution from transient length and FT explained.",
+					"description": "Done = omega \u221d sqrt(z/m) derived; resolution from transient length and FT explained.",
 					"needs": [
 						"fourier-transform-convolution"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Orbitrap physics"
 				},
 				{
 					"id": "envelope-fit",
@@ -690,7 +730,8 @@
 						"nonlinear-least-squares",
 						"bayes-posteriors"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Envelope fitting"
 				},
 				{
 					"id": "fragmentation",
@@ -698,7 +739,8 @@
 					"kind": "read",
 					"description": "Done = ion types and mechanisms explained; why ETD avoids scrambling.",
 					"needs": [],
-					"status": "ready"
+					"status": "ready",
+					"short": "Fragmentation"
 				},
 				{
 					"id": "search-fdr",
@@ -708,7 +750,8 @@
 					"needs": [
 						"hypothesis-testing-fdr"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Database search FDR"
 				},
 				{
 					"id": "lfq-stats",
@@ -718,7 +761,8 @@
 					"needs": [
 						"linear-models"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "LFQ statistics"
 				},
 				{
 					"id": "critique-own-library",
@@ -728,7 +772,8 @@
 					"needs": [
 						"m:envelope-fit"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "HDX library critique"
 				}
 			],
 			"created": "2026-10-02T03:48:57.772Z",
@@ -749,7 +794,8 @@
 					"needs": [
 						"chain-rule-jacobians"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Scalar autograd"
 				},
 				{
 					"id": "mlp-lm",
@@ -761,7 +807,8 @@
 						"gradient-descent",
 						"matrix-calculus"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "MLP language model"
 				},
 				{
 					"id": "gpt",
@@ -772,7 +819,8 @@
 						"linear-maps-matrix-products",
 						"m:mlp-lm"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "GPT from scratch"
 				},
 				{
 					"id": "why-it-works",
@@ -783,7 +831,8 @@
 						"bias-variance",
 						"m:gpt"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Double descent"
 				},
 				{
 					"id": "diffusion",
@@ -794,7 +843,8 @@
 						"kl-divergence",
 						"langevin-equation"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "DDPM"
 				},
 				{
 					"id": "rl-bellman",
@@ -805,7 +855,8 @@
 						"bellman-equation",
 						"gradient-descent"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Bellman RL"
 				},
 				{
 					"id": "equivariant-gnn",
@@ -816,7 +867,8 @@
 						"group-representations",
 						"m:mlp-lm"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Equivariant GNN"
 				},
 				{
 					"id": "ssm",
@@ -827,7 +879,8 @@
 						"matrix-exponential-linear-odes",
 						"eigendecomposition"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "SSM/Mamba"
 				},
 				{
 					"id": "critique-apply",
@@ -838,7 +891,8 @@
 						"m:gpt",
 						"m:equivariant-gnn"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Architecture critique"
 				}
 			],
 			"created": "2026-10-02T03:48:57.772Z",
@@ -859,7 +913,8 @@
 					"needs": [
 						"processes-syscalls"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "strace syscalls"
 				},
 				{
 					"id": "memory",
@@ -869,7 +924,8 @@
 					"needs": [
 						"virtual-memory"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "RSS/VSZ/OOM"
 				},
 				{
 					"id": "vm-admin",
@@ -879,7 +935,8 @@
 					"needs": [
 						"m:strace"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "VM hardening"
 				},
 				{
 					"id": "network",
@@ -890,7 +947,8 @@
 						"tcp-ip-layers",
 						"cidr-subnetting"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "DNS/TCP/subnetting"
 				},
 				{
 					"id": "slow-job",
@@ -901,7 +959,8 @@
 						"memory-hierarchy-cache",
 						"roofline-amdahl"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Slurm diagnostics"
 				},
 				{
 					"id": "mpi-rdma",
@@ -911,7 +970,8 @@
 					"needs": [
 						"latency-bandwidth-model"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "MPI/RDMA"
 				},
 				{
 					"id": "containers",
@@ -921,7 +981,8 @@
 					"needs": [
 						"m:strace"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Container internals"
 				},
 				{
 					"id": "cluster-critique",
@@ -932,7 +993,8 @@
 						"m:slow-job",
 						"m:mpi-rdma"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "HPC cluster critique"
 				}
 			],
 			"created": "2026-10-02T03:48:57.773Z",
@@ -947,23 +1009,25 @@
 			"milestones": [
 				{
 					"id": "resolution",
-					"title": "Estimate resolution, pixel size and depth of focus from λ and NA",
+					"title": "Estimate resolution, pixel size and depth of focus from \u03bb and NA",
 					"kind": "do",
 					"description": "Done = numbers for a DUV tool; why sub-resolution defects are still detectable.",
 					"needs": [
 						"diffraction-limit-abbe"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Optical resolution"
 				},
 				{
 					"id": "darkfield",
 					"title": "Explain darkfield vs brightfield via Rayleigh scattering",
 					"kind": "derive",
-					"description": "Done = d^6/λ^4 scaling derived/used to estimate signal for a 20 nm particle.",
+					"description": "Done = d^6/\u03bb^4 scaling derived/used to estimate signal for a 20 nm particle.",
 					"needs": [
 						"rayleigh-scattering"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Darkfield scattering"
 				},
 				{
 					"id": "fourier-imaging",
@@ -973,7 +1037,8 @@
 					"needs": [
 						"fourier-transform-convolution"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Fourier imaging"
 				},
 				{
 					"id": "detection",
@@ -983,7 +1048,8 @@
 					"needs": [
 						"signal-detection-roc"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Defect detection ROC"
 				},
 				{
 					"id": "throughput",
@@ -993,7 +1059,8 @@
 					"needs": [
 						"roofline-amdahl"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Wafer data throughput"
 				},
 				{
 					"id": "ml-classification",
@@ -1003,7 +1070,8 @@
 					"needs": [
 						"m:detection"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "ML defect classification"
 				},
 				{
 					"id": "ebeam",
@@ -1011,7 +1079,8 @@
 					"kind": "read",
 					"description": "Done = trade-offs explained in conversation terms.",
 					"needs": [],
-					"status": "ready"
+					"status": "ready",
+					"short": "E-beam vs optical"
 				}
 			],
 			"created": "2026-10-02T03:48:57.773Z",
@@ -1032,7 +1101,8 @@
 					"needs": [
 						"compound-growth-pv"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Cash flow planning"
 				},
 				{
 					"id": "accounts",
@@ -1042,7 +1112,8 @@
 					"needs": [
 						"marginal-vs-effective-tax"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Account prioritization"
 				},
 				{
 					"id": "allocation",
@@ -1052,7 +1123,8 @@
 					"needs": [
 						"diversification-correlation"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Asset allocation"
 				},
 				{
 					"id": "equity-comp",
@@ -1062,7 +1134,8 @@
 					"needs": [
 						"m:allocation"
 					],
-					"status": "locked"
+					"status": "locked",
+					"short": "Equity compensation"
 				},
 				{
 					"id": "map-unknowns",
@@ -1070,7 +1143,8 @@
 					"kind": "read",
 					"description": "Done = list of known unknowns with one source each.",
 					"needs": [],
-					"status": "ready"
+					"status": "ready",
+					"short": "Insurance & estate"
 				}
 			],
 			"created": "2026-10-02T03:48:57.773Z",
@@ -1083,193 +1157,225 @@
 			"slug": "taylor-series-error",
 			"title": "Taylor series with remainder; choosing the expansion point and small parameter",
 			"updated": "2026-10-02T03:49:46.373Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Taylor series error"
 		},
 		{
 			"slug": "asymptotic-orders",
 			"title": "Orders of magnitude, O/o notation, convergent vs asymptotic series",
 			"updated": "2026-10-02T03:49:46.374Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Asymptotic orders"
 		},
 		{
 			"slug": "gaussian-integrals",
 			"title": "Gaussian integrals and completing the square (1D and multivariate)",
 			"updated": "2026-10-02T03:49:46.374Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Gaussian integrals"
 		},
 		{
 			"slug": "eigendecomposition",
 			"title": "Eigendecomposition of symmetric matrices (spectral theorem)",
 			"updated": "2026-10-02T03:49:46.375Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Eigendecomposition"
 		},
 		{
 			"slug": "svd",
 			"title": "Singular value decomposition and low-rank approximation",
 			"updated": "2026-10-02T03:49:46.375Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "SVD"
 		},
 		{
 			"slug": "matrix-calculus",
 			"title": "Matrix calculus: gradients of scalar functions of vectors/matrices",
 			"updated": "2026-10-02T03:49:46.376Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Matrix calculus"
 		},
 		{
 			"slug": "moment-generating-functions",
 			"title": "Moment and cumulant generating functions",
 			"updated": "2026-10-02T03:49:46.376Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Moment gen. functions"
 		},
 		{
 			"slug": "lagrange-multipliers",
 			"title": "Constrained optimization with Lagrange multipliers",
 			"updated": "2026-10-02T03:49:46.377Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Lagrange multipliers"
 		},
 		{
 			"slug": "convexity-duality",
 			"title": "Convex functions and Lagrange duality",
 			"updated": "2026-10-02T03:49:46.377Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Convex duality"
 		},
 		{
 			"slug": "legendre-transform",
 			"title": "Legendre-Fenchel transform",
 			"updated": "2026-10-02T03:49:46.377Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Legendre transform"
 		},
 		{
 			"slug": "group-representations",
 			"title": "Group representations: SO(3)/E(3), irreps, equivariance",
 			"updated": "2026-10-02T03:49:46.378Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Group reps"
 		},
 		{
 			"slug": "matrix-exponential-linear-odes",
 			"title": "Linear ODE systems and the matrix exponential",
 			"updated": "2026-10-02T03:49:46.378Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Matrix exponential"
 		},
 		{
 			"slug": "linear-maps-matrix-products",
 			"title": "Matrices as linear maps; matrix products, projections, dot-product similarity",
 			"updated": "2026-10-02T03:49:46.378Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Linear maps"
 		},
 		{
 			"slug": "chain-rule-jacobians",
 			"title": "Multivariable chain rule, Jacobians, reverse-mode autodiff",
 			"updated": "2026-10-02T03:49:46.379Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Jacobians/autodiff"
 		},
 		{
 			"slug": "discrete-convolution-generating-functions",
 			"title": "Convolution of discrete distributions via polynomial generating functions",
 			"updated": "2026-10-02T03:49:46.379Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Discrete convolution"
 		},
 		{
 			"slug": "fourier-transform-convolution",
 			"title": "Fourier transform, convolution theorem, sampling and frequency resolution",
 			"updated": "2026-10-02T03:49:46.379Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Fourier transform"
 		},
 		{
 			"slug": "ill-posed-inverse-problems",
 			"title": "Ill-posed inverse problems, identifiability, regularization",
 			"updated": "2026-10-02T03:49:46.380Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Inverse problems"
 		},
 		{
 			"slug": "markov-chains",
 			"title": "Markov chains: transition matrices/generators, stationary distribution, detailed balance",
 			"updated": "2026-10-02T03:49:46.380Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Markov chains"
 		},
 		{
 			"slug": "bellman-equation",
 			"title": "Markov reward processes and the Bellman equation",
 			"updated": "2026-10-02T03:49:46.380Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "Bellman equation"
 		},
 		{
 			"slug": "ito-calculus",
-			"title": "Itô calculus basics: Wiener process, Itô's lemma",
+			"title": "It\u00f4 calculus basics: Wiener process, It\u00f4's lemma",
 			"updated": "2026-10-02T03:49:46.381Z",
-			"domain": "math"
+			"domain": "math",
+			"short": "It\u00f4 calculus"
 		},
 		{
 			"slug": "bayes-posteriors",
 			"title": "Bayes' theorem, priors, likelihoods, posteriors, conjugacy",
 			"updated": "2026-10-02T03:49:46.381Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Bayes' theorem"
 		},
 		{
 			"slug": "mcmc-metropolis",
 			"title": "Metropolis-Hastings MCMC and why it samples the target",
 			"updated": "2026-10-02T03:49:46.381Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Metropolis-Hastings"
 		},
 		{
 			"slug": "maximum-likelihood",
 			"title": "Maximum likelihood estimation (and cross-entropy as negative log-likelihood)",
 			"updated": "2026-10-02T03:49:46.382Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Max likelihood"
 		},
 		{
 			"slug": "kl-divergence",
 			"title": "Entropy and KL divergence",
 			"updated": "2026-10-02T03:49:46.382Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "KL divergence"
 		},
 		{
 			"slug": "importance-sampling",
 			"title": "Importance sampling and the variance of reweighting estimators",
 			"updated": "2026-10-02T03:49:46.382Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Importance sampling"
 		},
 		{
 			"slug": "autocorrelation-ess",
 			"title": "Autocorrelation time, effective sample size, block averaging",
 			"updated": "2026-10-02T03:49:46.383Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Autocorrelation/ESS"
 		},
 		{
 			"slug": "hypothesis-testing-fdr",
 			"title": "Hypothesis tests, p-values, multiple testing and false discovery rate",
 			"updated": "2026-10-02T03:49:46.383Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Hypothesis testing"
 		},
 		{
 			"slug": "nonlinear-least-squares",
 			"title": "Nonlinear least squares and parameter uncertainties (covariance from the Jacobian)",
 			"updated": "2026-10-02T03:49:46.383Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Nonlinear least squares"
 		},
 		{
 			"slug": "linear-models",
 			"title": "Linear models / regression with design matrices",
 			"updated": "2026-10-02T03:49:46.384Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Linear regression"
 		},
 		{
 			"slug": "bias-variance",
 			"title": "Bias-variance decomposition and generalization",
 			"updated": "2026-10-02T03:49:46.384Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Bias-variance"
 		},
 		{
 			"slug": "signal-detection-roc",
 			"title": "Signal detection theory, thresholds, ROC curves",
 			"updated": "2026-10-02T03:49:46.384Z",
-			"domain": "stats"
+			"domain": "stats",
+			"short": "Signal detection"
 		},
 		{
 			"slug": "langevin-equation",
 			"title": "Langevin equation: friction, noise, fluctuation-dissipation",
 			"updated": "2026-10-02T03:49:46.385Z",
-			"domain": "physics"
+			"domain": "physics",
+			"short": "Langevin equation"
 		},
 		{
 			"slug": "boltzmann-partition",
@@ -1277,121 +1383,140 @@
 			"updated": "2026-10-02T04:47:51.421Z",
 			"domain": "physics",
 			"status": "shaky",
-			"note": "Placement: computed e^{-ΔE/kT} but dropped degeneracy (picked 0.14 not 0.41). Remembers Z as 'normalizer' and microstate counting but cannot write p_i = e^{-E_i/kT}/Z or link ΔF to population ratios. Fragments present, so this is a quick relearn."
+			"note": "Placement: computed e^{-\u0394E/kT} but dropped degeneracy (picked 0.14 not 0.41). Remembers Z as 'normalizer' and microstate counting but cannot write p_i = e^{-E_i/kT}/Z or link \u0394F to population ratios. Fragments present, so this is a quick relearn.",
+			"short": "Boltzmann weights"
 		},
 		{
 			"slug": "thermodynamic-cycles",
 			"title": "Thermodynamic cycles and state functions",
 			"updated": "2026-10-02T03:49:46.386Z",
-			"domain": "physics"
+			"domain": "physics",
+			"short": "Thermodynamic cycles"
 		},
 		{
 			"slug": "symplectic-integrators",
 			"title": "Hamiltonian dynamics and symplectic (Verlet) integrators",
 			"updated": "2026-10-02T03:49:46.386Z",
-			"domain": "physics"
+			"domain": "physics",
+			"short": "Symplectic integrators"
 		},
 		{
 			"slug": "ewald-summation",
 			"title": "Ewald summation and particle-mesh Ewald",
 			"updated": "2026-10-02T03:49:46.386Z",
-			"domain": "physics"
+			"domain": "physics",
+			"short": "Ewald summation"
 		},
 		{
 			"slug": "first-order-kinetics",
 			"title": "First-order and two-state kinetics; steady-state and pre-equilibrium approximations",
 			"updated": "2026-10-02T03:49:46.387Z",
-			"domain": "chemistry"
+			"domain": "chemistry",
+			"short": "First-order kinetics"
 		},
 		{
 			"slug": "arrhenius-ph-rates",
 			"title": "Arrhenius temperature dependence and acid/base catalysis (pH dependence) of rates",
 			"updated": "2026-10-02T03:49:46.387Z",
-			"domain": "chemistry"
+			"domain": "chemistry",
+			"short": "Arrhenius kinetics"
 		},
 		{
 			"slug": "diffraction-limit-abbe",
 			"title": "Abbe/Rayleigh resolution limit, NA, depth of focus",
 			"updated": "2026-10-02T03:49:46.387Z",
-			"domain": "optics"
+			"domain": "optics",
+			"short": "Abbe/Rayleigh limit"
 		},
 		{
 			"slug": "rayleigh-scattering",
-			"title": "Rayleigh scattering cross-section (d^6/λ^4) and Mie regime",
+			"title": "Rayleigh scattering cross-section (d^6/\u03bb^4) and Mie regime",
 			"updated": "2026-10-02T03:49:46.388Z",
-			"domain": "optics"
+			"domain": "optics",
+			"short": "Rayleigh scattering"
 		},
 		{
 			"slug": "gradient-descent",
 			"title": "Gradient descent, step size and stability, SGD/Adam",
 			"updated": "2026-10-02T03:49:46.388Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "Gradient descent"
 		},
 		{
 			"slug": "processes-syscalls",
 			"title": "Processes, fork/exec, file descriptors, system calls",
 			"updated": "2026-10-02T03:49:46.389Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "Processes/syscalls"
 		},
 		{
 			"slug": "virtual-memory",
 			"title": "Virtual memory, page tables, page faults",
 			"updated": "2026-10-02T03:49:46.389Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "Virtual memory"
 		},
 		{
 			"slug": "tcp-ip-layers",
 			"title": "TCP/IP layering, TCP handshake and state machine, DNS",
 			"updated": "2026-10-02T03:49:46.389Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "TCP/IP layering"
 		},
 		{
 			"slug": "cidr-subnetting",
 			"title": "IP addressing, CIDR subnetting, routing tables",
 			"updated": "2026-10-02T03:49:46.390Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "CIDR subnetting"
 		},
 		{
 			"slug": "memory-hierarchy-cache",
 			"title": "Memory hierarchy, cache lines, NUMA",
 			"updated": "2026-10-02T03:49:46.390Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "Memory hierarchy"
 		},
 		{
 			"slug": "roofline-amdahl",
 			"title": "Amdahl's law and the roofline model (arithmetic intensity)",
 			"updated": "2026-10-02T03:49:46.390Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "Roofline/Amdahl"
 		},
 		{
 			"slug": "latency-bandwidth-model",
 			"title": "Alpha-beta latency/bandwidth model of communication",
 			"updated": "2026-10-02T03:49:46.391Z",
-			"domain": "cs"
+			"domain": "cs",
+			"short": "Alpha-beta model"
 		},
 		{
 			"slug": "compound-growth-pv",
 			"title": "Compound growth, present value, real vs nominal returns",
 			"updated": "2026-10-02T03:49:46.391Z",
-			"domain": "finance"
+			"domain": "finance",
+			"short": "Compound growth"
 		},
 		{
 			"slug": "marginal-vs-effective-tax",
 			"title": "Marginal vs effective tax rates; tax-deferred vs tax-free growth",
 			"updated": "2026-10-02T03:49:46.391Z",
-			"domain": "finance"
+			"domain": "finance",
+			"short": "Marginal/effective tax"
 		},
 		{
 			"slug": "diversification-correlation",
 			"title": "Diversification, correlation, expected return vs volatility",
 			"updated": "2026-10-02T03:49:46.392Z",
-			"domain": "finance"
+			"domain": "finance",
+			"short": "Diversification"
 		}
 	],
 	"interests": [
 		{
 			"at": "2026-10-07T00:42:28.524Z",
-			"text": "bleed.py math: conformational CTMC (generator Q) + state-dependent exchange rates k_{i,s} -> occupation times tau -> Feynman–Kac / uniformization -> Poisson-binomial envelopes; metastability/aggregation for EX1/EX2; renewal kernels. 11-topic reading list (Norris, Moler–Van Loan, Sericola, Yin–Zhang).",
+			"text": "bleed.py math: conformational CTMC (generator Q) + state-dependent exchange rates k_{i,s} -> occupation times tau -> Feynman\u2013Kac / uniformization -> Poisson-binomial envelopes; metastability/aggregation for EX1/EX2; renewal kernels. 11-topic reading list (Norris, Moler\u2013Van Loan, Sericola, Yin\u2013Zhang).",
 			"goal": "hdx",
 			"milestone": "bleed-forward-model",
 			"fundamentals": [

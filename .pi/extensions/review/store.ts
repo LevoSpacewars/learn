@@ -114,6 +114,7 @@ export type MilestoneStatus = "locked" | "ready" | "in_progress" | "done";
 export interface Milestone {
 	id: string;
 	title: string;
+	short?: string; // 2-3 word name for the map
 	kind: MilestoneKind;
 	description?: string;
 	/** Fundamental slugs, or "m:<milestoneId>" for another milestone of the same goal. */
@@ -141,6 +142,7 @@ export type FundamentalStatus = "unknown" | "shaky" | "solid";
 export interface Fundamental {
 	slug: string; // == the lesson slug that teaches it
 	title: string;
+	short?: string; // 2-3 word name for the map
 	domain?: string; // math | physics | cs | chemistry | ...
 	status?: FundamentalStatus; // explicit override; otherwise derived from lessons
 	note?: string;
@@ -582,7 +584,7 @@ export function refreshMilestones(store: LearnerStore): void {
 
 export function upsertGoal(
 	cwd: string,
-	input: { id: string; title: string; why?: string; weight?: number; status?: Goal["status"]; milestones?: Array<{ id: string; title: string; kind: MilestoneKind; description?: string; needs?: string[] }> },
+	input: { id: string; title: string; why?: string; weight?: number; status?: Goal["status"]; milestones?: Array<{ id: string; title: string; short?: string; kind: MilestoneKind; description?: string; needs?: string[] }> },
 ): Goal {
 	const store = loadLearner(cwd);
 	const now = new Date().toISOString();
@@ -599,7 +601,7 @@ export function upsertGoal(
 		const prev = new Map(g.milestones.map((m) => [m.id, m]));
 		g.milestones = input.milestones.map((m) => {
 			const old = prev.get(m.id);
-			return { id: m.id, title: m.title, kind: m.kind, description: m.description, needs: m.needs ?? [], status: old?.status ?? "locked", evidence: old?.evidence, lesson: old?.lesson, done: old?.done };
+			return { id: m.id, title: m.title, short: m.short ?? old?.short, kind: m.kind, description: m.description, needs: m.needs ?? [], status: old?.status ?? "locked", evidence: old?.evidence, lesson: old?.lesson, done: old?.done };
 		});
 	}
 	g.updated = now;
@@ -639,7 +641,7 @@ export function setMilestone(cwd: string, goalId: string, milestoneId: string, p
 	return m;
 }
 
-export function upsertFundamental(cwd: string, input: { slug: string; title?: string; domain?: string; status?: FundamentalStatus; note?: string; serves?: string[] }): Fundamental {
+export function upsertFundamental(cwd: string, input: { slug: string; title?: string; short?: string; domain?: string; status?: FundamentalStatus; note?: string; serves?: string[] }): Fundamental {
 	const store = loadLearner(cwd);
 	const now = new Date().toISOString();
 	let f = store.fundamentals.find((x) => x.slug === input.slug);
@@ -648,6 +650,7 @@ export function upsertFundamental(cwd: string, input: { slug: string; title?: st
 		store.fundamentals.push(f);
 	}
 	if (input.title) f.title = input.title;
+	if (input.short) f.short = input.short;
 	if (input.domain) f.domain = input.domain;
 	if (input.status) f.status = input.status;
 	if (input.note) f.note = input.note;
@@ -780,7 +783,8 @@ export function curriculumMap(store: LearnerStore): string {
 
 export interface GraphNode {
 	id: string;
-	label: string;
+	label: string; // full title (tooltip / detail)
+	short: string; // what the map draws
 	type: "goal" | "milestone" | "concept" | "plan";
 	status?: string;
 	last?: string; // ISO of last learn/review activity
@@ -792,6 +796,36 @@ export interface GraphLink {
 	source: string;
 	target: string;
 	kind: "needs" | "has" | "step" | "teaches";
+}
+
+const LEAD_VERBS =
+	/^(derive|deriving|compute|calculate|build|analy[sz]e|explain|write|implement|classify|estimate|extract|validate|dissect|draw|fit|read|critique|reproduce|order|choose|decide|set up|run|interpret|measure|model|prove|solve|design|compare|calibrate|simulate|map|plan|review|sketch|understand|learn|use|apply|show|state|find|identify|construct|train|predict|diagnose|own|know)\b\s*(the|a|an|your|one of your|how|why|what)?\s*/i;
+
+/** A 2-4 word map label: drop the leading verb, cut at punctuation, keep the first clause, cap the length. */
+export function shortLabel(title: string, max = 24): string {
+	let t = title.replace(/\s+/g, " ").trim();
+	t = t.replace(/^"|"$/g, "");
+	t = t.split(/\s[—–-]\s|:\s|;\s|\s\(|\s\[/)[0];
+	t = t.replace(LEAD_VERBS, "");
+	t = t.replace(/\s+(and|with|from|using|via|for|to|on|in|of)\s.*$/i, (m) => (t.length > max ? "" : m));
+	t = t.replace(/[.,]+$/, "").trim();
+	if (t.length > max) {
+		const words = t.split(" ");
+		let out = "";
+		for (const w of words) {
+			if ((out + " " + w).trim().length > max) break;
+			out = (out + " " + w).trim();
+		}
+		t = out || t.slice(0, max);
+	}
+	// no dangling connectives or arrows after a cut
+	t = t.replace(/\s+(as|of|the|a|an|and|with|for|to|in|on|by|via|from|→|=|vs)$/i, "").trim();
+	if (!t) t = title.slice(0, max);
+	return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function humanize(slug: string): string {
+	return slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function later(a?: string, b?: string): string | undefined {
@@ -852,14 +886,16 @@ export function buildGraph(cwd: string): { nodes: GraphNode[]; links: GraphLink[
 	const concept = (slug: string, title?: string): GraphNode => {
 		const a = act.get(slug);
 		const dossier = fs.existsSync(path.join(cwd, "knowledge", `${slug}.md`)) ? `knowledge/${slug}.md` : undefined;
-		return add({ id: `c:${slug}`, label: title ?? slug, type: "concept", status: fundamentalStatus(store, slug), last: a?.last, count: a?.count ?? 0, url: dossier });
+		const f = store.fundamentals.find((x) => x.slug === slug);
+		const full = title ?? f?.title ?? humanize(slug);
+		return add({ id: `c:${slug}`, label: full, short: f?.short ?? shortLabel(full, 22), type: "concept", status: fundamentalStatus(store, slug), last: a?.last, count: a?.count ?? 0, url: dossier });
 	};
 	for (const f of store.fundamentals) concept(f.slug, f.title);
 	for (const g of store.goals) {
-		add({ id: `g:${g.id}`, label: g.title, type: "goal", status: g.status, last: g.lastTouched, count: 0, group: g.id });
+		add({ id: `g:${g.id}`, label: g.title, short: shortLabel(g.title.split(/[:(—–]/)[0], 20), type: "goal", status: g.status, last: g.lastTouched, count: 0, group: g.id });
 		for (const m of g.milestones) {
 			const a = act.get(`m-${g.id}-${m.id}`);
-			add({ id: `m:${g.id}/${m.id}`, label: m.title, type: "milestone", status: m.status, last: later(m.done, a?.last), count: a?.count ?? 0, group: g.id });
+			add({ id: `m:${g.id}/${m.id}`, label: m.title, short: m.short ?? shortLabel(m.title), type: "milestone", status: m.status, last: later(m.done, a?.last), count: a?.count ?? 0, group: g.id });
 			link(`g:${g.id}`, `m:${g.id}/${m.id}`, "has");
 			for (const n of m.needs) {
 				if (n.startsWith("m:")) link(`m:${g.id}/${n.slice(2)}`, `m:${g.id}/${m.id}`, "needs");
@@ -884,7 +920,8 @@ export function buildGraph(cwd: string): { nodes: GraphNode[]; links: GraphLink[
 			for (const n of l.nodes) ids.add(n.id);
 			for (const id of ids) {
 				const ln = l.nodes.find((n) => n.id === id);
-				add({ id: `p:${l.slug}:${id}`, label: ln?.label ?? labels[id] ?? id, type: "plan", status: ln?.status ?? "pending", last: ln?.updated, count: ln?.status === "confirmed" ? 1 : 0, group: l.slug });
+				const full = ln?.label ?? labels[id] ?? id;
+				add({ id: `p:${l.slug}:${id}`, label: full, short: shortLabel(full, 18), type: "plan", status: ln?.status ?? "pending", last: ln?.updated, count: ln?.status === "confirmed" ? 1 : 0, group: l.slug });
 			}
 			for (const [a, b] of edges) link(`p:${l.slug}:${a}`, `p:${l.slug}:${b}`, "step");
 			const targets = new Set(edges.map((e) => e[1]));

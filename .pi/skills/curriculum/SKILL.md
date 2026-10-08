@@ -30,6 +30,7 @@ Turn each research brief into a spine of **5-8 milestones**, each a real task ph
 - **Name fundamentals by concept and reuse slugs across goals.** The same `eigendecomposition` serves MD normal modes, PCA in MS analysis, and large-deviation rate functions. Shared slugs are what make the graph efficient.
 - Where a paper or problem of his own fits, make it a milestone (`kind: read` / `critique` / `do`) and say so; his material lives in `inbox/` in the vault.
 - A fundamental is a *lesson-sized* idea (one session), not a course. Split "linear algebra" into the three or four pieces the milestones actually use.
+- Give every milestone and fundamental a `short` name of 2-3 words ("Uptake curves", "BAOAB integrator", "Legendre transform"): the knowledge map draws those, the full title is the tooltip.
 
 Present all spines in chat as compact lists (goal → milestones → needs). Then ask whether to adjust; apply his edits; save each goal with `goal_set` and each fundamental with `fundamental_set` (domain + serves). Finish with `curriculum_map` and show it.
 
