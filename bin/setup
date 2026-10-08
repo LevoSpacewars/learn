@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# One-time setup on a new machine (macOS or Linux/WSL). Safe to re-run.
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$here"
+echo "learn vault: $here"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "  missing: $1  ($2)"; return 1; }; echo "  ok: $1"; }
+echo "Tools:"
+need pi      "install: https://github.com/earendil-works/pi  then: pi install npm:pi-claude-bridge  and  pi install https://github.com/amosblomqvist/pi-interactive-subagents" || true
+need node    "Node 20+ (brew install node / apt install nodejs)" || true
+need tmux    "brew install tmux / apt install tmux (subagents and bin/learn need it)" || true
+need ffmpeg  "brew install ffmpeg / apt install ffmpeg (voice answers)" || true
+need whisper-cli "brew install whisper-cpp / build whisper.cpp (voice answers)" || true
+need pdftotext "brew install poppler / apt install poppler-utils (papers in inbox/)" || true
+need claude  "Claude Code CLI (the researcher subagent uses it): npm i -g @anthropic-ai/claude-code" || true
+
+echo "Extension dependencies:"
+for d in .pi/extensions/*/; do
+  if [ -f "$d/package.json" ]; then (cd "$d" && npm install --silent --no-audit --no-fund && echo "  ok: $d"); fi
+done
+
+model="${PI_WHISPER_MODEL:-$HOME/.cache/whisper/ggml-medium.en.bin}"
+if [ ! -f "$model" ]; then
+  echo "Whisper model missing at $model"
+  read -r -p "  download ggml-medium.en.bin (1.5 GB) now? [y/N] " yn
+  if [ "${yn:-n}" = y ]; then mkdir -p "$(dirname "$model")"; curl -L -o "$model" https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin; fi
+else echo "  ok: whisper model"; fi
+
+mkdir -p .learn lessons knowledge work viz inbox
+[ -f .learn/phone-token ] || echo "  (the phone token is created on first pi start; it is per machine and never committed)"
+echo
+echo "Next: run bin/learn  (or just: cd $here && pi)"

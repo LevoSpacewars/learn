@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Start (or re-attach to) the learning session in tmux. Works locally and over ssh.
+#   bin/learn           attach / start
+#   bin/learn stop      stop the session
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+name="learn"
+if [ "${1:-}" = stop ]; then tmux kill-session -t "$name" 2>/dev/null && echo "stopped" || echo "not running"; exit 0; fi
+if tmux has-session -t "$name" 2>/dev/null; then
+  exec tmux attach -t "$name"
+else
+  cd "$here"
+  exec tmux new-session -s "$name" -c "$here" "pi"
+fi
