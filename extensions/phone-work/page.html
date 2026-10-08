@@ -74,10 +74,16 @@ input[type=file] { display:none; }
 .thumb button { position:absolute; top:4px; right:4px; min-height:0; width:28px; height:28px; border-radius:50%; padding:0; background:rgba(0,0,0,.6); color:#fff; border:0; font-size:16px; }
 /* drawing (vector scratchpad engine in scratch.js) */
 .draw { display:none; flex-direction:column; gap:8px; } .draw.on { display:flex; }
-.tools { display:flex; gap:6px; flex-wrap:wrap; align-items:center; } .tools button { min-height:36px; padding:0 10px; font-size:14px; } .tools button.on { background:var(--soft); border-color:var(--accent); color:var(--accent); }
-.tools .sc-sizes, .tools .sc-colors { display:inline-flex; gap:4px; }
-.tools .sc-color { width:30px; min-height:30px; padding:0; border-radius:50%; border:2px solid transparent; } .tools .sc-color.on { border-color:var(--accent); box-shadow:0 0 0 2px var(--card); }
-.scratch-host { position:relative; width:100%; height:62vh; min-height:320px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fbfaf7; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+/* vertical tool rail */
+.draw.on { flex-direction:row; gap:6px; align-items:stretch; }
+.tools { display:flex; flex-direction:column; gap:10px; width:52px; flex:none; overflow:auto; padding:4px 0; }
+.sc-group { display:flex; flex-direction:column; gap:4px; align-items:center; }
+.sc-group + .sc-group { border-top:1px solid var(--line); padding-top:8px; }
+.tools button { width:44px; min-height:44px; padding:0; font-size:19px; line-height:1; border-radius:11px; }
+.tools button.on { background:var(--soft); border-color:var(--accent); color:var(--accent); }
+.tools .sc-color { width:30px; min-height:30px; border-radius:50%; border:2px solid transparent; } .tools .sc-color.on { border-color:var(--accent); box-shadow:0 0 0 2px var(--card); }
+.tools .sc-size { min-height:34px; } .tools .sc-dot { display:block; border-radius:50%; background:currentColor; }
+.scratch-host { position:relative; flex:1; min-width:0; height:62vh; min-height:320px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fbfaf7; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
 .scratch-host canvas { position:absolute; inset:0; touch-action:none; }
 .sc-live { z-index:2; }
 .status { min-height:1.4em; font-size:15px; text-align:center; } .status.ok { color:var(--ok); } .status.err { color:var(--err); }
@@ -94,10 +100,15 @@ body.role-viewer #text { display:block !important; }
 body.role-scratch main { grid-template-columns: 1fr; height: calc(100% - 56px); }
 body.role-scratch #lesson, body.role-scratch .tabs, body.role-scratch .modes, body.role-scratch #text, body.role-scratch #photo, body.role-scratch #voice, body.role-scratch #freephoto, body.role-scratch #hint, body.role-scratch #idk { display:none !important; }
 body.role-scratch #pad { display:flex !important; padding:8px 10px; gap:8px; }
-body.role-scratch #qcard { padding:8px 12px; } body.role-scratch .prompt { font-size:15px; max-height:30vh; overflow:auto; }
+body.role-scratch #qcard { padding:6px 12px; cursor:pointer; } body.role-scratch .prompt { font-size:15px; max-height:28vh; overflow:auto; }
+body.role-scratch #qcard.collapsed .prompt { max-height:1.5em; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+body.role-scratch #qcard.collapsed .prompt p { display:inline; margin:0; }
+body.role-scratch .small { display:none; }
+body.role-scratch #confrow { margin:0; }
 body.role-scratch #answer { display:flex !important; flex:1; min-height:0; }
 body.role-scratch #draw { display:flex !important; flex:1; min-height:0; }
 body.role-scratch .scratch-host { flex:1; min-height:0; height:auto; }
+body.role-scratch .draw.on { flex:1; min-height:0; }
 body.role-scratch #result { position:fixed; left:10px; right:10px; bottom:90px; z-index:6; box-shadow:0 8px 30px rgba(0,0,0,.25); }
 body.role-scratch #quiz { display:none !important; }
 body.role-scratch #actions { grid-template-columns: 1fr; }
@@ -125,7 +136,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
       <div id="draw" class="draw">
         <div id="sctools" class="tools"></div>
         <div id="schost"></div>
-        <div class="small">Pencil draws · one finger scrolls · pinch zooms · two-finger tap undoes · the eraser removes whole strokes. Sent as images, then the sheet clears.</div>
+
       </div>
       <div id="photo" class="hidden" style="display:flex; flex-direction:column; gap:8px;">
         <div class="btns"><label class="btn">📷 Take photo<input id="cam" type="file" accept="image/*" capture="environment"></label><label class="btn">🖼 Choose<input id="pick" type="file" accept="image/*" multiple></label></div>
@@ -227,6 +238,7 @@ function setRole(r, save) {
   if (r === "full" && matchMedia("(min-width: 900px)").matches) document.body.className = "view-pad view-lesson";
   updateButtons();
 }
+$("qcard").addEventListener("click", () => { if (role === "scratch" && pending) $("qcard").classList.toggle("collapsed"); });
 $("roleFull").onclick = () => setRole("full", true); $("roleViewer").onclick = () => setRole("viewer", true); $("roleScratch").onclick = () => setRole("scratch", true);
 (function initRole() {
   const q = new URLSearchParams(location.search).get("mode");
@@ -261,6 +273,7 @@ function updateButtons() {
 function showPrompt(p) {
   $("kind").textContent = KIND[p.kind] || p.kind; $("prompt").innerHTML = renderMd(p.prompt + (p.context ? "\n\n" + p.context : ""));
   $("idle").classList.add("hidden"); $("prompt").classList.remove("hidden"); $("kind").classList.remove("hidden");
+  $("qcard").classList.remove("collapsed");
   $("result").classList.add("hidden");
   $("confrow").classList.remove("hidden"); $("actions").classList.remove("hidden"); $("freephoto").classList.add("hidden");
   if (p.kind === "quiz") {

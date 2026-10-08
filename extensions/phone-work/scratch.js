@@ -222,17 +222,21 @@
     const tb = toolbar; tb.innerHTML = "";
     const toolBtns = {};
     const setTool = (t) => { S.tool = t; for (const k in toolBtns) toolBtns[k].classList.toggle("on", k === t); if (t !== "lasso") { S.selection = null; dirty = true; } };
-    toolBtns.pen = button("✎ Pen", "Pen", () => setTool("pen")); toolBtns.eraser = button("⌫ Erase", "Stroke eraser: touch any part of a stroke to remove it", () => setTool("eraser")); toolBtns.lasso = button("◌ Lasso", "Circle strokes, then drag them", () => setTool("lasso"));
-    tb.append(toolBtns.pen, toolBtns.eraser, toolBtns.lasso);
-    const sizeWrap = document.createElement("span"); sizeWrap.className = "sc-sizes";
-    const sizeBtns = SIZES.map((sz, i) => { const b = button(["thin", "med", "thick"][i], "Pen size", () => { S.size = sz; sizeBtns.forEach((x, j) => x.classList.toggle("on", j === i)); }); if (sz === S.size) b.classList.add("on"); return b; });
-    sizeWrap.append(...sizeBtns); tb.append(sizeWrap);
-    const colWrap = document.createElement("span"); colWrap.className = "sc-colors";
+    const group = (cls) => { const g = document.createElement("div"); g.className = "sc-group " + cls; tb.append(g); return g; };
+    const g1 = group("sc-tools");
+    toolBtns.pen = button("✎", "Pen", () => setTool("pen")); toolBtns.eraser = button("⌫", "Stroke eraser: touch any part of a stroke to remove it", () => setTool("eraser")); toolBtns.lasso = button("◌", "Lasso: circle strokes, then drag them", () => setTool("lasso"));
+    g1.append(toolBtns.pen, toolBtns.eraser, toolBtns.lasso);
+    const g2 = group("sc-sizes");
+    const sizeBtns = SIZES.map((sz, i) => { const b = button("", "Pen size", () => { S.size = sz; sizeBtns.forEach((x, j) => x.classList.toggle("on", j === i)); setTool("pen"); }); const dot = document.createElement("i"); dot.className = "sc-dot"; dot.style.width = dot.style.height = (6 + i * 5) + "px"; b.appendChild(dot); b.className = "sc-size"; if (sz === S.size) b.classList.add("on"); return b; });
+    g2.append(...sizeBtns);
+    const g3 = group("sc-colors");
     const colBtns = COLORS.map((c, i) => { const b = button("", "Ink color", () => { S.color = c; colBtns.forEach((x, j) => x.classList.toggle("on", j === i)); setTool("pen"); }); b.style.background = c; b.className = "sc-color"; if (c === S.color) b.classList.add("on"); return b; });
-    colWrap.append(...colBtns); tb.append(colWrap);
-    tb.append(button("↶", "Undo (or two-finger tap)", undo), button("↷", "Redo (or three-finger tap)", redo));
-    const delBtn = button("Delete", "Delete the lassoed strokes", () => { if (S.selection) { const gone = S.selection.strokes; S.strokes = S.strokes.filter((s) => !gone.includes(s)); push({ type: "remove", strokes: gone }); S.selection = null; dirty = true; } }); tb.append(delBtn);
-    tb.append(button("Grid", "Toggle grid", () => { S.grid = !S.grid; dirty = true; }), button("Fit", "Fit page width", () => { fitWidth(); dirty = true; }), button("Clear", "Clear the sheet", () => { if (!S.strokes.length) return; push({ type: "remove", strokes: S.strokes.slice() }); S.strokes = []; S.selection = null; dirty = true; }));
+    g3.append(...colBtns);
+    const g4 = group("sc-edit");
+    g4.append(button("↶", "Undo (or two-finger tap)", undo), button("↷", "Redo (or three-finger tap)", redo));
+    const delBtn = button("🗑", "Delete the lassoed strokes", () => { if (S.selection) { const gone = S.selection.strokes; S.strokes = S.strokes.filter((s) => !gone.includes(s)); push({ type: "remove", strokes: gone }); S.selection = null; dirty = true; } }); g4.append(delBtn);
+    const g5 = group("sc-view");
+    g5.append(button("⊞", "Toggle grid", () => { S.grid = !S.grid; dirty = true; }), button("⤢", "Fit page width", () => { fitWidth(); dirty = true; }), button("✕", "Clear the sheet", () => { if (!S.strokes.length) return; push({ type: "remove", strokes: S.strokes.slice() }); S.strokes = []; S.selection = null; dirty = true; }));
     setTool("pen");
 
     // ---------- export ----------
