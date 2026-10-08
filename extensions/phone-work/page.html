@@ -344,7 +344,7 @@ $("text").oninput = updateButtons; $("conf").oninput = () => { $("confv").textCo
 // ---------- drawing: vector scratchpad (scratch.js) ----------
 let pointerPenCapable = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
 let pad = null;
-function ensurePage() { if (!pad && window.Scratch) { pad = Scratch.mount($("schost"), $("sctools")); $("schost").addEventListener("pointerup", updateButtons); $("schost").addEventListener("pointercancel", updateButtons); $("sctools").addEventListener("click", () => setTimeout(updateButtons, 0)); } }
+function ensurePage() { if (!pad && window.Scratch) { pad = Scratch.mount($("schost"), $("sctools"), { onSend: () => { if (!busy && !$("send").disabled) { setStatus("Swipe: sending…"); $("send").click(); } } }); $("schost").addEventListener("pointerup", updateButtons); $("schost").addEventListener("pointercancel", updateButtons); $("sctools").addEventListener("click", () => setTimeout(updateButtons, 0)); } }
 const pages = { some: (f) => !!(pad && pad.hasInk() && f({ strokes: [1] })) };
 function exportPages() { ensurePage(); return pad ? pad.exportImages() : []; }
 function clearPages() { if (pad) pad.clear(); }

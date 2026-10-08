@@ -44,7 +44,8 @@
   }
   function boxesHit(a, b) { return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]; }
 
-  function mount(host, toolbar) {
+  function mount(host, toolbar, opts) {
+    opts = opts || {};
     host.classList.add("scratch-host");
     host.innerHTML = '<canvas class="sc-static"></canvas><canvas class="sc-live"></canvas>';
     const stat = host.querySelector(".sc-static"), live = host.querySelector(".sc-live");
@@ -173,13 +174,14 @@
       S.touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() });
       const n = S.touches.size;
       if (n === 1) S.gesture = { kind: "pan", lx: e.clientX, ly: e.clientY, moved: 0, start: performance.now() };
-      else if (n >= 2) { const [p, q] = [...S.touches.values()]; S.gesture = { kind: "pinch", d0: dist(p.x, p.y, q.x, q.y), s0: S.view.scale, mx: (p.x + q.x) / 2, my: (p.y + q.y) / 2, tx0: S.view.tx, ty0: S.view.ty, moved: 0, start: S.gesture ? S.gesture.start : performance.now(), fingers: n }; }
+      else if (n >= 2) { const [p, q] = [...S.touches.values()]; S.gesture = { kind: "pinch", d0: dist(p.x, p.y, q.x, q.y), s0: S.view.scale, mx: (p.x + q.x) / 2, my: (p.y + q.y) / 2, tx0: S.view.tx, ty0: S.view.ty, moved: S.gesture ? S.gesture.moved : 0, start: S.gesture ? S.gesture.start : performance.now(), fingers: Math.max(n, S.gesture ? S.gesture.fingers || 0 : 0), swipes: S.gesture ? S.gesture.swipes : undefined }; }
     }
     function fingerMove(e) {
       const t = S.touches.get(e.pointerId); if (!t) return; t.x = e.clientX; t.y = e.clientY;
       const g = S.gesture; if (!g) return;
       const r = host.getBoundingClientRect();
-      if (g.kind === "pan" && S.touches.size === 1) { const dx = e.clientX - g.lx, dy = e.clientY - g.ly; g.moved += Math.abs(dx) + Math.abs(dy); g.lx = e.clientX; g.ly = e.clientY; S.view.tx += dx; S.view.ty += dy; clampView(); dirty = true; }
+      if (g.kind === "pan" && S.touches.size === 1 && (g.fingers || 1) === 1) { const dx = e.clientX - g.lx, dy = e.clientY - g.ly; g.moved += Math.abs(dx) + Math.abs(dy); g.lx = e.clientX; g.ly = e.clientY; S.view.tx += dx; S.view.ty += dy; clampView(); dirty = true; }
+      else if (g.kind === "pinch" && S.touches.size >= 3) { /* multi-finger swipe in progress: no pan/zoom */ }
       else if (g.kind === "pinch" && S.touches.size >= 2) {
         const [p, q] = [...S.touches.values()]; const d = dist(p.x, p.y, q.x, q.y); const mx = (p.x + q.x) / 2 - r.left, my = (p.y + q.y) / 2 - r.top;
         const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, g.s0 * (d / g.d0))); const k = scale / S.view.scale;
@@ -192,11 +194,16 @@
     function fingerUp(e) {
       const t = S.touches.get(e.pointerId); S.touches.delete(e.pointerId);
       const g = S.gesture;
+      if (g && t) { g.swipes = g.swipes || []; g.swipes.push({ dx: t.x - t.sx, dy: t.y - t.sy }); }
       if (S.touches.size === 0 && g) {
         const dur = performance.now() - g.start; const fingers = g.fingers || 1;
         if (dur < 300 && g.moved < 12 && t && dist(t.sx, t.sy, t.x, t.y) < 12) { if (fingers === 2) undo(); else if (fingers >= 3) redo(); }
+        else if (fingers >= 3 && dur < 900 && (g.swipes || []).length >= 3 && g.swipes.every((w) => w.dy < -70 && Math.abs(w.dx) < Math.abs(w.dy) * 0.7)) {
+          // three/four-finger swipe up = send (iPadOS often keeps four-finger swipes for itself)
+          if (typeof opts.onSend === "function") opts.onSend();
+        }
         S.gesture = null;
-      } else if (S.touches.size === 1 && g && g.kind === "pinch") { const [p] = [...S.touches.values()]; S.gesture = { kind: "pan", lx: p.x, ly: p.y, moved: g.moved, start: g.start, fingers: g.fingers }; }
+      } else if (S.touches.size === 1 && g && g.kind === "pinch") { const [p] = [...S.touches.values()]; S.gesture = { kind: "pan", lx: p.x, ly: p.y, moved: g.moved, start: g.start, fingers: g.fingers, swipes: g.swipes }; }
     }
 
     // ---------- event wiring ----------
