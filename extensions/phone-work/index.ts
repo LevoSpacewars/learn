@@ -48,7 +48,15 @@ const WHISPER_BIN = process.env.PI_WHISPER_BIN || "whisper-cli";
 const PAGE_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "page.html");
 function pageHtml(): string {
 	try {
-		return fs.readFileSync(PAGE_FILE, "utf8");
+		// Inline the scratchpad engine so the page is one request and never depends on a separate route.
+		const page = fs.readFileSync(PAGE_FILE, "utf8");
+		let engine = "";
+		try {
+			engine = fs.readFileSync(path.join(path.dirname(PAGE_FILE), "scratch.js"), "utf8");
+		} catch {
+			// marker stays; the page shows a notice
+		}
+		return engine ? page.replace("<!--SCRATCH-->", `<script>\n${engine.replace(/<\/script/gi, "<\\/script")}\n</script>`) : page;
 	} catch (e: any) {
 		return `<!doctype html><meta charset="utf-8"><p>page.html missing next to phone-work/index.ts (${String(e?.message ?? e)})</p>`;
 	}

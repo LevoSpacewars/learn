@@ -8,7 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"></script>
-<script>document.write('<script src="/scratch.js?t=' + encodeURIComponent(new URLSearchParams(location.search).get("t") || "") + '"><\/script>');</script>
+<!--SCRATCH-->
+<script>if (!window.Scratch) document.addEventListener("DOMContentLoaded", () => { const n = document.createElement("div"); n.className = "card"; n.style.color = "var(--err)"; n.textContent = "Scratchpad engine not loaded: the running pi session is older than this page. Quit pi and start it again."; const d = document.getElementById("draw"); (d || document.body).prepend(n); });</script>
 <style>
 :root { --bg:#f6f5f2; --fg:#1d1d1f; --muted:#6e6e73; --card:#fff; --line:#e3e1dc; --accent:#2f6fde; --ok:#1f8a4c; --err:#c0392b; --warn:#b7791f; --soft:#eef2fb; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root { --bg:#141416; --fg:#f2f2f4; --muted:#9a9aa1; --card:#1f1f23; --line:#2e2e34; --accent:#5b8ff0; --ok:#3fbf73; --err:#e5675a; --warn:#e0a83a; --soft:#242838; color-scheme: dark; } }
