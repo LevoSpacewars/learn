@@ -127,7 +127,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
     <div id="qcard" class="card">
       <span id="kind" class="kind"></span><span id="timer" class="timer"></span>
       <div id="prompt" class="prompt"></div>
-      <div id="idle" class="idle">No open question. When the tutor asks something, it appears here.</div>
+      <div id="idle" class="idle">Waiting for the tutor. Menus, questions and answers all appear here.</div>
     </div>
     <div id="result" class="card result hidden"></div>
     <div id="quiz" class="opts hidden"></div>
@@ -256,10 +256,14 @@ $("tabPad").onclick = () => { document.body.className = "view-pad"; $("tabPad").
 // ---------- prompt ----------
 function setStatus(msg, cls) { $("status").textContent = msg || ""; $("status").className = "status " + (cls || ""); }
 function fmt(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
-const KIND = { recall: "Recall", explain: "Explain it back", predict: "Predict", boundary: "Boundary", flaw: "Find the flaw", transfer: "Transfer", problem: "Problem", quiz: "Quiz" };
+const KIND = { recall: "Recall", explain: "Explain it back", predict: "Predict", boundary: "Boundary", flaw: "Find the flaw", transfer: "Transfer", problem: "Problem", quiz: "Quiz", menu: "Choose", input: "Your turn", ask: "Question" };
+const isChoice = (p) => p && (p.kind === "quiz" || p.kind === "menu" || p.kind === "ask");
+const isGraded = (p) => p && !["menu", "input", "ask"].includes(p.kind);
 function hasAnswer() {
   if (!pending) return false;
-  if (pending.kind === "quiz") return role !== "scratch" && selected.size > 0;
+  if (pending.kind === "input") return !!$("text").value.trim();
+  if (pending.kind === "ask") return selected.size > 0 || !!$("text").value.trim();
+  if (pending.kind === "quiz" || pending.kind === "menu") return role !== "scratch" && selected.size > 0;
   if (mode === "draw") return pages.some((p) => p.strokes.length);
   return !!(files.length || audio || $("text").value.trim());
 }
@@ -269,7 +273,8 @@ function updateButtons() {
   $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer());
   $("send").textContent = pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
   for (const id of ["hint", "idk", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
-  $("hint").classList.toggle("hidden", !!q);
+  $("hint").classList.toggle("hidden", !!q || !isGraded(pending));
+  $("idk").classList.toggle("hidden", !isGraded(pending));
   $("freesend").disabled = freefiles.length === 0 || busy;
 }
 function showPrompt(p) {
@@ -277,12 +282,20 @@ function showPrompt(p) {
   $("idle").classList.add("hidden"); $("prompt").classList.remove("hidden"); $("kind").classList.remove("hidden");
   $("qcard").classList.remove("collapsed");
   $("result").classList.add("hidden");
-  $("confrow").classList.remove("hidden"); $("actions").classList.remove("hidden"); $("freephoto").classList.add("hidden");
-  if (p.kind === "quiz") {
-    $("answer").classList.add("hidden"); $("quiz").classList.remove("hidden"); $("quiz").innerHTML = ""; selected = new Set();
+  $("confrow").classList.toggle("hidden", !isGraded(p)); $("actions").classList.remove("hidden"); $("freephoto").classList.add("hidden");
+  if (p.kind === "input") {
+    $("quiz").classList.add("hidden"); $("answer").classList.remove("hidden"); setMode("type"); $("text").placeholder = p.context || "Type here…";
+  } else if (isChoice(p)) {
+    $("answer").classList.toggle("hidden", p.kind !== "ask"); $("quiz").classList.remove("hidden"); $("quiz").innerHTML = ""; selected = new Set();
+    if (p.kind === "ask") { setMode("type"); $("text").placeholder = "Other: type your own answer…"; }
     for (const o of p.options || []) {
-      const b = document.createElement("button"); b.innerHTML = o.index + ". " + renderMd(o.label).replace(/^<p>|<\/p>\s*$/g, "");
-      b.onclick = () => { if (p.multi) { selected.has(o.index) ? selected.delete(o.index) : selected.add(o.index); } else { selected = new Set([o.index]); } [...$("quiz").children].forEach((c, i) => c.classList.toggle("sel", selected.has((p.options[i] || {}).index))); updateButtons(); };
+      const b = document.createElement("button"); b.innerHTML = (p.kind === "menu" ? "" : o.index + ". ") + renderMd(o.label).replace(/^<p>|<\/p>\s*$/g, "");
+      b.onclick = () => {
+        if (p.multi) { selected.has(o.index) ? selected.delete(o.index) : selected.add(o.index); } else { selected = new Set([o.index]); }
+        [...$("quiz").children].forEach((c, i) => c.classList.toggle("sel", selected.has((p.options[i] || {}).index)));
+        updateButtons();
+        if (p.kind === "menu" && !p.multi) $("send").click(); // a menu choice sends itself
+      };
       $("quiz").appendChild(b);
     }
   } else {
@@ -291,13 +304,13 @@ function showPrompt(p) {
   }
   if (role === "scratch" && p.kind === "quiz") { $("answer").classList.remove("hidden"); setMode("draw"); }
   resetAnswer(); setStatus("");
-  try { navigator.vibrate && navigator.vibrate(80); } catch {}
+  if (p.kind !== "menu") { try { navigator.vibrate && navigator.vibrate(80); } catch {} }
 }
 function hidePrompt() {
   pending = null; $("idle").classList.remove("hidden"); $("prompt").classList.add("hidden"); $("kind").classList.add("hidden"); $("timer").textContent = "";
   $("quiz").classList.add("hidden"); $("answer").classList.add("hidden"); $("confrow").classList.add("hidden"); $("actions").classList.add("hidden"); $("freephoto").classList.remove("hidden");
   if (role === "scratch") { $("answer").classList.remove("hidden"); $("actions").classList.remove("hidden"); $("idle").textContent = "No open question — you can still draw and send it to the tutor."; }
-  else $("idle").textContent = "No open question. When the tutor asks something, it appears here.";
+  else $("idle").textContent = "Waiting for the tutor. Menus, questions and answers all appear here.";
   updateButtons();
 }
 function showResult(r) {
@@ -325,7 +338,7 @@ async function poll() {
     const p = j.pending;
     if (p && (!pending || pending.id !== p.id)) { pending = p; showPrompt(p); }
     else if (!p && pending) hidePrompt();
-    if (j.last && j.last.id !== lastShownId && (!p || p.id !== j.last.id) && Date.now() - skew - j.last.at < 10 * 60 * 1000) { lastShownId = j.last.id; showResult(j.last); }
+    if (j.last && j.last.id !== lastShownId && (!p || p.id !== j.last.id) && Date.now() - skew - j.last.at < 10 * 60 * 1000 && !["menu", "input", "ask"].includes(j.last.kind)) { lastShownId = j.last.id; showResult(j.last); }
   } catch (e) { $("conn").textContent = "Can't reach your Mac — is Tailscale on?"; $("conn").className = "conn bad"; }
 }
 setInterval(poll, 1500); poll();
@@ -401,6 +414,9 @@ $("send").onclick = async () => {
     busy = false; updateButtons(); return;
   }
   const confidence = Number($("conf").value);
+  if (pending.kind === "menu") return submit({ choices: [...selected] });
+  if (pending.kind === "input") return submit({ text: $("text").value });
+  if (pending.kind === "ask") return submit(selected.size ? { choices: [...selected] } : { text: $("text").value });
   if (pending.kind === "quiz") return submit({ choices: [...selected], confidence });
   const images = mode === "draw" ? exportPages() : files.map((f) => ({ data: f.data, mimeType: f.mimeType }));
   submit({ text: mode === "type" ? $("text").value : "", confidence, images, audio: mode === "voice" ? audio : null }, audio ? "Transcribing on the Mac…" : "Sending…");

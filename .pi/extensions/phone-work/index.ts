@@ -181,6 +181,7 @@ interface Upload {
 	confidence?: number;
 	dontKnow?: boolean;
 	hint?: boolean;
+	choices?: number[]; // quiz / menu / ask: 1-based option indices
 	id?: string;
 }
 
@@ -331,6 +332,14 @@ export default function phoneWork(pi: ExtensionAPI) {
 
 		if (payload.hint) return json(res, 200, { ok: true, answered: answerPending({ source: "pad", hint: true }) });
 		if (payload.dontKnow) return json(res, 200, { ok: true, answered: answerPending({ source: "pad", dontKnow: true }) });
+		if (Array.isArray(payload.choices) && payload.choices.length) {
+			const choices = payload.choices.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+			const conf = typeof payload.confidence === "number" && Number.isFinite(payload.confidence) ? Math.max(0, Math.min(100, Math.round(payload.confidence))) : undefined;
+			const ok = answerPending({ source: "pad", choices, confidence: conf, text: payload.text?.trim() || undefined });
+			if (!ok) return json(res, 409, { error: "That question has already been answered" });
+			ctx.ui.notify("📱 Choice received from your device", "info");
+			return json(res, 200, { ok: true, answered: true });
+		}
 
 		const images = (payload.images ?? []).filter((i) => MIME_EXT[i?.mimeType] && typeof i.data === "string").slice(0, MAX_IMAGES);
 		const saved = images.length ? saveImages(ctx.cwd, images) : [];

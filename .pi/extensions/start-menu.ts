@@ -26,6 +26,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { beginLearnSession, beginReviewSession, countDue, dueByTopic } from "./review/index.ts";
 import { buildGraph, learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
+import { webInput, webSelect } from "./review/ui.ts";
 
 function today(): string {
 	const d = new Date();
@@ -68,7 +69,7 @@ export default function startMenu(pi: ExtensionAPI) {
 	}
 
 	async function askBudget(ctx: any): Promise<number | undefined> {
-		const raw = (await ctx.ui.input("How much time do you have? (minutes, blank = open-ended)", "e.g. 30"))?.trim();
+		const raw = (await webInput(ctx, "How much time do you have? (minutes, blank = open-ended)", "e.g. 30"))?.trim();
 		if (!raw) return undefined;
 		const n = Number.parseInt(raw.replace(/[^0-9]/g, ""), 10);
 		return Number.isFinite(n) && n > 0 ? n : undefined;
@@ -110,7 +111,7 @@ export default function startMenu(pi: ExtensionAPI) {
 			? `Next on the path: ${pick.action === "learn" ? `learn ${pick.fundamental!.title}` : `attempt ${pick.milestone.title}`} (${pick.goal.title})`
 			: undefined;
 		const options = [...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ORIENT, ...(hasGoals ? [] : [SETUP])];
-		const choice = await ctx.ui.select("What would you like to do?", options);
+		const choice = await webSelect(ctx, "What would you like to do?", options);
 		if (!choice) return;
 
 		if (choice === ORIENT) {
@@ -166,7 +167,7 @@ export default function startMenu(pi: ExtensionAPI) {
 		}
 
 		if (choice === BRING) {
-			const text = (await ctx.ui.input("What did you bring?", "a file in inbox/, a URL, a question, an idea…"))?.trim();
+			const text = (await webInput(ctx, "What did you bring?", "a file in inbox/, a URL, a question, an idea…"))?.trim();
 			if (!text) return;
 			const budget = await askBudget(ctx);
 			const file = lessonFile(ctx.cwd, text.replace(/^inbox\//, "").replace(/\.[a-z0-9]+$/i, ""));
@@ -210,7 +211,7 @@ export default function startMenu(pi: ExtensionAPI) {
 			return;
 		}
 
-		const topic = (await ctx.ui.input("What do you want to learn?", "e.g. the Pythagorean theorem"))?.trim();
+		const topic = (await webInput(ctx, "What do you want to learn?", "e.g. the Pythagorean theorem"))?.trim();
 		if (!topic) return;
 		const budget = await askBudget(ctx);
 		const file = lessonFile(ctx.cwd, topic);

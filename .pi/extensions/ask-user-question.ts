@@ -9,6 +9,8 @@ import {
 	wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import { type PromptAnswer, setPending } from "./review/prompts.ts";
+import { webInput } from "./review/ui.ts";
 
 interface AskOption {
 	label: string;
@@ -218,11 +220,38 @@ async function askSingleChoice(
 		let cachedLines: string[] | undefined;
 		let cachedWidth = -1;
 		const editor = new Editor(tui, createEditorTheme(theme));
+		let finished = false;
+		const finish = (r: AskAnswer | null) => {
+			if (finished) return;
+			finished = true;
+			setPending(undefined);
+			done(r);
+		};
+		// Mirror to the web surface (buttons + an "other" text box).
+		setPending({
+			id: `ask${Date.now().toString(36)}`,
+			kind: "ask",
+			prompt: question,
+			context,
+			startedAt: Date.now(),
+			options: options.map((o, i) => ({ index: i + 1, label: o.label })),
+			answer: (a: PromptAnswer) => {
+				const i = a.choices?.[0];
+				if (i && options[i - 1]) {
+					finish({ type: "option", label: options[i - 1].label, value: options[i - 1].value, index: i });
+					return true;
+				}
+				const t = (a.text ?? "").trim();
+				if (!t) return false;
+				finish({ type: "other", label: t, value: t });
+				return true;
+			},
+		});
 
 		editor.onSubmit = (value) => {
 			const trimmed = value.trim();
 			if (!trimmed) return;
-			done({ type: "other", label: trimmed, value: trimmed });
+			finish({ type: "other", label: trimmed, value: trimmed });
 		};
 
 		function refresh() {
@@ -261,7 +290,7 @@ async function askSingleChoice(
 					refresh();
 					return;
 				}
-				done({
+				finish({
 					type: "option",
 					label: selected.label,
 					value: selected.value,
@@ -270,7 +299,7 @@ async function askSingleChoice(
 				return;
 			}
 			if (matchesKey(data, Key.escape)) {
-				done(null);
+				finish(null);
 			}
 		}
 
@@ -359,6 +388,32 @@ async function askMultiChoice(
 		let cachedWidth = -1;
 		const selected = new Map<string, AskAnswer>();
 		const editor = new Editor(tui, createEditorTheme(theme));
+		let finished = false;
+		const finish = (r: AskAnswer[] | null) => {
+			if (finished) return;
+			finished = true;
+			setPending(undefined);
+			done(r);
+		};
+		// MIRROR-MULTI
+		setPending({
+			id: `ask${Date.now().toString(36)}`,
+			kind: "ask",
+			prompt: question,
+			context,
+			startedAt: Date.now(),
+			multi: true,
+			options: options.map((o, i) => ({ index: i + 1, label: o.label })),
+			answer: (a: PromptAnswer) => {
+				const out: AskAnswer[] = [];
+				for (const i of a.choices ?? []) if (options[i - 1]) out.push({ type: "option", label: options[i - 1].label, value: options[i - 1].value, index: i });
+				const t = (a.text ?? "").trim();
+				if (t) out.push({ type: "other", label: t, value: t });
+				if (!out.length) return false;
+				finish(out);
+				return true;
+			},
+		});
 
 		editor.onSubmit = (value) => {
 			const trimmed = value.trim();
@@ -432,7 +487,7 @@ async function askMultiChoice(
 			if (matchesKey(data, Key.enter)) {
 				if (current.isSubmit) {
 					if (selected.size > 0) {
-						done(sortAnswers(Array.from(selected.values())));
+						finish(sortAnswers(Array.from(selected.values())));
 					}
 					return;
 				}
@@ -447,7 +502,7 @@ async function askMultiChoice(
 			}
 
 			if (matchesKey(data, Key.escape)) {
-				done(null);
+				finish(null);
 			}
 		}
 
@@ -600,7 +655,7 @@ export default function askUserQuestion(pi: ExtensionAPI) {
 			return withUILock(async () => {
 				if (mode === "text") {
 					const editorTitle = context ? `${params.question}\n\n${context}` : params.question;
-					const answer = await ctx.ui.editor(editorTitle);
+					const answer = await webInput(ctx, editorTitle);
 					if (answer === undefined) {
 						return cancelledResult(params.question, mode, context);
 					}

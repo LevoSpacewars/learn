@@ -5,6 +5,8 @@
 <title>learn · map</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
 <style>
 :root { --bg:#f6f5f2; --fg:#1d1d1f; --muted:#6e6e73; --card:#fff; --line:#e3e1dc; --accent:#2f6fde; --soft:#eef2fb; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root { --bg:#141416; --fg:#f2f2f4; --muted:#9a9aa1; --card:#1f1f23; --line:#2e2e34; --accent:#5b8ff0; --soft:#242838; color-scheme: dark; } }
@@ -51,6 +53,15 @@ aside p { margin:0 0 8px; } aside li { margin:0 0 6px; }
 </main>
 <script>
 const token = new URLSearchParams(location.search).get("t");
+function escH(t) { return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]); }
+function renderMd(src) {
+  const spans = [];
+  const s = (src || "")
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => { spans.push({ m, d: true }); return "@@M" + (spans.length - 1) + "@@"; })
+    .replace(/\$([^$\n]+?)\$/g, (_, m) => { spans.push({ m, d: false }); return "@@M" + (spans.length - 1) + "@@"; });
+  let html; try { html = window.marked ? marked.parse(s) : escH(s); } catch { html = escH(s); }
+  return html.replace(/@@M(\d+)@@/g, (_, i) => { const x = spans[+i]; try { return window.katex ? katex.renderToString(x.m, { displayMode: x.d, throwOnError: false }) : escH(x.m); } catch { return escH(x.m); } });
+}
 const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(token);
 document.getElementById("back").href = "/?t=" + encodeURIComponent(token);
 const $ = (id) => document.getElementById(id);
@@ -117,7 +128,7 @@ function describe(n) {
 function showDetail(n) { $("detail").innerHTML = n ? describe(n) : '<span class="small">Hover a node for details; click to pin.</span>'; }
 async function load() {
   const r = await fetch(api("/graph.json"), { cache: "no-store" }); data = await r.json();
-  $("summary").innerHTML = window.marked ? marked.parse(data.summary || "") : "<pre>" + (data.summary || "") + "</pre>";
+  $("summary").innerHTML = renderMd(data.summary || "");
   nodes = data.nodes.map((n) => ({ ...n })); const idx = new Map(nodes.map((n) => [n.id, n]));
   links = data.links.filter((l) => idx.has(l.source) && idx.has(l.target)).map((l) => ({ ...l }));
   computeHeat();
@@ -143,6 +154,6 @@ $("byFreq").onclick = () => { mode = "freq"; $("byFreq").classList.add("on"); $(
 $("fall").oninput = () => { falloff = Number($("fall").value) / 100; $("fallv").textContent = $("fall").value + "%"; computeHeat(); draw(); };
 $("showPlan").onchange = () => { showPlan = $("showPlan").checked; draw(); };
 $("labels").onchange = () => { showLabels = $("labels").checked; draw(); };
-setInterval(async () => { try { const r = await fetch(api("/graph.json"), { cache: "no-store" }); const d = await r.json(); if (d.generated !== data.generated) { const pos = new Map(nodes.map((n) => [n.id, [n.x, n.y]])); data = d; $("summary").innerHTML = marked.parse(d.summary || ""); nodes = d.nodes.map((n) => { const p = pos.get(n.id); return p ? { ...n, x: p[0], y: p[1] } : { ...n }; }); const idx = new Map(nodes.map((n) => [n.id, n])); links = d.links.filter((l) => idx.has(l.source) && idx.has(l.target)).map((l) => ({ ...l })); computeHeat(); sim.nodes(nodes); sim.force("link").links(links); sim.alpha(0.3).restart(); } } catch {} }, 15000);
+setInterval(async () => { try { const r = await fetch(api("/graph.json"), { cache: "no-store" }); const d = await r.json(); if (d.generated !== data.generated) { const pos = new Map(nodes.map((n) => [n.id, [n.x, n.y]])); data = d; $("summary").innerHTML = renderMd(d.summary || ""); nodes = d.nodes.map((n) => { const p = pos.get(n.id); return p ? { ...n, x: p[0], y: p[1] } : { ...n }; }); const idx = new Map(nodes.map((n) => [n.id, n])); links = d.links.filter((l) => idx.has(l.source) && idx.has(l.target)).map((l) => ({ ...l })); computeHeat(); sim.nodes(nodes); sim.force("link").links(links); sim.alpha(0.3).restart(); } } catch {} }, 15000);
 </script>
 </body></html>
