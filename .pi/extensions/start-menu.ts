@@ -65,7 +65,7 @@ export default function startMenu(pi: ExtensionAPI) {
 		fs.mkdirSync(path.dirname(file), { recursive: true });
 		if (!fs.existsSync(file)) fs.writeFileSync(file, `# ${title}\n\n`, "utf8");
 		pi.events.emit("md-log:link", { file, ctx });
-		if (!process.env.PI_LEARN_NO_OPEN) execFile("open", [`obsidian://open?path=${encodeURIComponent(file)}`], () => {});
+		if (!process.env.PI_LEARN_NO_OPEN && process.platform === "darwin") execFile("open", [`obsidian://open?path=${encodeURIComponent(file)}`], () => {});
 	}
 
 	async function askBudget(ctx: any): Promise<number | undefined> {
@@ -121,7 +121,7 @@ export default function startMenu(pi: ExtensionAPI) {
 			fs.writeFileSync(file, `# Orientation — ${today()}\n\n${g.summary}\n\n(Knowledge map: open the web surface and tap Map, or /phone for the link.)\n`, "utf8");
 			const sh = (globalThis as any).__learnPhone as { url?: string; localUrl?: string } | undefined;
 			const link = sh?.localUrl?.replace("/?t=", "/graph?t=") ?? sh?.url?.replace("/?t=", "/graph?t=");
-			if (link && !process.env.PI_LEARN_NO_OPEN) execFile("open", [link], () => {});
+			if (link && !process.env.PI_LEARN_NO_OPEN) execFile(process.platform === "darwin" ? "open" : "xdg-open", [link], () => {});
 			ctx.ui.notify(`${g.summary.split("\n").slice(0, 12).join("\n")}\n\nFull orientation: knowledge/_orientation.md${link ? `\nMap: ${link}` : ""}`, "info");
 			// Offer the menu again so this doesn't end the session.
 			setTimeout(() => run(ctx).catch(() => {}), 0);
