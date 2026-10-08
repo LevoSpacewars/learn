@@ -776,6 +776,146 @@ export function curriculumMap(store: LearnerStore): string {
 	return out.join("\n");
 }
 
+// ── Knowledge graph + orientation (for the web surface) ────────────────────
+
+export interface GraphNode {
+	id: string;
+	label: string;
+	type: "goal" | "milestone" | "concept" | "plan";
+	status?: string;
+	last?: string; // ISO of last learn/review activity
+	count: number; // learn/review events
+	group?: string; // goal id or lesson slug (for clustering)
+	url?: string; // knowledge dossier path if any
+}
+export interface GraphLink {
+	source: string;
+	target: string;
+	kind: "needs" | "has" | "step" | "teaches";
+}
+
+function later(a?: string, b?: string): string | undefined {
+	if (!a) return b;
+	if (!b) return a;
+	return a > b ? a : b;
+}
+
+/** Parse "A --> B" edges and `A["label"]` labels out of a mermaid graph. */
+function parseMermaid(src: string): { edges: Array<[string, string]>; labels: Record<string, string> } {
+	const edges: Array<[string, string]> = [];
+	const labels: Record<string, string> = {};
+	for (const raw of src.split("\n")) {
+		const line = raw.trim();
+		const lab = line.match(/^([A-Za-z0-9_]+)\s*[\[\(\{]+"?([^"\]\)\}]+)"?[\]\)\}]+/);
+		if (lab) labels[lab[1]] = lab[2].replace(/<br\s*\/?>/g, " ").trim();
+		const m = line.match(/^([A-Za-z0-9_]+)\s*-[-.]*>\s*(?:\|[^|]*\|\s*)?([A-Za-z0-9_]+)/);
+		if (m) edges.push([m[1], m[2]]);
+	}
+	return { edges, labels };
+}
+
+export function buildGraph(cwd: string): { nodes: GraphNode[]; links: GraphLink[]; summary: string; generated: string } {
+	const store = loadLearner(cwd);
+	const events = loadEvents(cwd);
+	const nodes = new Map<string, GraphNode>();
+	const links: GraphLink[] = [];
+	const add = (n: GraphNode) => {
+		const e = nodes.get(n.id);
+		if (e) {
+			e.last = later(e.last, n.last);
+			e.count += n.count;
+			if (n.status && !e.status) e.status = n.status;
+			return e;
+		}
+		nodes.set(n.id, n);
+		return n;
+	};
+	const link = (source: string, target: string, kind: GraphLink["kind"]) => {
+		if (source !== target) links.push({ source, target, kind });
+	};
+	// activity per topic from events and cards
+	const act = new Map<string, { last?: string; count: number }>();
+	const bump = (topic: string | undefined, at: string) => {
+		if (!topic) return;
+		const a = act.get(topic) ?? { count: 0 };
+		a.count++;
+		a.last = later(a.last, at);
+		act.set(topic, a);
+	};
+	for (const e of events) bump(e.topic, e.at);
+	try {
+		const cards = JSON.parse(fs.readFileSync(path.join(cwd, ".learn", "cards.json"), "utf8")).cards as Array<{ topic: string; history: Array<{ at: string }> }>;
+		for (const c of cards) for (const h of c.history) bump(c.topic, h.at);
+	} catch {
+		// no cards yet
+	}
+	const concept = (slug: string, title?: string): GraphNode => {
+		const a = act.get(slug);
+		const dossier = fs.existsSync(path.join(cwd, "knowledge", `${slug}.md`)) ? `knowledge/${slug}.md` : undefined;
+		return add({ id: `c:${slug}`, label: title ?? slug, type: "concept", status: fundamentalStatus(store, slug), last: a?.last, count: a?.count ?? 0, url: dossier });
+	};
+	for (const f of store.fundamentals) concept(f.slug, f.title);
+	for (const g of store.goals) {
+		add({ id: `g:${g.id}`, label: g.title, type: "goal", status: g.status, last: g.lastTouched, count: 0, group: g.id });
+		for (const m of g.milestones) {
+			const a = act.get(`m-${g.id}-${m.id}`);
+			add({ id: `m:${g.id}/${m.id}`, label: m.title, type: "milestone", status: m.status, last: later(m.done, a?.last), count: a?.count ?? 0, group: g.id });
+			link(`g:${g.id}`, `m:${g.id}/${m.id}`, "has");
+			for (const n of m.needs) {
+				if (n.startsWith("m:")) link(`m:${g.id}/${n.slice(2)}`, `m:${g.id}/${m.id}`, "needs");
+				else {
+					concept(n);
+					link(`c:${n}`, `m:${g.id}/${m.id}`, "needs");
+				}
+			}
+		}
+	}
+	for (const l of store.lessons) {
+		const c = concept(l.slug, l.title);
+		c.last = later(c.last, l.updated);
+		c.status = c.status === "unknown" ? l.status : c.status;
+		if (l.plan) {
+			const { edges, labels } = parseMermaid(l.plan);
+			const ids = new Set<string>();
+			for (const [a, b] of edges) {
+				ids.add(a);
+				ids.add(b);
+			}
+			for (const n of l.nodes) ids.add(n.id);
+			for (const id of ids) {
+				const ln = l.nodes.find((n) => n.id === id);
+				add({ id: `p:${l.slug}:${id}`, label: ln?.label ?? labels[id] ?? id, type: "plan", status: ln?.status ?? "pending", last: ln?.updated, count: ln?.status === "confirmed" ? 1 : 0, group: l.slug });
+			}
+			for (const [a, b] of edges) link(`p:${l.slug}:${a}`, `p:${l.slug}:${b}`, "step");
+			const targets = new Set(edges.map((e) => e[1]));
+			for (const id of ids) if (!targets.has(id)) link(`c:${l.slug}`, `p:${l.slug}:${id}`, "teaches");
+		}
+	}
+	// orientation summary (code-generated, instant)
+	const lines: string[] = [];
+	const sessions = store.sessions.slice(-3).reverse();
+	if (sessions.length) {
+		lines.push("## Recently");
+		for (const s of sessions) lines.push(`- ${fmtDate(s.at)} ${s.kind}${s.lesson ? ` · ${s.lesson}` : ""}${s.note ? `: ${s.note}` : ""}`);
+	}
+	const open = openLessons(store);
+	if (open.length) {
+		lines.push("", "## Open lessons");
+		for (const l of open.slice(0, 5)) lines.push(`- **${l.title}** (${l.nodes.filter((n) => n.status === "confirmed").length}/${l.nodes.length} nodes)${l.summary ? ` — ${l.summary}` : ""}`);
+	}
+	const pick = nextOnPath(store)[0];
+	if (pick) lines.push("", `## Next on the path`, pick.reason);
+	const struggles = recentStruggles(cwd, new Set(), 4);
+	if (struggles.length) lines.push("", "## Recent struggles", ...struggles);
+	lines.push("", `## ${calibrationLine(store.calibration)}`);
+	const ret = retentionSummary(events);
+	if (ret.n) lines.push(`Long-delay retention: ${ret.n} checks, ${Math.round(ret.accuracy * 100)}% correct.`);
+	const done = store.goals.flatMap((g) => g.milestones).filter((m) => m.status === "done").length;
+	const solid = store.fundamentals.filter((f) => fundamentalStatus(store, f.slug) === "solid").length;
+	lines.push("", `## Totals`, `${store.goals.length} goals · ${done} milestones reached · ${solid}/${store.fundamentals.length} fundamentals solid · ${events.length} graded answers`);
+	return { nodes: [...nodes.values()], links, summary: lines.join("\n"), generated: new Date().toISOString() };
+}
+
 // ── Slice for a session (what the teacher gets to see) ─────────────────────
 
 function fmtDate(iso: string): string {

@@ -25,7 +25,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { beginLearnSession, beginReviewSession, countDue, dueByTopic } from "./review/index.ts";
-import { learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
+import { buildGraph, learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
 
 function today(): string {
 	const d = new Date();
@@ -89,6 +89,7 @@ export default function startMenu(pi: ExtensionAPI) {
 		}
 
 		const LEARN = "Learn something new";
+		const ORIENT = "Get oriented (summary + knowledge map)";
 		const REVIEW = `Review (${due} due)`;
 		const BRING = "Bring something (paper, idea, question)";
 		const SETUP = "Set up my goals (one-time)";
@@ -108,9 +109,23 @@ export default function startMenu(pi: ExtensionAPI) {
 		const NEXT = pick
 			? `Next on the path: ${pick.action === "learn" ? `learn ${pick.fundamental!.title}` : `attempt ${pick.milestone.title}`} (${pick.goal.title})`
 			: undefined;
-		const options = [...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ...(hasGoals ? [] : [SETUP])];
+		const options = [...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ORIENT, ...(hasGoals ? [] : [SETUP])];
 		const choice = await ctx.ui.select("What would you like to do?", options);
 		if (!choice) return;
+
+		if (choice === ORIENT) {
+			const g = buildGraph(ctx.cwd);
+			const file = path.join(ctx.cwd, "knowledge", "_orientation.md");
+			fs.mkdirSync(path.dirname(file), { recursive: true });
+			fs.writeFileSync(file, `# Orientation — ${today()}\n\n${g.summary}\n\n(Knowledge map: open the web surface and tap Map, or /phone for the link.)\n`, "utf8");
+			const sh = (globalThis as any).__learnPhone as { url?: string; localUrl?: string } | undefined;
+			const link = sh?.localUrl?.replace("/?t=", "/graph?t=") ?? sh?.url?.replace("/?t=", "/graph?t=");
+			if (link && !process.env.PI_LEARN_NO_OPEN) execFile("open", [link], () => {});
+			ctx.ui.notify(`${g.summary.split("\n").slice(0, 12).join("\n")}\n\nFull orientation: knowledge/_orientation.md${link ? `\nMap: ${link}` : ""}`, "info");
+			// Offer the menu again so this doesn't end the session.
+			setTimeout(() => run(ctx).catch(() => {}), 0);
+			return;
+		}
 
 		if (choice === SETUP) {
 			const budget = await askBudget(ctx);

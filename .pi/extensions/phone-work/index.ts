@@ -36,6 +36,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import qrcode from "qrcode-terminal";
 import { answerPending, getLastResult, getPending } from "../review/prompts.ts";
+import { buildGraph } from "../review/store.ts";
 
 const PORT = Number(process.env.PI_PHONE_PORT) || 8787;
 const MAX_BODY = 60 * 1024 * 1024;
@@ -229,6 +230,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 			url,
 			`On this Mac (viewer): ${sh.localUrl ?? ""}&mode=viewer`,
 			`iPad as scratchpad: ${url}&mode=scratch`,
+			`Knowledge map: ${url.replace("/?t=", "/graph?t=")}`,
 			"Bookmark it — the link stays the same. Hides once a device connects. /phone hide to dismiss.",
 		];
 		return sh.qrLines;
@@ -372,6 +374,20 @@ export default function phoneWork(pi: ExtensionAPI) {
 			const u = new URL(req.url ?? "/", "http://x");
 			if (!tokenOk(u.searchParams.get("t"), token)) return send(res, 403, "text/plain", "Forbidden");
 			if (req.method === "GET" && u.pathname === "/") return send(res, 200, "text/html; charset=utf-8", pageHtml());
+			if (req.method === "GET" && u.pathname === "/graph") {
+				try {
+					return send(res, 200, "text/html; charset=utf-8", fs.readFileSync(path.join(path.dirname(PAGE_FILE), "graph.html"), "utf8"));
+				} catch {
+					return send(res, 404, "text/plain", "graph.html missing");
+				}
+			}
+			if (req.method === "GET" && u.pathname === "/graph.json") {
+				try {
+					return json(res, 200, buildGraph(latestCtx?.cwd ?? process.cwd()));
+				} catch (e: any) {
+					return json(res, 500, { error: String(e?.message ?? e) });
+				}
+			}
 			if (req.method === "GET" && u.pathname === "/scratch.js") {
 				try {
 					return send(res, 200, "application/javascript; charset=utf-8", fs.readFileSync(path.join(path.dirname(PAGE_FILE), "scratch.js"), "utf8"));

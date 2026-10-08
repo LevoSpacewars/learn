@@ -118,6 +118,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   <h1 id="title">learn</h1>
   <div class="tabs"><button id="tabLesson">Lesson</button><button id="tabPad" class="on">Answer</button></div>
   <div class="modeSel"><button id="roleFull" title="Lesson and answers on this device">Both</button><button id="roleViewer" title="Lesson + questions; answers typed or on another device">Viewer</button><button id="roleScratch" title="Full-screen drawing pad; the question shows at the top">Scratchpad</button></div>
+  <a id="mapLink" href="#" style="color:var(--accent); text-decoration:none; font-weight:600; font-size:14px;">Map</a>
   <div id="conn" class="conn">Connecting…</div>
 </header>
 <main>
@@ -163,6 +164,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
 const token = new URLSearchParams(location.search).get("t");
 const $ = (id) => document.getElementById(id);
 const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(token);
+document.getElementById("mapLink").href = "/graph?t=" + encodeURIComponent(token);
 let pending = null, last = null, lastShownId = null, skew = 0, busy = false, mode = "type";
 const files = [], freefiles = []; let audio = null, recorder = null, chunks = [];
 let selected = new Set();
