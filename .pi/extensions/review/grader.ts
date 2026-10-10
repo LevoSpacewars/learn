@@ -91,6 +91,8 @@ export function buildGraderPrompt(input: GradeInput): string {
 		' "score": <number 0 to 1>,',
 		' "first_error": "<the first place it goes wrong, or empty string>",',
 		' "feedback": "<1-3 sentences to the learner: what was right specifically, and what was wrong and where. Diagnosis only: do NOT tell the learner what to do next (no redo / try / revisit / then-ask phrasing), and do not give the solution — the teacher decides the next step>"}',
+		"",
+		"Formatting: in reading, first_error and feedback, write every mathematical expression in LaTeX between dollar signs (e.g. $k\\,dt$, $e^{-kt}$, $(1-0.002)^{1000} \\approx 0.135$). They are rendered; plain ASCII math like e^-kt or 1-0.002^1000 is not acceptable. Escape backslashes for JSON.",
 	];
 	return lines.filter((l) => l !== undefined).join("\n");
 }

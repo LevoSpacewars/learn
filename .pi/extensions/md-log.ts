@@ -343,6 +343,8 @@ export default function mdLog(pi: ExtensionAPI) {
 		const toolName = (event as any).toolName;
 		if (!QA_TOOLS.has(toolName)) return;
 		const details = (event as any).details;
+		// A recall the gate refused never reached the learner: nothing to log.
+		if (toolName === "recall" && details?.status === "blocked") return;
 		const block = toolName === "quiz"
 			? answerCalloutQuiz(details)
 			: toolName === "recall"

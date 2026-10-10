@@ -32,22 +32,46 @@ main { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr
   #lesson, #pad { display:none; border:0; }
   body.view-lesson #lesson { display:block; } body.view-pad #pad { display:flex; }
 }
-/* lesson rendering */
-#lesson h1 { font-size:24px; margin:0 0 12px; } #lesson h2 { font-size:19px; margin:22px 0 8px; } #lesson h3 { font-size:17px; margin:18px 0 6px; }
-#lesson p { margin:0 0 10px; } #lesson img { max-width:100%; border-radius:10px; border:1px solid var(--line); }
-#lesson pre { background:var(--soft); padding:10px 12px; border-radius:10px; overflow:auto; font-size:14px; }
-#lesson code { font-size:0.93em; }
-.callout { border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:10px; padding:10px 14px; margin:12px 0; background:var(--card); }
-.callout .ct { font-weight:700; font-size:13px; letter-spacing:.03em; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
-.callout.c-quote { border-left-color:var(--muted); } .callout.c-quote .ct { color:var(--muted); }
-.callout.c-abstract { border-left-color:var(--accent); }
-.callout.c-question { border-left-color:var(--warn); } .callout.c-question .ct { color:var(--warn); }
-.callout.c-success { border-left-color:var(--ok); } .callout.c-success .ct { color:var(--ok); }
-.callout.c-failure { border-left-color:var(--err); } .callout.c-failure .ct { color:var(--err); }
-.callout.c-warning { border-left-color:var(--warn); } .callout.c-warning .ct { color:var(--warn); }
-.callout.c-note, .callout.c-example { border-left-color:var(--muted); } .callout.c-note .ct, .callout.c-example .ct { color:var(--muted); }
-.callout.c-note { opacity:.75; font-size:14px; }
-.callout .cb p:last-child { margin-bottom:0; }
+/* lesson rendering: one continuous document (the tutor's prose flows like a
+   textbook page); questions, answers and verdicts stay as coloured cards so
+   the record of what happened is visible at a glance. */
+#lesson { padding:0 0 80px; }
+#lesson .doc { max-width:740px; margin:0 auto; padding:26px 28px 0; font-family: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif; font-size:17.5px; line-height:1.62; }
+@media (max-width: 899px) { #lesson .doc { padding:18px 16px 0; font-size:17px; } }
+#lesson h1, #lesson h2, #lesson h3, #lesson h4 { font-family:-apple-system, system-ui, sans-serif; line-height:1.25; letter-spacing:-.01em; }
+#lesson h1 { font-size:26px; margin:0 0 16px; } #lesson h2 { font-size:21px; margin:30px 0 10px; } #lesson h3 { font-size:18px; margin:24px 0 8px; } #lesson h4 { font-size:16px; margin:18px 0 6px; }
+#lesson p { margin:0 0 14px; } #lesson ul, #lesson ol { margin:0 0 14px; padding-left:26px; } #lesson li { margin:0 0 5px; }
+#lesson img { max-width:100%; display:block; margin:14px auto; border-radius:8px; }
+#lesson img[src$=".svg"], #lesson img[src*=".svg?"], #lesson img[src*="plot-"] { border:0; background:transparent; }
+#lesson pre { background:var(--soft); padding:10px 12px; border-radius:10px; overflow:auto; font-size:14px; font-family:ui-monospace, Menlo, monospace; }
+#lesson pre.mermaid { background:transparent; text-align:center; }
+#lesson code { font-size:0.9em; font-family:ui-monospace, Menlo, monospace; }
+#lesson blockquote { margin:0 0 14px; padding:0 0 0 14px; border-left:3px solid var(--line); color:var(--muted); }
+#lesson hr { border:0; border-top:1px solid var(--line); margin:26px 0; }
+#lesson .katex-display { margin:16px 0 20px; overflow-x:auto; overflow-y:hidden; padding:2px 0; }
+#lesson .katex { font-size:1.06em; }
+#lesson table { border-collapse:collapse; margin:0 0 14px; font-size:.95em; } #lesson th, #lesson td { border:1px solid var(--line); padding:4px 10px; }
+/* the learner's own words: a quiet margin note, not a card */
+#lesson .you { margin:22px 0; padding:2px 0 2px 16px; border-left:3px solid var(--muted); color:var(--muted); font-style:italic; }
+#lesson .you .who { font-family:-apple-system, system-ui, sans-serif; font-style:normal; font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; margin-bottom:2px; }
+#lesson .you p:last-child { margin-bottom:0; }
+/* a new sitting of the same lesson */
+#lesson .session { display:flex; align-items:center; gap:12px; margin:40px 0 18px; font-family:-apple-system, system-ui, sans-serif; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+#lesson .session::before, #lesson .session::after { content:""; flex:1; border-top:1px solid var(--line); }
+/* event cards */
+.callout { --c:var(--accent); border:1px solid color-mix(in srgb, var(--c) 28%, var(--line)); border-left:4px solid var(--c); border-radius:10px; padding:11px 15px 10px; margin:18px 0; background:color-mix(in srgb, var(--c) 6%, var(--card)); font-family:-apple-system, system-ui, sans-serif; font-size:15.5px; line-height:1.5; }
+.callout .ct { font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--c); margin-bottom:5px; }
+.callout .cb p { margin:0 0 8px; } .callout .cb p:last-child { margin-bottom:0; } .callout .cb ol, .callout .cb ul { margin:0 0 8px; }
+.callout .cb img { margin:8px 0; max-height:360px; width:auto; max-width:100%; border:1px solid var(--line); }
+.callout .cb .katex-display { margin:8px 0 10px; }
+.callout.c-quote, .callout.c-abstract, .callout.c-note, .callout.c-example { --c:var(--muted); }
+.callout.c-question { --c:var(--warn); }
+.callout.c-success { --c:var(--ok); }
+.callout.c-failure { --c:var(--err); }
+.callout.c-warning { --c:var(--warn); }
+.callout.c-example { padding:7px 15px; font-size:14.5px; } .callout.c-example .ct { display:inline; margin-right:8px; } .callout.c-example .cb { display:inline; }
+.callout.c-example .cb p { display:inline; margin:0; }
+.callout .cb .verdict-meta { color:var(--muted); font-size:13px; }
 .mermaid { background:var(--card); border-radius:10px; padding:8px; }
 /* pad */
 .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
@@ -63,6 +87,7 @@ textarea { width:100%; min-height:100px; border-radius:12px; border:1px solid va
 .modes button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
 .conf { display:flex; align-items:center; gap:12px; } .conf label { color:var(--muted); font-size:14px; white-space:nowrap; }
 .conf input { flex:1; accent-color:var(--accent); } .conf output { min-width:3.2em; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+.conf input.unset { accent-color:var(--muted); opacity:.55; } .conf input.unset + output { color:var(--muted); }
 .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 label.btn, button { display:flex; align-items:center; justify-content:center; min-height:46px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-weight:600; cursor:pointer; }
 button.primary { background:var(--accent); border-color:var(--accent); color:#fff; grid-column:1 / -1; font-size:17px; }
@@ -147,7 +172,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
         <button id="rec" class="rec">🎙 Record</button><div id="audioline" class="small"></div>
       </div>
     </div>
-    <div id="confrow" class="conf hidden"><label for="conf">Confidence</label><input id="conf" type="range" min="0" max="100" step="5" value="70"><output id="confv">70%</output></div>
+    <div id="confrow" class="conf hidden"><label for="conf">Confidence</label><input id="conf" type="range" min="0" max="100" step="5" value="50" class="unset"><output id="confv">—</output></div>
     <div id="actions" class="btns hidden">
       <button id="hint">? Hint</button><button id="idk">I don't know</button>
       <button id="send" class="primary" disabled>Send answer</button>
@@ -172,7 +197,7 @@ const MAX = 2000;
 
 // ---------- markdown + math + callouts ----------
 function esc(t) { return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]); }
-function renderMd(src) {
+function renderMd(src, opts) {
   const spans = [];
   let s = src
     .replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => { spans.push({ m, d: true }); return "@@M" + (spans.length - 1) + "@@"; })
@@ -181,7 +206,7 @@ function renderMd(src) {
   const mer = [];
   s = s.replace(/```mermaid\n([\s\S]*?)```/g, (_, body) => { mer.push(body); return "@@MER" + (mer.length - 1) + "@@"; });
   let html;
-  try { html = window.marked ? marked.parse(s, { breaks: false }) : esc(s).replace(/\n/g, "<br>"); } catch { html = esc(s).replace(/\n/g, "<br>"); }
+  try { html = window.marked ? marked.parse(s, { breaks: !!(opts && opts.breaks) }) : esc(s).replace(/\n/g, "<br>"); } catch { html = esc(s).replace(/\n/g, "<br>"); }
   html = html.replace(/@@M(\d+)@@/g, (_, i) => { const x = spans[+i]; try { return window.katex ? katex.renderToString(x.m, { displayMode: x.d, throwOnError: false }) : esc(x.m); } catch { return esc(x.m); } });
   html = html.replace(/(?:<p>)?@@MER(\d+)@@(?:<\/p>)?/g, (_, i) => '<pre class="mermaid">' + esc(mer[+i]) + "</pre>");
   return html;
@@ -199,16 +224,37 @@ function splitCallouts(md) {
   }
   return out;
 }
+// The log marks speakers with empty "YOU" / "PI" callouts followed by plain
+// text. Render the tutor's text as the document itself, the learner's as a
+// quiet margin note, and keep only real events (questions, answers, verdicts)
+// as cards. Skill/learner-slice notes are bookkeeping and are not shown.
+const SESSION_START = /^(Continue the lesson|Teach me|Review:|Next on the path)/i;
 function renderLesson(md) {
-  const parts = splitCallouts(md); let html = ""; let buf = [];
-  const flush = () => { if (buf.length) { html += renderMd(buf.join("\n")); buf = []; } };
+  const parts = splitCallouts(md); let html = '<div class="doc">'; let buf = []; let speaker = "pi"; let first = true;
+  const flush = () => {
+    if (!buf.length) return;
+    const text = buf.join("\n").trim(); buf = [];
+    if (!text) return;
+    if (speaker === "you") {
+      if (SESSION_START.test(text) && !first) html += '<div class="session">Next sitting</div>';
+      html += '<div class="you"><div class="who">You</div>' + renderMd(text) + "</div>";
+    } else html += renderMd(text);
+    first = false;
+  };
   for (const p of parts) {
     if (p.type === undefined) { buf.push(p.md); continue; }
     flush();
-    html += '<div class="callout c-' + p.type + '"><div class="ct">' + esc(p.title) + '</div><div class="cb">' + renderMd(p.body) + "</div></div>";
+    if (p.type === "quote") { speaker = "you"; if (p.body.trim()) { buf.push(p.body); flush(); } continue; }
+    if (p.type === "abstract") { speaker = "pi"; if (p.body.trim()) { buf.push(p.body); flush(); } continue; }
+    if (p.type === "note") continue; // "SKILL loaded" / "Learner file" markers: not content
+    speaker = "pi";
+    // Verdict cards: the bookkeeping lines (confidence, what the grader read, first error) are
+    // one per line in the log; keep them on their own lines and mute them.
+    const body = p.body.split("\n").map((l) => /^(Confidence|Read as|First error|Card):/.test(l) ? '<span class="verdict-meta">' + l + "</span>" : l).join("\n");
+    html += '<div class="callout c-' + p.type + '"><div class="ct">' + esc(p.title) + '</div><div class="cb">' + renderMd(body, { breaks: true }) + "</div></div>";
   }
   flush();
-  return html;
+  return html + "</div>";
 }
 let lessonMtime = 0, lessonFile = null;
 async function pollLesson() {
@@ -270,8 +316,9 @@ function hasAnswer() {
 function updateButtons() {
   const q = pending && pending.kind === "quiz";
   const scratchFree = role === "scratch" && !pending && pages.some((p) => p.strokes.length);
-  $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer());
-  $("send").textContent = pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
+  const waitConf = pending && hasAnswer() && needsConf();
+  $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer() || needsConf());
+  $("send").textContent = waitConf ? "Set confidence to send" : pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
   for (const id of ["hint", "idk", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
   $("hint").classList.toggle("hidden", !!q || !isGraded(pending));
   $("idk").classList.toggle("hidden", !isGraded(pending));
@@ -322,8 +369,9 @@ function showResult(r) {
   if (meta.length) html += '<div class="m">' + meta.join(" · ") + "</div>";
   if (r.chosen && r.chosen.length) html += "<p><b>You chose:</b> " + esc(r.chosen.join(" | ")) + "</p>";
   if (r.correct && r.correct.length && v !== "correct") html += "<p><b>Correct:</b> " + esc(r.correct.join(" | ")) + "</p>";
-  if (r.reading) html += '<p class="m">Read as: ' + esc(r.reading) + "</p>";
-  if (r.firstError) html += "<p><b>First error:</b> " + esc(r.firstError) + "</p>";
+  const inl = (s) => renderMd(String(s)).replace(/^<p>|<\/p>\s*$/g, "");
+  if (r.reading) html += '<p class="m">Read as: ' + inl(r.reading) + "</p>";
+  if (r.firstError) html += "<p><b>First error:</b> " + inl(r.firstError) + "</p>";
   if (r.feedback) html += "<p>" + renderMd(r.feedback) + "</p>";
   if (r.explanation) html += "<p>" + renderMd(r.explanation) + "</p>";
   if (r.reference) html += '<p class="m">Key points: ' + renderMd(r.reference) + "</p>";
@@ -353,13 +401,19 @@ function setMode(m) {
   updateButtons();
 }
 $("mType").onclick = () => setMode("type"); $("mDraw").onclick = () => setMode("draw"); $("mPhoto").onclick = () => setMode("photo"); $("mVoice").onclick = () => setMode("voice");
-function resetAnswer() { files.length = 0; audio = null; $("text").value = ""; $("audioline").textContent = ""; renderGrid($("grid"), files); $("conf").value = 70; $("confv").textContent = "70%"; clearPages(); updateButtons(); }
-$("text").oninput = updateButtons; $("conf").oninput = () => { $("confv").textContent = $("conf").value + "%"; };
+// Confidence must be set by hand each time: a default value is not a judgement, and
+// it silently poisons the calibration record (a session of 70% defaults looks like
+// overconfidence). The slider starts blank and the send button waits for it.
+let confSet = false;
+function resetAnswer() { files.length = 0; audio = null; $("text").value = ""; $("audioline").textContent = ""; renderGrid($("grid"), files); $("conf").value = 50; confSet = false; $("conf").classList.add("unset"); $("confv").textContent = "—"; clearPages(); updateButtons(); }
+function needsConf() { return !!(pending && isGraded(pending) && !confSet); }
+function onConf() { confSet = true; $("conf").classList.remove("unset"); $("confv").textContent = $("conf").value + "%"; updateButtons(); }
+$("text").oninput = updateButtons; $("conf").oninput = onConf; $("conf").onchange = onConf;
 
 // ---------- drawing: vector scratchpad (scratch.js) ----------
 let pointerPenCapable = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
 let pad = null;
-function ensurePage() { if (!pad && window.Scratch) { pad = Scratch.mount($("schost"), $("sctools"), { onSend: () => { if (!busy && !$("send").disabled) { setStatus("Swipe: sending…"); $("send").click(); } } }); $("schost").addEventListener("pointerup", updateButtons); $("schost").addEventListener("pointercancel", updateButtons); $("sctools").addEventListener("click", () => setTimeout(updateButtons, 0)); } }
+function ensurePage() { if (!pad && window.Scratch) { pad = Scratch.mount($("schost"), $("sctools"), { onSend: () => { if (busy) return; if (needsConf()) { setStatus("Set your confidence first, then swipe again.", "err"); return; } if (!$("send").disabled) { setStatus("Swipe: sending…"); $("send").click(); } } }); $("schost").addEventListener("pointerup", updateButtons); $("schost").addEventListener("pointercancel", updateButtons); $("sctools").addEventListener("click", () => setTimeout(updateButtons, 0)); } }
 const pages = { some: (f) => !!(pad && pad.hasInk() && f({ strokes: [1] })) };
 function exportPages() { ensurePage(); return pad ? pad.exportImages() : []; }
 function clearPages() { if (pad) pad.clear(); }
@@ -425,6 +479,7 @@ $("hint").onclick = () => submit({ hint: true });
 $("idk").onclick = () => submit({ dontKnow: true });
 $("freesend").onclick = async () => { busy = true; updateButtons(); setStatus("Sending…"); try { await post("/upload", { note: "", images: freefiles.map((f) => ({ data: f.data, mimeType: f.mimeType })) }); freefiles.length = 0; renderGrid($("freegrid"), freefiles); setStatus("Sent ✓", "ok"); } catch (e) { setStatus("Failed: " + e.message, "err"); } busy = false; updateButtons(); };
 if (matchMedia("(min-width: 900px)").matches) document.body.className = "view-pad view-lesson";
+if (new URLSearchParams(location.search).get("view") === "lesson") $("tabLesson").click(); // open on the lesson tab (phone)
 hidePrompt();
 </script>
 </body></html>

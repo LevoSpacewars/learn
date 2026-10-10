@@ -97,7 +97,7 @@ const OptionSchema = Type.Object({
 
 const QuizParams = Type.Object({
 	question: Type.String({
-		description: "The single quiz question to ask. Ask exactly one question per tool call.",
+		description: "The single quiz question to ask. Ask exactly one question per tool call. All math in LaTeX ($...$): it renders on the web page and in Obsidian and is auto-converted for the terminal; never ASCII math. Same for options, details and explanation.",
 	}),
 	details: Type.Optional(
 		Type.String({ description: "Optional extra context or instructions shown under the question." }),

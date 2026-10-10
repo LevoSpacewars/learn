@@ -32,7 +32,7 @@ import { plainMath } from "./review/plainmath.ts";
 import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import { type CheckKind, recordCalibration, recordEvent } from "./review/store.ts";
 
-type RecallStatus = "answered" | "hint" | "dontKnow" | "cancelled" | "unavailable";
+type RecallStatus = "answered" | "hint" | "dontKnow" | "cancelled" | "unavailable" | "blocked";
 type Modality = "typed" | "photo" | "audio";
 
 interface RecallDetails {
@@ -68,7 +68,10 @@ const KIND_LABEL: Record<CheckKind, string> = {
 };
 
 const RecallParams = Type.Object({
-	prompt: Type.String({ description: "What the learner sees. Self-contained; LaTeX allowed. For 'flaw': the full planted-error argument plus 'Is this right? If not, where does it go wrong?'" }),
+	prompt: Type.String({
+		description:
+			"What the learner sees. Self-contained. ALL math in LaTeX ($k\\,dt$, $e^{-kt}$, $\\frac{a}{b}$): it renders on the web page and in Obsidian, and is auto-converted for the terminal; never write ASCII math like 'k x dt' or 'e^-kt'. After a miss: ONE step, at most two parts. For 'flaw': the full planted-error argument plus 'Is this right? If not, where does it go wrong?'",
+	}),
 	reference: Type.String({
 		description:
 			"HIDDEN. The correct answer with its reason, or the key points a good answer must contain. For 'flaw': exactly what the planted error is and where. For 'problem': the method and the result. Write it BEFORE the learner answers; the grader compares against it.",
@@ -138,7 +141,8 @@ async function askRecall(
 		let phase: "answer" | "confidence" | "grading" | "feedback" = "answer";
 		let answer: PromptAnswer | undefined;
 		let latencyMs = 0;
-		let confidence = 70;
+		let confidence = 50;
+		let confSet = false; // the learner must move the value; a default is not a judgement
 		let typedDigits = "";
 		let graded: GradeResult | undefined;
 		let gradeError: string | undefined;
@@ -228,6 +232,8 @@ async function askRecall(
 				return;
 			}
 			if (phase === "confidence") {
+				const valueKey = matchesKey(data, Key.left) || matchesKey(data, Key.right) || matchesKey(data, Key.down) || matchesKey(data, Key.up) || /^[0-9]$/.test(data) || matchesKey(data, Key.backspace);
+				if (valueKey) confSet = true;
 				if (matchesKey(data, Key.left)) confidence = Math.max(0, confidence - 10);
 				else if (matchesKey(data, Key.right)) confidence = Math.min(100, confidence + 10);
 				else if (matchesKey(data, Key.down)) confidence = Math.max(0, confidence - 5);
@@ -239,6 +245,10 @@ async function askRecall(
 					typedDigits = typedDigits.slice(0, -1);
 					confidence = typedDigits ? Number(typedDigits) : 0;
 				} else if (matchesKey(data, Key.enter)) {
+					if (!confSet) {
+						refresh();
+						return;
+					}
 					startGrading();
 					return;
 				} else if (matchesKey(data, Key.escape)) {
@@ -280,9 +290,9 @@ async function askRecall(
 				const filled = Math.round(confidence / 5);
 				const bar = "█".repeat(filled) + "░".repeat(20 - filled);
 				add(theme.fg("text", ` How confident are you that this is right?`));
-				add(` ${theme.fg("accent", bar)} ${theme.fg("accent", `${confidence}%`)}`);
+				add(` ${theme.fg(confSet ? "accent" : "dim", bar)} ${confSet ? theme.fg("accent", `${confidence}%`) : theme.fg("dim", "— (set it)")}`);
 				lines.push("");
-				add(theme.fg("dim", " ←/→ ±10 · ↑/↓ ±5 · type digits · Enter confirm"));
+				add(theme.fg("dim", confSet ? " ←/→ ±10 · ↑/↓ ±5 · type digits · Enter confirm" : " Move it first: ←/→ ±10 · ↑/↓ ±5 · or type digits · then Enter"));
 			} else if (phase === "grading") {
 				add(theme.fg("muted", ` Grading independently… (${answer?.photos?.length ? "reading your photo" : "reading your answer"})`));
 			} else {
@@ -346,8 +356,67 @@ function result(text: string, details: RecallDetails) {
 	return { content: [{ type: "text" as const, text }], details };
 }
 
+// ---------- pedagogy gate ----------
+// The teach skill says: after a miss, diagnose and drill down before testing
+// again; after two misses, teach (a worked example) before testing again. The
+// model ignores that under pressure, so the tool enforces it: it counts the
+// assistant text written since the last miss and refuses a new recall until
+// enough has been said. State lives on globalThis (one instance per extension
+// file otherwise) so a future extension can read it too.
+interface Pedagogy {
+	missStreak: number; // consecutive partial/incorrect/dontKnow verdicts
+	sinceMissChars: number; // assistant prose written since the last miss
+	lastMiss?: { prompt: string; firstError?: string; verdict: string };
+}
+function pedagogy(): Pedagogy {
+	const g = globalThis as any;
+	if (!g.__learnPedagogy) g.__learnPedagogy = { missStreak: 0, sinceMissChars: 0 } satisfies Pedagogy;
+	return g.__learnPedagogy as Pedagogy;
+}
+/** Sub-questions in a prompt: numbered lines, plus bullet lines that ask something. */
+export function countParts(prompt: string): number {
+	const numbered = prompt.match(/^\s*\d+[.)]\s+/gm)?.length ?? 0;
+	const bullets = prompt.match(/^\s*[-*•]\s+.*(\?|=\s*\?)\s*$/gm)?.length ?? 0;
+	return Math.max(1, numbered + bullets);
+}
+const DIAGNOSE_CHARS = 60; // "one to three lines" of diagnosis
+const TEACH_CHARS = 350; // a worked example, not a sentence
+/** Why the next recall may not be posed yet, or undefined if it may. */
+export function gateReason(p: Pedagogy, prompt: string): string | undefined {
+	if (p.missStreak === 0) return undefined;
+	if (p.missStreak >= 2 && p.sinceMissChars < TEACH_CHARS) {
+		return `Blocked: that is ${p.missStreak} misses in a row and you have not taught since the last one (${p.sinceMissChars} characters of text). Testing again now would be a third miss. Before the next recall, write a WORKED EXAMPLE of exactly the step that failed (${p.lastMiss?.firstError ?? "see the grader's first error"}): every move with its reason, using concrete numbers. Then pose a completion problem: the same structure with one blank for him to fill.`;
+	}
+	if (p.sinceMissChars < DIAGNOSE_CHARS) {
+		return `Blocked: the last answer was a miss and you have said nothing since (${p.sinceMissChars} characters). First, in one to three lines, tell him what went wrong and why (not the grader's words: yours, and what the right move was). Then pose a narrower question on that one step.`;
+	}
+	const parts = countParts(prompt);
+	if (parts > 2) {
+		return `Blocked: after a miss, drill down. This prompt has ${parts} parts; pose ONE step (at most two parts) on exactly what failed (${p.lastMiss?.firstError ?? "the first error"}). Multi-part questions after a miss hide which step is broken.`;
+	}
+	return undefined;
+}
+
 export default function recall(pi: ExtensionAPI) {
 	if (process.env.PI_SUBAGENT_AGENT) return;
+
+	// Count the teacher's prose so the gate above knows whether anything was
+	// said (or taught) between a miss and the next recall.
+	pi.on("message_end", async (event) => {
+		const msg = (event as any).message;
+		if (!msg || msg.role !== "assistant") return;
+		const chars = (msg.content || [])
+			.filter((c: any) => c.type === "text")
+			.map((c: any) => String(c.text ?? "").trim())
+			.reduce((n: number, t: string) => n + t.length, 0);
+		if (chars) pedagogy().sinceMissChars += chars;
+	});
+	pi.on("session_start", async () => {
+		const p = pedagogy();
+		p.missStreak = 0;
+		p.sinceMissChars = 0;
+		p.lastMiss = undefined;
+	});
 
 	pi.registerTool({
 		name: "recall",
@@ -367,6 +436,10 @@ export default function recall(pi: ExtensionAPI) {
 			const paper = params.paper ?? kind === "problem";
 			const base: RecallDetails = { status: "unavailable", kind, prompt: params.prompt, paper, topic: params.topic, cardId: params.cardId };
 			if (!ctx.hasUI) return result("recall requires interactive mode UI", { ...base, message: "no UI" });
+
+			const ped = pedagogy();
+			const blocked = gateReason(ped, params.prompt);
+			if (blocked) return result(blocked, { ...base, status: "blocked", message: blocked });
 
 			onUpdate?.({ content: [{ type: "text", text: "asked" }], details: { ...base, phase: "asked" } });
 
@@ -412,6 +485,9 @@ export default function recall(pi: ExtensionAPI) {
 			}
 			if (outcome.status === "dontKnow") {
 				logEvent("dontKnow");
+				ped.missStreak += 1;
+				ped.sinceMissChars = 0;
+				ped.lastMiss = { prompt: params.prompt, verdict: "dontKnow" };
 				if (params.cardId) {
 					const g = gradeCard(ctx.cwd, { id: params.cardId, rating: "again", note: "I don't know", check: kind, modality: "typed", latencyMs: outcome.latencyMs });
 					details.cardRating = g.rating;
@@ -427,6 +503,14 @@ export default function recall(pi: ExtensionAPI) {
 			if (g) {
 				Object.assign(details, { verdict: g.verdict, score: g.score, reading: g.reading, firstError: g.firstError, feedback: g.feedback });
 				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading, confidence });
+				if (g.verdict === "correct") {
+					ped.missStreak = 0;
+					ped.lastMiss = undefined;
+				} else {
+					ped.missStreak += 1;
+					ped.sinceMissChars = 0;
+					ped.lastMiss = { prompt: params.prompt, firstError: g.firstError, verdict: g.verdict };
+				}
 				try {
 					recordCalibration(ctx.cwd, { topic: params.topic, confidence, correct: g.verdict === "correct", source: "recall", check: kind, cardId: params.cardId, latencyMs: outcome.latencyMs });
 				} catch {
@@ -453,8 +537,13 @@ export default function recall(pi: ExtensionAPI) {
 							g.firstError ? `First error: ${g.firstError}` : "",
 							`Grader feedback (already shown to learner): ${g.feedback}`,
 							g.verdict !== "correct" && confidence >= 70 ? "HIGH-CONFIDENCE MISS: give richer feedback on the mechanism and re-test this soon." : "",
-							g.verdict !== "correct"
-								? "NEXT STEP (required): in 1-3 lines say what went wrong and why, then EITHER pose a fresh variant of the same thing with `recall`, OR drill down: pose the specific component that failed. Do not move on to a different strand until he has had another go at this one."
+							g.verdict !== "correct" && ped.missStreak >= 2
+								? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers), then a completion problem with one blank. The next recall is refused until you have written that.`
+								: g.verdict !== "correct"
+									? "NEXT STEP (enforced): in 1-3 lines say what went wrong and why (your words, and what the right move was). Then drill down with ONE narrower recall (at most two parts) on exactly the step that failed. A multi-part prompt, or a prompt with no text before it, is refused. Do not move to a different strand until he has had another go at this one."
+									: "",
+							g.verdict !== "correct" && g.firstError && /slip|instead of|dropped|off by|should be|mislabel|complement|sign|factor|width/i.test(g.firstError)
+								? "ATTENTION-TO-DETAIL: the first error looks like a slip inside otherwise-right working. Consider kind 'flaw' with HIS OWN line as the argument (\"Here is your step 1: ... Is it right? If not, where does it go wrong?\") so he finds it himself."
 								: "",
 						].join("\n")
 					: "Grader unavailable — grade this answer yourself.",
@@ -471,6 +560,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (!d) return new Text(theme.fg("dim", "recall"), 0, 0);
 			if (d.phase === "asked") return new Text(theme.fg("dim", "awaiting answer…"), 0, 0);
 			if (d.status === "unavailable") return new Text(theme.fg("warning", d.message || "recall unavailable"), 0, 0);
+			if (d.status === "blocked") return new Text(theme.fg("warning", "refused: teach before re-testing"), 0, 0);
 			if (d.status === "hint") return new Text(theme.fg("warning", "hint requested"), 0, 0);
 			if (d.status === "dontKnow") return new Text(theme.fg("warning", "I don't know"), 0, 0);
 			if (d.status === "cancelled") return new Text(theme.fg("dim", "cancelled"), 0, 0);
