@@ -296,7 +296,17 @@ export default function phoneWork(pi: ExtensionAPI) {
 		const payload = await parse(req, res);
 		if (!payload) return;
 		const images = (payload.images ?? []).filter((i) => MIME_EXT[i?.mimeType] && typeof i.data === "string").slice(0, MAX_IMAGES);
-		if (images.length === 0) return json(res, 400, { error: "No images" });
+		const noteText = payload.note?.trim();
+		if (images.length === 0 && !noteText) return json(res, 400, { error: "Nothing to send" });
+		if (images.length === 0) {
+			// A typed reply with no question open: the tutor asked something in prose.
+			if (answerPending({ source: "phone", text: noteText })) return json(res, 200, { ok: true, answered: true });
+			const idle = typeof ctx.isIdle === "function" ? ctx.isIdle() : true;
+			pi.sendUserMessage(noteText!, idle ? undefined : { deliverAs: "followUp" });
+			hideWidget(ctx);
+			ctx.ui.notify(`📱 Message received${idle ? "" : " (queued until the agent finishes)"}`, "info");
+			return json(res, 200, { ok: true, queued: !idle });
+		}
 		const saved = saveImages(ctx.cwd, images);
 		const names = saved.map((s) => s.name);
 

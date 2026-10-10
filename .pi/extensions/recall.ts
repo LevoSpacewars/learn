@@ -388,7 +388,7 @@ export function gateReason(p: Pedagogy, prompt: string): string | undefined {
 		return `Blocked: that is ${p.missStreak} misses in a row and you have not taught since the last one (${p.sinceMissChars} characters of text). Testing again now would be a third miss. Before the next recall, write a WORKED EXAMPLE of exactly the step that failed (${p.lastMiss?.firstError ?? "see the grader's first error"}): every move with its reason, using concrete numbers. Then pose a completion problem: the same structure with one blank for him to fill.`;
 	}
 	if (p.sinceMissChars < DIAGNOSE_CHARS) {
-		return `Blocked: the last answer was a miss and you have said nothing since (${p.sinceMissChars} characters). First, in one to three lines, tell him what went wrong and why (not the grader's words: yours, and what the right move was). Then pose a narrower question on that one step.`;
+		return `Blocked: the last answer was a miss and you have said nothing since (${p.sinceMissChars} characters). First, in one to three lines, tell him what went wrong and why (not the grader's words: yours, and what the right move was). Then, in the SAME turn, call recall with a narrower question on that one step. Never ask it as plain text: he answers on the web page, which only has an answer box while a recall is open.`;
 	}
 	const parts = countParts(prompt);
 	if (parts > 2) {
@@ -538,9 +538,9 @@ export default function recall(pi: ExtensionAPI) {
 							`Grader feedback (already shown to learner): ${g.feedback}`,
 							g.verdict !== "correct" && confidence >= 70 ? "HIGH-CONFIDENCE MISS: give richer feedback on the mechanism and re-test this soon." : "",
 							g.verdict !== "correct" && ped.missStreak >= 2
-								? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers), then a completion problem with one blank. The next recall is refused until you have written that.`
+								? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers), then, in the SAME turn, call recall with a completion problem (one blank). The next recall is refused until the worked example is written. Never end your turn on a question written as plain text: he cannot answer it from the web page.`
 								: g.verdict !== "correct"
-									? "NEXT STEP (enforced): in 1-3 lines say what went wrong and why (your words, and what the right move was). Then drill down with ONE narrower recall (at most two parts) on exactly the step that failed. A multi-part prompt, or a prompt with no text before it, is refused. Do not move to a different strand until he has had another go at this one."
+									? "NEXT STEP (enforced): in 1-3 lines say what went wrong and why (your words, and what the right move was). Then drill down with ONE narrower recall (at most two parts) on exactly the step that failed. Write the diagnosis and call recall in the SAME turn; never ask the follow-up as plain text (the web page has no answer box without an open recall). A multi-part prompt, or a prompt with no text before it, is refused. Do not move to a different strand until he has had another go at this one."
 									: "",
 							g.verdict !== "correct" && g.firstError && /slip|instead of|dropped|off by|should be|mislabel|complement|sign|factor|width/i.test(g.firstError)
 								? "ATTENTION-TO-DETAIL: the first error looks like a slip inside otherwise-right working. Consider kind 'flaw' with HIS OWN line as the argument (\"Here is your step 1: ... Is it right? If not, where does it go wrong?\") so he finds it himself."

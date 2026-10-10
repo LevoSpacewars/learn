@@ -120,7 +120,7 @@ input[type=file] { display:none; }
 .modeSel { display:flex; gap:4px; } .modeSel button { min-height:30px; padding:0 10px; font-size:12px; border-radius:8px; }
 .modeSel button.on { background:var(--soft); border-color:var(--accent); color:var(--accent); }
 body.role-viewer main { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
-body.role-viewer .modes, body.role-viewer #draw, body.role-viewer #photo, body.role-viewer #voice, body.role-viewer #freephoto { display:none !important; }
+body.role-viewer .modes, body.role-viewer #draw, body.role-viewer #photo, body.role-viewer #voice, body.role-viewer #freephoto .photo-only { display:none !important; }
 body.role-viewer #text { display:block !important; }
 body.role-scratch main { grid-template-columns: 1fr; height: calc(100% - 56px); }
 body.role-scratch #lesson, body.role-scratch .tabs, body.role-scratch .modes, body.role-scratch #text, body.role-scratch #photo, body.role-scratch #voice, body.role-scratch #freephoto, body.role-scratch #hint, body.role-scratch #idk { display:none !important; }
@@ -179,8 +179,9 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
     </div>
     <div id="status" class="status" role="status"></div>
     <div id="freephoto" class="card">
-      <div class="small">No question open? You can still send a photo to the tutor as a message.</div>
-      <div class="btns" style="margin-top:8px"><label class="btn">📷 Photo<input id="freecam" type="file" accept="image/*" capture="environment"></label><button id="freesend" disabled>Send to tutor</button></div>
+      <div class="small">No question open. Reply to the tutor here, as text, a photo, or both.</div>
+      <textarea id="freetext" placeholder="Message the tutor…" style="margin-top:8px; min-height:90px"></textarea>
+      <div class="btns" style="margin-top:8px"><label class="btn photo-only">📷 Photo<input id="freecam" type="file" accept="image/*" capture="environment"></label><button id="freesend" class="primary" disabled>Send to tutor</button></div>
       <div id="freegrid" class="grid"></div>
     </div>
   </section>
@@ -322,7 +323,7 @@ function updateButtons() {
   for (const id of ["hint", "idk", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
   $("hint").classList.toggle("hidden", !!q || !isGraded(pending));
   $("idk").classList.toggle("hidden", !isGraded(pending));
-  $("freesend").disabled = freefiles.length === 0 || busy;
+  $("freesend").disabled = (freefiles.length === 0 && !$("freetext").value.trim()) || busy;
 }
 function showPrompt(p) {
   $("kind").textContent = KIND[p.kind] || p.kind; $("prompt").innerHTML = renderMd(p.prompt + (p.context ? "\n\n" + p.context : ""));
@@ -477,7 +478,8 @@ $("send").onclick = async () => {
 };
 $("hint").onclick = () => submit({ hint: true });
 $("idk").onclick = () => submit({ dontKnow: true });
-$("freesend").onclick = async () => { busy = true; updateButtons(); setStatus("Sending…"); try { await post("/upload", { note: "", images: freefiles.map((f) => ({ data: f.data, mimeType: f.mimeType })) }); freefiles.length = 0; renderGrid($("freegrid"), freefiles); setStatus("Sent ✓", "ok"); } catch (e) { setStatus("Failed: " + e.message, "err"); } busy = false; updateButtons(); };
+$("freetext").oninput = updateButtons;
+$("freesend").onclick = async () => { busy = true; updateButtons(); setStatus("Sending…"); try { await post("/upload", { note: $("freetext").value.trim(), images: freefiles.map((f) => ({ data: f.data, mimeType: f.mimeType })) }); freefiles.length = 0; renderGrid($("freegrid"), freefiles); $("freetext").value = ""; setStatus("Sent ✓", "ok"); } catch (e) { setStatus("Failed: " + e.message, "err"); } busy = false; updateButtons(); };
 if (matchMedia("(min-width: 900px)").matches) document.body.className = "view-pad view-lesson";
 if (new URLSearchParams(location.search).get("view") === "lesson") $("tabLesson").click(); // open on the lesson tab (phone)
 hidePrompt();
