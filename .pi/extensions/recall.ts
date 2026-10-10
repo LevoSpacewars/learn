@@ -25,6 +25,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Editor, type EditorTheme, Key, Text, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { type GradeResult, grade } from "./review/grader.ts";
 import { gradeCard, refreshReviewStatus } from "./review/index.ts";
@@ -397,8 +398,70 @@ export function gateReason(p: Pedagogy, prompt: string): string | undefined {
 	return undefined;
 }
 
+// ---------- turn-end guard ----------
+// The tutor sometimes stops on a question written as prose ("Say go when you're
+// ready", "Tell me where it goes wrong"). The learner answers from the web page,
+// which has no answer box unless a tool prompt is open, so the lesson stalls.
+// At the final boundary of a run, if the last thing said is waiting on the
+// learner and no prompt tool was opened, push the tutor to pose it with a tool.
+const WAITING = /(\?\s*[*_)"'”’]*\s*$)|say\s+["“']?go\b|when you'?re ready|ready when you are|let me know when|i'?ll (?:pose|ask|give you)|\bnext i'?ll\b|tell me (?:where|what|why|how|which|if)|your turn\b|over to you|have a go\b|give it a (?:go|try)|try (?:it|this|that)\b[^.]*\.?\s*$/i;
+/** True when the tutor's final text is waiting on the learner. */
+export function endsWaitingOnLearner(text: string): boolean {
+	const tail = text.trim().slice(-400);
+	return tail.length > 0 && WAITING.test(tail);
+}
+function lastAssistant(messages: any[]): any | undefined {
+	for (let i = messages.length - 1; i >= 0; i--) if (messages[i]?.role === "assistant") return messages[i];
+	return undefined;
+}
+const PROMPT_TOOLS = new Set(["recall", "quiz", "ask_user_question"]);
+
 export default function recall(pi: ExtensionAPI) {
 	if (process.env.PI_SUBAGENT_AGENT) return;
+
+	// Lesson context: only guard sessions where a recall has been posed, and at
+	// most one nudge per learner message (a nudge that fails must not loop).
+	let lessonActive = false;
+	let nudged = false;
+	let closedThisRun = false; // the session was wrapped up: closing remarks may end on a question
+	pi.on("tool_call", async (event) => {
+		const name = (event as any).toolName;
+		if (PROMPT_TOOLS.has(name)) lessonActive = true;
+		if (name === "session_close") closedThisRun = true;
+	});
+	pi.on("agent_start", async () => {
+		closedThisRun = false;
+	});
+	pi.on("input", async () => {
+		nudged = false;
+	});
+	pi.on("agent_before_settle", async (event) => {
+		const e = event as any;
+		if (process.env.PI_GUARD_DEBUG) {
+			const lm = lastAssistant(e.context?.contextMessages ?? []);
+			fs.appendFileSync(process.env.PI_GUARD_DEBUG, JSON.stringify({ lessonActive, nudged, closedThisRun, outcome: e.outcome, canContinue: e.context?.canContinue, n: e.context?.contextMessages?.length, roles: (e.context?.contextMessages ?? []).map((m: any) => m.role), last: lm?.content }) + "\n");
+		}
+		if (!lessonActive || nudged || closedThisRun || e.outcome !== "completed") return;
+		const last = lastAssistant(e.context?.contextMessages ?? []);
+		if (!last) return;
+		const content = Array.isArray(last.content) ? last.content : [];
+		if (content.some((c: any) => c.type === "toolCall")) return;
+		const text = content.filter((c: any) => c.type === "text").map((c: any) => String(c.text ?? "")).join("\n");
+		if (!endsWaitingOnLearner(text)) return;
+		nudged = true;
+		return {
+			entries: [
+				{
+					type: "custom_message" as const,
+					customType: "tutor-guard",
+					display: false,
+					content:
+						"[tutor-guard] You ended your turn on a question to the learner written as plain text. He answers from the web page, which shows an answer box ONLY while a tool prompt is open, so he cannot reply and the lesson has stalled. Do not repeat your explanation and do not ask whether he is ready. Pose that exact question now: `recall` if it has a right answer (write the reference first), `ask_user_question` if it is a choice. If you meant to end the session, call `ask_user_question` (continue / pause) instead.",
+				},
+			],
+			continue: true,
+		};
+	});
 
 	// Count the teacher's prose so the gate above knows whether anything was
 	// said (or taught) between a miss and the next recall.
