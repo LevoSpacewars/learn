@@ -365,6 +365,7 @@ function result(text: string, details: RecallDetails) {
 // enough has been said. State lives on globalThis (one instance per extension
 // file otherwise) so a future extension can read it too.
 interface Pedagogy {
+	floorNeeded?: boolean; // new material: the learner gets to discuss before the first question
 	missStreak: number; // consecutive partial/incorrect/dontKnow verdicts
 	sinceMissChars: number; // assistant prose written since the last miss
 	lastMiss?: { prompt: string; firstError?: string; verdict: string };
@@ -379,6 +380,16 @@ export function countParts(prompt: string): number {
 	const numbered = prompt.match(/^\s*\d+[.)]\s+/gm)?.length ?? 0;
 	const bullets = prompt.match(/^\s*[-*•]\s+.*(\?|=\s*\?)\s*$/gm)?.length ?? 0;
 	return Math.max(1, numbered + bullets);
+}
+/** The learner said they are ready for the first question. */
+const READY = /^\s*(?:ok(?:ay)?[,!. ]*)?(?:go|ready|start|begin|i'?m ready|let'?s (?:go|start|begin|do it)|ask (?:me )?(?:the |a )?(?:first )?question|first question|no(?:pe)?,? (?:questions?|i'?m good)|ready[^a-z]*ask|ready)(?![a-z'])/i;
+export function isReady(text: string): boolean {
+	return READY.test(text.trim());
+}
+export const FLOOR_MESSAGE =
+	"Blocked: this is new material, and he gets to discuss it before the first question. Introduce what we are about to learn in a few lines (what it is, why it matters for his goal, what it hangs off), then call ask_user_question with the question \"Anything you want to discuss before the first question?\" and options \"Ready, ask the first question\" and \"I want to discuss first\" (he can also type his own question). If he discusses, answer him, then offer the same choice again with ask_user_question. Pose the first recall only after he picks ready.";
+export function floorReason(p: Pedagogy): string | undefined {
+	return p.floorNeeded ? FLOOR_MESSAGE : undefined;
 }
 const DIAGNOSE_CHARS = 60; // "one to three lines" of diagnosis
 const TEACH_CHARS = 350; // a worked example, not a sentence
@@ -479,6 +490,27 @@ export default function recall(pi: ExtensionAPI) {
 		p.missStreak = 0;
 		p.sinceMissChars = 0;
 		p.lastMiss = undefined;
+		p.floorNeeded = false;
+	});
+
+	// Open floor before new material: a teach session start, an approved plan
+	// (teaching begins), or a finished node (the next one is new) all mean the
+	// next question would be the first on something new. The learner's "ready"
+	// (typed, or picked in ask_user_question) lifts it; discussion does not.
+	pi.on("before_agent_start", async (event) => {
+		const prompt = String((event as any).prompt ?? "");
+		if (/<skill name="teach"/.test(prompt) || /^\s*\/skill:teach\b/.test(prompt)) pedagogy().floorNeeded = true;
+		else if (/<skill name="review"/.test(prompt) || /^\s*\/skill:review\b/.test(prompt)) pedagogy().floorNeeded = false; // review is not new material
+		else if (isReady(prompt)) pedagogy().floorNeeded = false;
+	});
+	pi.on("tool_result", async (event) => {
+		const e = event as any;
+		const name = e.toolName;
+		if (name === "lesson_plan" || (name === "lesson_node" && e.input?.status === "confirmed")) pedagogy().floorNeeded = true;
+		if (name === "ask_user_question") {
+			const answers: any[] = e.details?.answers ?? [];
+			if (answers.some((a) => isReady(String(a?.label ?? "")))) pedagogy().floorNeeded = false;
+		}
 	});
 
 	pi.registerTool({
@@ -498,11 +530,10 @@ export default function recall(pi: ExtensionAPI) {
 			const kind = (params.kind ?? "recall") as CheckKind;
 			const paper = params.paper ?? kind === "problem";
 			const base: RecallDetails = { status: "unavailable", kind, prompt: params.prompt, paper, topic: params.topic, cardId: params.cardId };
-			if (!ctx.hasUI) return result("recall requires interactive mode UI", { ...base, message: "no UI" });
-
 			const ped = pedagogy();
-			const blocked = gateReason(ped, params.prompt);
+			const blocked = floorReason(ped) ?? gateReason(ped, params.prompt);
 			if (blocked) return result(blocked, { ...base, status: "blocked", message: blocked });
+			if (!ctx.hasUI) return result("recall requires interactive mode UI", { ...base, message: "no UI" });
 
 			onUpdate?.({ content: [{ type: "text", text: "asked" }], details: { ...base, phase: "asked" } });
 

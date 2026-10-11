@@ -1050,6 +1050,10 @@ export default function quiz(pi: ExtensionAPI) {
 		parameters: QuizParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
+			// Same open-floor rule as recall (state shared via globalThis): no first question on new material until he says ready.
+			if ((globalThis as any).__learnPedagogy?.floorNeeded) {
+				return { content: [{ type: "text" as const, text: "Blocked: new material. Open the floor first with ask_user_question (\"Anything you want to discuss before the first question?\" with options \"Ready, ask the first question\" / \"I want to discuss first\"); quiz only after he picks ready." }], details: { status: "unavailable", message: "open the floor first" } as any };
+			}
 			const context = params.details?.trim() || undefined;
 			const explanation = params.explanation.trim();
 			const mode: QuizMode = params.multiSelect ? "multi-select" : "single-select";
