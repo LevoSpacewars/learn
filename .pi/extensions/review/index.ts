@@ -88,7 +88,36 @@ const GRADUATE_AFTER = 3;
 const FLAW_MIN_REPS = 3;
 const FLAW_RATE = 0.2;
 const UNAIDED_EVERY = 5;
-const FIRST_REVIEW_DELAY_MS = 20 * 60 * 60 * 1000; // first review after a night's sleep, never the same evening
+// Day boundary (Anki-style rollover): a "review day" starts at 5am local time.
+// A card due at any time on a review day is available from that day's 5am, and
+// a new card's first review is the next 5am: after a night's sleep, not after
+// a fixed 24 hours. Before 5am still counts as the previous day.
+export const DAY_START_HOUR = 5;
+/** The most recent DAY_START_HOUR local time at or before d. */
+export function reviewDayStart(d: Date): Date {
+	const s = new Date(d);
+	s.setHours(DAY_START_HOUR, 0, 0, 0);
+	if (s.getTime() > d.getTime()) s.setDate(s.getDate() - 1);
+	return s;
+}
+/** The next review-day start strictly after d (first review of a new card). */
+export function nextReviewDay(d: Date): Date {
+	const s = reviewDayStart(d);
+	s.setDate(s.getDate() + 1);
+	return s;
+}
+/**
+ * When a card scheduled for `due` becomes available. Day-scale gaps snap to
+ * the start of the due day; short relearning steps (under ~20 h since the last
+ * review, e.g. 10 minutes after "again") keep their exact time.
+ */
+export function availableAt(due: Date, lastReview?: Date): Date {
+	if (lastReview && due.getTime() - lastReview.getTime() < 20 * 60 * 60 * 1000 && reviewDayStart(due).getTime() === reviewDayStart(lastReview).getTime()) return due;
+	return reviewDayStart(due);
+}
+export function isDue(card: { due: Date; last_review?: Date }, now: Date): boolean {
+	return availableAt(card.due, card.last_review).getTime() <= now.getTime();
+}
 const RETENTION_MIN_AGE_DAYS = 28; // unannounced long-delay checks: cards at least this old…
 const RETENTION_RATE = 0.25; // …get tagged as retention checks this often
 
@@ -139,7 +168,7 @@ function newId(): string {
 function dueCards(store: Store, now: Date, topic?: string): ReviewCard[] {
 	const t = topic?.trim().toLowerCase();
 	return store.cards
-		.filter((c) => c.fsrs.due.getTime() <= now.getTime())
+		.filter((c) => isDue(c.fsrs, now))
 		.filter((c) => !t || c.topic.toLowerCase() === t)
 		.sort((a, b) => a.fsrs.due.getTime() - b.fsrs.due.getTime());
 }
@@ -180,7 +209,7 @@ function humanizeUntil(due: Date, now: Date): string {
 }
 
 function nextDue(store: Store, now: Date): Date | undefined {
-	const future = store.cards.map((c) => c.fsrs.due).filter((d) => d.getTime() > now.getTime());
+	const future = store.cards.map((c) => availableAt(c.fsrs.due, c.fsrs.last_review)).filter((d) => d.getTime() > now.getTime());
 	if (future.length === 0) return undefined;
 	return new Date(Math.min(...future.map((d) => d.getTime())));
 }
@@ -396,7 +425,7 @@ export function gradeCard(cwd: string, params: GradeCardInput): { text: string; 
 	const remaining = dueCards(store, now).length;
 	const retry = session ? relearnCards(store, session.id, new Date(session.at)).length : 0;
 	const text =
-		`${card.id}: ${rating}${rating !== params.rating ? ` (was ${params.rating}; slow)` : ""} → next review ${humanizeUntil(card.fsrs.due, now)}.` +
+		`${card.id}: ${rating}${rating !== params.rating ? ` (was ${params.rating}; slow)` : ""} → next review ${humanizeUntil(availableAt(card.fsrs.due, card.fsrs.last_review), now)}.` +
 		` ${remaining} due, ${retry} to retry this session.${graduatedNow ? " Card graduated (fluent)." : ""}`;
 	return { text, rating, details: { due: card.fsrs.due.toISOString(), remaining, retry, graduated: card.graduated } };
 }
@@ -454,7 +483,7 @@ export default function review(pi: ExtensionAPI) {
 					topic: c.topic.trim().toLowerCase(),
 					lesson: params.lesson,
 					created: now.toISOString(),
-					fsrs: { ...createEmptyCard(now), due: new Date(now.getTime() + FIRST_REVIEW_DELAY_MS) },
+					fsrs: { ...createEmptyCard(now), due: nextReviewDay(now) },
 					history: [],
 					criterionSessions: 0,
 					graduated: false,
@@ -572,7 +601,7 @@ export default function review(pi: ExtensionAPI) {
 			const now = new Date();
 			return textResult(
 				hits
-					.map((c) => `${c.id} [${c.kind}] ${c.topic} (${State[c.fsrs.state]}, reps ${c.fsrs.reps}, due ${humanizeUntil(c.fsrs.due, now)}): ${c.front}`)
+					.map((c) => `${c.id} [${c.kind}] ${c.topic} (${State[c.fsrs.state]}, reps ${c.fsrs.reps}, due ${humanizeUntil(availableAt(c.fsrs.due, c.fsrs.last_review), now)}): ${c.front}`)
 					.join("\n"),
 			);
 		},
@@ -711,7 +740,7 @@ export default function review(pi: ExtensionAPI) {
 			const byTopic = new Map<string, ReviewCard[]>();
 			for (const c of store.cards) byTopic.set(c.topic, [...(byTopic.get(c.topic) ?? []), c]);
 			const lines = [...byTopic.entries()].map(([topic, cards]) => {
-				const due = cards.filter((c) => c.fsrs.due.getTime() <= now.getTime()).length;
+				const due = cards.filter((c) => isDue(c.fsrs, now)).length;
 				const grad = cards.filter((c) => c.graduated).length;
 				const next = nextDue({ version: 2, cards }, now);
 				return `${topic}: ${cards.length} cards, ${due} due, ${grad} graduated${next ? `, next ${humanizeUntil(next, now)}` : ""}`;
