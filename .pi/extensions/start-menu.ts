@@ -10,6 +10,9 @@
  *   • Learn something new        — asks what, then starts the teach skill
  *   • Set up my goals            — only until goals exist
  * then "How much time do you have?" (minutes; blank = no budget).
+ * The last session's closing note steers the order: its "Next:" line is shown
+ * under the title, and when it points at new material / the open lesson, that
+ * option comes first (preselected) and Review moves after it.
  * Esc skips the menu and leaves a plain chat.
  *
  * Every choice creates/reuses a lesson note, links it with md-log, opens it
@@ -25,7 +28,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { beginLearnSession, beginReviewSession, countDue, dueByTopic } from "./review/index.ts";
-import { buildGraph, currentSession, learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
+import { type LearnerStore, buildGraph, currentSession, learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
 import { webInput, webSelect } from "./review/ui.ts";
 
 function today(): string {
@@ -56,6 +59,62 @@ function stashSlice(text: string): string {
 }
 function learnerBlock(text: string): string {
 	return stashSlice(text);
+}
+
+// ── The last session's "Next:" line steers the menu ──────────────────────
+
+/** The closing note of the most recent session that has one. */
+export function lastSessionNote(store: Pick<LearnerStore, "sessions">): string | undefined {
+	for (let i = store.sessions.length - 1; i >= 0; i--) if (store.sessions[i].note?.trim()) return store.sessions[i].note!.trim();
+	return undefined;
+}
+
+/** The note's "Next: …" sentence (the last one, if several), or undefined. */
+export function nextLine(note: string | undefined): string | undefined {
+	if (!note) return undefined;
+	const all = [...note.matchAll(/\bnext(?: steps?)?\s*:\s*([^\n]+)/gi)];
+	const m = all.at(-1);
+	return m ? `Next: ${m[1].trim()}` : undefined;
+}
+
+const NEW_MATERIAL = /\bnew (?:material|ideas?|topics?|concepts?|content|nodes?)\b|\b(?:open|next) lesson\b|\bcontinue (?:the )?lesson\b|\blead with\b|\bnext on the path\b|\bmilestones?\b|\bstart (?:the )?lesson\b/i;
+const STOP = new Set(["the", "and", "from", "last", "lesson", "continue", "let", "with", "for", "new", "next", "path"]);
+
+/** Does the line name this lesson (its slug, its title, or most of its distinctive slug words)? */
+export function namesLesson(line: string, l: { slug: string; title?: string }): boolean {
+	const low = line.toLowerCase();
+	if (low.includes(l.slug.toLowerCase())) return true;
+	if (l.title && l.title.length >= 6 && low.includes(l.title.toLowerCase())) return true;
+	const words = new Set(low.split(/[^a-z0-9]+/).filter(Boolean));
+	const toks = l.slug.toLowerCase().split("-").filter((t) => t.length >= 3 && !STOP.has(t));
+	if (toks.length === 0) return false;
+	const hit = toks.filter((t) => words.has(t)).length;
+	return hit >= Math.min(2, toks.length);
+}
+
+/**
+ * Which menu option the "Next:" line points at, if any: a named lesson's
+ * Continue option, the Next-on-the-path option when its title is named, or for
+ * "new material" generally the first Continue option (else Next on the path).
+ */
+export function preferredOption(
+	line: string | undefined,
+	o: { continues: Array<{ label: string; slug: string; title?: string }>; next?: { label: string; titles: string[] } },
+): string | undefined {
+	if (!line) return undefined;
+	const named = o.continues.find((c) => namesLesson(line, c));
+	if (named) return named.label;
+	if (o.next && o.next.titles.some((t) => t && line.toLowerCase().includes(t.toLowerCase()))) return o.next.label;
+	if (NEW_MATERIAL.test(line)) return o.continues[0]?.label ?? o.next?.label;
+	return undefined;
+}
+
+/** Put the preferred option first and Review right after it; everything else keeps its order. */
+export function orderOptions(options: string[], preferred: string | undefined, review: string | undefined): string[] {
+	if (!preferred || !options.includes(preferred)) return options;
+	const rest = options.filter((x) => x !== preferred && x !== review);
+	const hasReview = review !== undefined && options.includes(review);
+	return [preferred, ...(hasReview ? [review!] : []), ...rest];
 }
 
 export default function startMenu(pi: ExtensionAPI) {
@@ -100,9 +159,11 @@ export default function startMenu(pi: ExtensionAPI) {
 		}));
 		let pick: ReturnType<typeof nextOnPath>[number] | undefined;
 		let hasGoals = false;
+		let lastNext: string | undefined;
 		try {
 			const store = loadLearner(ctx.cwd);
 			hasGoals = store.goals.length > 0;
+			lastNext = nextLine(lastSessionNote(store));
 			pick = nextOnPath(store)[0];
 		} catch {
 			// no curriculum yet
@@ -110,8 +171,16 @@ export default function startMenu(pi: ExtensionAPI) {
 		const NEXT = pick
 			? `Next on the path: ${pick.action === "learn" ? `learn ${pick.fundamental!.title}` : `attempt ${pick.milestone.title}`} (${pick.goal.title})`
 			: undefined;
-		const options = [...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ORIENT, ...(hasGoals ? [] : [SETUP])];
-		const choice = await webSelect(ctx, "What would you like to do?", options);
+		const preferred = preferredOption(lastNext, {
+			continues: continues.map((c) => ({ label: c.label, slug: c.lesson.slug, title: c.lesson.title })),
+			next: NEXT && pick ? { label: NEXT, titles: [pick.fundamental?.title ?? "", pick.milestone.title, pick.fundamental?.slug ?? ""] } : undefined,
+		});
+		const options = orderOptions(
+			[...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ORIENT, ...(hasGoals ? [] : [SETUP])],
+			preferred,
+			due > 0 ? REVIEW : undefined,
+		);
+		const choice = await webSelect(ctx, `What would you like to do?${lastNext ? `\n\nLast session — ${lastNext}` : ""}`, options);
 		if (!choice) return;
 
 		if (choice === ORIENT) {
