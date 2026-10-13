@@ -124,6 +124,7 @@ body.role-viewer .modes, body.role-viewer #draw, body.role-viewer #photo, body.r
 body.role-viewer #text { display:block !important; }
 body.role-scratch main { grid-template-columns: 1fr; height: calc(100% - 56px); }
 body.role-scratch #lesson, body.role-scratch .tabs, body.role-scratch .modes, body.role-scratch #text, body.role-scratch #photo, body.role-scratch #voice, body.role-scratch #freephoto, body.role-scratch #hint, body.role-scratch #idk { display:none !important; }
+#actions { grid-template-columns: 1fr 1fr 1fr; } #actions #send { grid-column: 1 / -1; }
 body.role-scratch #pad { display:flex !important; padding:8px 10px; gap:8px; }
 body.role-scratch #qcard { padding:6px 12px; cursor:pointer; } body.role-scratch .prompt { font-size:15px; max-height:28vh; overflow:auto; }
 body.role-scratch #qcard.collapsed .prompt { max-height:1.5em; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
@@ -174,7 +175,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
     </div>
     <div id="confrow" class="conf hidden"><label for="conf">Confidence</label><input id="conf" type="range" min="0" max="100" step="5" value="50" class="unset"><output id="confv">—</output></div>
     <div id="actions" class="btns hidden">
-      <button id="hint">? Hint</button><button id="idk">I don't know</button>
+      <button id="hint">? Hint</button><button id="idk">I don't know</button><button id="skip" title="Skip this check and move on to something new">Skip ⏭</button>
       <button id="send" class="primary" disabled>Send answer</button>
     </div>
     <div id="status" class="status" role="status"></div>
@@ -320,7 +321,8 @@ function updateButtons() {
   const waitConf = pending && hasAnswer() && needsConf();
   $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer() || needsConf());
   $("send").textContent = waitConf ? "Set confidence to send" : pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
-  for (const id of ["hint", "idk", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
+  for (const id of ["hint", "idk", "skip", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
+  $("skip").classList.toggle("hidden", !pending || !isGraded(pending) || pending.kind === "quiz");
   $("hint").classList.toggle("hidden", !!q || !isGraded(pending));
   $("idk").classList.toggle("hidden", !isGraded(pending));
   $("freesend").disabled = (freefiles.length === 0 && !$("freetext").value.trim()) || busy;
@@ -477,6 +479,7 @@ $("send").onclick = async () => {
   submit({ text: mode === "type" ? $("text").value : "", confidence, images, audio: mode === "voice" ? audio : null }, audio ? "Transcribing on the Mac…" : "Sending…");
 };
 $("hint").onclick = () => submit({ hint: true });
+$("skip").onclick = () => submit({ skip: true }, "Skipping…");
 $("idk").onclick = () => submit({ dontKnow: true });
 $("freetext").oninput = updateButtons;
 $("freesend").onclick = async () => { busy = true; updateButtons(); setStatus("Sending…"); try { await post("/upload", { note: $("freetext").value.trim(), images: freefiles.map((f) => ({ data: f.data, mimeType: f.mimeType })) }); freefiles.length = 0; renderGrid($("freegrid"), freefiles); $("freetext").value = ""; setStatus("Sent ✓", "ok"); } catch (e) { setStatus("Failed: " + e.message, "err"); } busy = false; updateButtons(); };

@@ -33,7 +33,7 @@ import { plainMath } from "./review/plainmath.ts";
 import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import { type CheckKind, recordCalibration, recordEvent } from "./review/store.ts";
 
-type RecallStatus = "answered" | "hint" | "dontKnow" | "cancelled" | "unavailable" | "blocked";
+type RecallStatus = "answered" | "hint" | "dontKnow" | "skipped" | "cancelled" | "unavailable" | "blocked";
 type Modality = "typed" | "photo" | "audio";
 
 interface RecallDetails {
@@ -170,6 +170,10 @@ async function askRecall(
 				finish({ status: "hint", answer: a, latencyMs });
 				return true;
 			}
+			if (a.skip) {
+				finish({ status: "skipped", answer: a, latencyMs });
+				return true;
+			}
 			if (a.dontKnow) {
 				finish({ status: "dontKnow", answer: a, latencyMs });
 				return true;
@@ -224,6 +228,7 @@ async function askRecall(
 						return;
 					}
 					if (text === "?") return void receive({ source: "tui", hint: true });
+					if (/^(skip|next|move on)$/i.test(text)) return void receive({ source: "tui", skip: true });
 					if (/^(idk|i don'?t know)$/i.test(text)) return void receive({ source: "tui", dontKnow: true });
 					receive({ source: "tui", text });
 					return;
@@ -286,7 +291,7 @@ async function askRecall(
 				}
 				for (const l of editor.render(Math.max(1, width - 2))) lines.push(l);
 				lines.push("");
-				add(theme.fg("dim", " Enter submit · Ctrl+J newline · ? = hint · idk = I don't know · qr = phone link · Esc cancel"));
+				add(theme.fg("dim", " Enter submit · Ctrl+J newline · ? = hint · idk = I don't know · skip = move on · qr = phone link · Esc cancel"));
 			} else if (phase === "confidence") {
 				const filled = Math.round(confidence / 5);
 				const bar = "█".repeat(filled) + "░".repeat(20 - filled);
@@ -570,6 +575,16 @@ export default function recall(pi: ExtensionAPI) {
 					// never block on bookkeeping
 				}
 			};
+			if (outcome.status === "skipped") {
+				// He chose learning over testing: clear the drill-down pressure entirely.
+				ped.missStreak = 0;
+				ped.sinceMissChars = 0;
+				ped.lastMiss = undefined;
+				return result(
+					"Learner SKIPPED this check: he wants to learn something new now. Do NOT re-pose it, a variant, or a drill-down, and don't ask whether he wants to continue. Note it and move on: if this was a node's check, lesson_node with status shaky; if no review card covers the idea, save one with review_add_cards (that is where it gets tested, later). Then go straight to teaching the next new idea. If he skips twice in a row, check in once with ask_user_question about the pace (more explanation, fewer checks?).",
+					details,
+				);
+			}
 			if (outcome.status === "hint") {
 				logEvent("hint");
 				return result(
@@ -656,6 +671,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (d.status === "unavailable") return new Text(theme.fg("warning", d.message || "recall unavailable"), 0, 0);
 			if (d.status === "blocked") return new Text(theme.fg("warning", "refused: teach before re-testing"), 0, 0);
 			if (d.status === "hint") return new Text(theme.fg("warning", "hint requested"), 0, 0);
+			if (d.status === "skipped") return new Text(theme.fg("dim", "skipped: moving on"), 0, 0);
 			if (d.status === "dontKnow") return new Text(theme.fg("warning", "I don't know"), 0, 0);
 			if (d.status === "cancelled") return new Text(theme.fg("dim", "cancelled"), 0, 0);
 			const color = d.verdict === "correct" ? "success" : d.verdict === "partial" ? "warning" : "error";

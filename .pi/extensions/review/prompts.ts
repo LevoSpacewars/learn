@@ -30,6 +30,7 @@ export interface PromptAnswer {
 	confidence?: number;
 	dontKnow?: boolean;
 	hint?: boolean;
+	skip?: boolean; // learner wants to move on to new material without this check
 	choices?: number[]; // quiz: 1-based option indices
 }
 

@@ -180,6 +180,7 @@ interface Upload {
 	text?: string;
 	confidence?: number;
 	dontKnow?: boolean;
+	skip?: boolean;
 	hint?: boolean;
 	choices?: number[]; // quiz / menu / ask: 1-based option indices
 	id?: string;
@@ -341,6 +342,10 @@ export default function phoneWork(pi: ExtensionAPI) {
 		if (payload.id && payload.id !== pending.id) return json(res, 409, { error: "That question has already been answered" });
 
 		if (payload.hint) return json(res, 200, { ok: true, answered: answerPending({ source: "pad", hint: true }) });
+		if (payload.skip) {
+			ctx.ui.notify("📱 Check skipped: moving on", "info");
+			return json(res, 200, { ok: true, answered: answerPending({ source: "pad", skip: true }) });
+		}
 		if (payload.dontKnow) return json(res, 200, { ok: true, answered: answerPending({ source: "pad", dontKnow: true }) });
 		if (Array.isArray(payload.choices) && payload.choices.length) {
 			const choices = payload.choices.map(Number).filter((n) => Number.isInteger(n) && n > 0);
