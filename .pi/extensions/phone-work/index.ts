@@ -181,6 +181,7 @@ interface Upload {
 	confidence?: number;
 	dontKnow?: boolean;
 	skip?: boolean;
+	endRecall?: boolean;
 	hint?: boolean;
 	choices?: number[]; // quiz / menu / ask: 1-based option indices
 	id?: string;
@@ -342,6 +343,10 @@ export default function phoneWork(pi: ExtensionAPI) {
 		if (payload.id && payload.id !== pending.id) return json(res, 409, { error: "That question has already been answered" });
 
 		if (payload.hint) return json(res, 200, { ok: true, answered: answerPending({ source: "pad", hint: true }) });
+		if (payload.endRecall) {
+			ctx.ui.notify("📱 Recall ended: starting the lesson", "info");
+			return json(res, 200, { ok: true, answered: answerPending({ source: "pad", endRecall: true }) });
+		}
 		if (payload.skip) {
 			ctx.ui.notify("📱 Check skipped: moving on", "info");
 			return json(res, 200, { ok: true, answered: answerPending({ source: "pad", skip: true }) });

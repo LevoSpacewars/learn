@@ -33,7 +33,7 @@ import { plainMath } from "./review/plainmath.ts";
 import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import { type CheckKind, recordCalibration, recordEvent } from "./review/store.ts";
 
-type RecallStatus = "answered" | "hint" | "dontKnow" | "skipped" | "cancelled" | "unavailable" | "blocked";
+type RecallStatus = "answered" | "hint" | "dontKnow" | "skipped" | "ended" | "cancelled" | "unavailable" | "blocked";
 type Modality = "typed" | "photo" | "audio";
 
 interface RecallDetails {
@@ -174,6 +174,10 @@ async function askRecall(
 				finish({ status: "skipped", answer: a, latencyMs });
 				return true;
 			}
+			if (a.endRecall) {
+				finish({ status: "ended", answer: a, latencyMs });
+				return true;
+			}
 			if (a.dontKnow) {
 				finish({ status: "dontKnow", answer: a, latencyMs });
 				return true;
@@ -229,6 +233,7 @@ async function askRecall(
 					}
 					if (text === "?") return void receive({ source: "tui", hint: true });
 					if (/^(skip|next|move on)$/i.test(text)) return void receive({ source: "tui", skip: true });
+					if (/^(lesson|end recall|start (the )?lesson|teach me)$/i.test(text)) return void receive({ source: "tui", endRecall: true });
 					if (/^(idk|i don'?t know)$/i.test(text)) return void receive({ source: "tui", dontKnow: true });
 					receive({ source: "tui", text });
 					return;
@@ -291,7 +296,7 @@ async function askRecall(
 				}
 				for (const l of editor.render(Math.max(1, width - 2))) lines.push(l);
 				lines.push("");
-				add(theme.fg("dim", " Enter submit · Ctrl+J newline · ? = hint · idk = I don't know · skip = move on · qr = phone link · Esc cancel"));
+				add(theme.fg("dim", " Enter submit · Ctrl+J newline · ? = hint · idk = I don't know · skip = move on · lesson = end recall, start the lesson · qr = phone link · Esc cancel"));
 			} else if (phase === "confidence") {
 				const filled = Math.round(confidence / 5);
 				const bar = "█".repeat(filled) + "░".repeat(20 - filled);
@@ -575,6 +580,24 @@ export default function recall(pi: ExtensionAPI) {
 					// never block on bookkeeping
 				}
 			};
+			if (outcome.status === "ended") {
+				ped.missStreak = 0;
+				ped.sinceMissChars = 0;
+				ped.lastMiss = undefined;
+				let started = "";
+				try {
+					started = (globalThis as any).__learnStartLesson?.(ctx) ?? "";
+				} catch (e: any) {
+					started = "";
+					details.message = `lesson start failed: ${e?.message ?? e}`;
+				}
+				return result(
+					started
+						? `Learner ENDED the recall phase and asked to start the lesson. Do not pose any more checks or review cards. If this was a review session, call session_close with a one-line note of what was reviewed. Then reply with one short line (e.g. "On to the lesson.") and STOP: ${started} starts automatically in the next message.`
+						: "Learner ENDED the recall phase and asked to start the lesson. Do not pose any more checks or review cards. Start teaching new material now: continue the open lesson from its first pending node (no warm-up re-check), or if there is none, ask with ask_user_question what he wants to learn.",
+					details,
+				);
+			}
 			if (outcome.status === "skipped") {
 				// He chose learning over testing: clear the drill-down pressure entirely.
 				ped.missStreak = 0;
@@ -672,6 +695,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (d.status === "blocked") return new Text(theme.fg("warning", "refused: teach before re-testing"), 0, 0);
 			if (d.status === "hint") return new Text(theme.fg("warning", "hint requested"), 0, 0);
 			if (d.status === "skipped") return new Text(theme.fg("dim", "skipped: moving on"), 0, 0);
+			if (d.status === "ended") return new Text(theme.fg("accent", "recall ended: starting the lesson"), 0, 0);
 			if (d.status === "dontKnow") return new Text(theme.fg("warning", "I don't know"), 0, 0);
 			if (d.status === "cancelled") return new Text(theme.fg("dim", "cancelled"), 0, 0);
 			const color = d.verdict === "correct" ? "success" : d.verdict === "partial" ? "warning" : "error";

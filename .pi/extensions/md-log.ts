@@ -214,6 +214,7 @@ export default function mdLog(pi: ExtensionAPI) {
 		if (status === "unavailable") return callout("warning", "Recall — unavailable", [details?.message || ""]);
 		if (status === "hint") return callout("warning", "Recall — hint requested", ["No attempt yet; asked for a hint."]);
 		if (status === "skipped") return callout("example", "Recall — skipped", ["Skipped to move on; saved for review."]);
+		if (status === "ended") return callout("example", "Recall — ended", ["Recall phase ended; starting the lesson."]);
 		if (status === "dontKnow") return callout("question", "Recall — I don't know", ["Your answer: I don't know"]);
 		const verdict = details?.verdict as string | undefined;
 		const type = verdict === "correct" ? "success" : verdict === "partial" ? "warning" : verdict === "incorrect" ? "failure" : "note";

@@ -25,7 +25,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { beginLearnSession, beginReviewSession, countDue, dueByTopic } from "./review/index.ts";
-import { buildGraph, learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
+import { buildGraph, currentSession, learnerSlice, loadLearner, nextOnPath, openLessons, slugify, touchGoal, upsertLesson } from "./review/store.ts";
 import { webInput, webSelect } from "./review/ui.ts";
 
 function today(): string {
@@ -225,6 +225,56 @@ export default function startMenu(pi: ExtensionAPI) {
 			{ expandPromptTemplates: true },
 		);
 	}
+
+	// "End recall → lesson": the learner stopped the recall phase mid-check and
+	// wants to be taught. Start a lesson straight away, no menus: the lesson of the
+	// current learn session, else the most recent open lesson, else next on the
+	// path. Queued as a follow-up so it runs right after the current turn.
+	const NO_RECALL =
+		"RECALL PHASE ENDED BY THE LEARNER: he wants to learn something new now. No warm-up re-check, no review cards, no checks on earlier nodes. Go straight to teaching the first pending (new) node.";
+	(globalThis as any).__learnStartLesson = (ctx: any): string => {
+		const send = (text: string) => pi.sendUserMessage(text, { deliverAs: "followUp", expandPromptTemplates: true } as any);
+		const store = loadLearner(ctx.cwd);
+		const cur = currentSession(ctx.cwd, store);
+		const open = openLessons(store);
+		const lesson = (cur?.kind === "learn" && cur.lesson ? store.lessons.find((l) => l.slug === cur.lesson && l.status !== "done") : undefined) ?? open[0];
+		if (lesson) {
+			const file = lesson.file && fs.existsSync(path.resolve(ctx.cwd, lesson.file)) ? path.resolve(ctx.cwd, lesson.file) : lessonFile(ctx.cwd, lesson.title);
+			if (!lesson.file) upsertLesson(ctx.cwd, { slug: lesson.slug, file: path.relative(ctx.cwd, file) });
+			openNote(ctx, file, lesson.title);
+			beginLearnSession(ctx.cwd, lesson.slug);
+			const slice = learnerSlice(ctx.cwd, { lesson: lesson.slug, dueByTopic: dueByTopic(ctx.cwd) });
+			send(`/skill:teach Continue the lesson "${lesson.title}" (slug: ${lesson.slug}). ${NO_RECALL}${learnerBlock(slice)}`);
+			return `lesson "${lesson.title}"`;
+		}
+		const pick = nextOnPath(store)[0];
+		if (pick && pick.action === "learn") {
+			touchGoal(ctx.cwd, pick.goal.id);
+			const slug = pick.fundamental!.slug;
+			const existing = store.lessons.find((l) => l.slug === slug);
+			const file = existing?.file && fs.existsSync(path.resolve(ctx.cwd, existing.file)) ? path.resolve(ctx.cwd, existing.file) : lessonFile(ctx.cwd, pick.fundamental!.title);
+			openNote(ctx, file, pick.fundamental!.title);
+			upsertLesson(ctx.cwd, { slug, title: pick.fundamental!.title, file: path.relative(ctx.cwd, file) });
+			beginLearnSession(ctx.cwd, slug);
+			const slice = learnerSlice(ctx.cwd, { lesson: slug, topics: [slug, pick.goal.id], dueByTopic: dueByTopic(ctx.cwd) });
+			send(`/skill:teach Next on the path. ${pick.reason} Teach me: ${pick.fundamental!.title}. Use lesson slug "${slug}" and note "${path.relative(ctx.cwd, file)}". Motivate it from the milestone "${pick.milestone.title}" (goal ${pick.goal.id}). ${NO_RECALL}${learnerBlock(slice)}`);
+			return `"${pick.fundamental!.title}" (next on the path)`;
+		}
+		if (pick) {
+			touchGoal(ctx.cwd, pick.goal.id);
+			const slug = `m-${pick.goal.id}-${pick.milestone.id}`;
+			const existing = store.lessons.find((l) => l.slug === slug);
+			const file = existing?.file && fs.existsSync(path.resolve(ctx.cwd, existing.file)) ? path.resolve(ctx.cwd, existing.file) : lessonFile(ctx.cwd, `${pick.goal.id} ${pick.milestone.title}`);
+			openNote(ctx, file, pick.milestone.title);
+			upsertLesson(ctx.cwd, { slug, title: pick.milestone.title, file: path.relative(ctx.cwd, file) });
+			beginLearnSession(ctx.cwd, slug);
+			const slice = learnerSlice(ctx.cwd, { lesson: slug, topics: [pick.goal.id, ...pick.milestone.needs], dueByTopic: dueByTopic(ctx.cwd) });
+			send(`/skill:teach Next on the path. ${pick.reason} Milestone attempt: "${pick.milestone.title}" (goal ${pick.goal.id}, milestone ${pick.milestone.id}, kind ${pick.milestone.kind}).${pick.milestone.description ? ` Done means: ${pick.milestone.description}` : ""} Use lesson slug "${slug}" and note "${path.relative(ctx.cwd, file)}". ${NO_RECALL}${learnerBlock(slice)}`);
+			return `"${pick.milestone.title}" (next on the path)`;
+		}
+		send(`/skill:teach ${NO_RECALL} There is no open lesson and no path yet: ask him with ask_user_question what he wants to learn, then teach it.`);
+		return "a new lesson";
+	};
 
 	pi.on("before_agent_start", async () => {
 		const g = globalThis as any;
