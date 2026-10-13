@@ -539,11 +539,18 @@ export default function recall(pi: ExtensionAPI) {
 	// Open floor at the start of a teach session: the learner gets to discuss
 	// before the first question. His "ready" (typed, or picked in
 	// ask_user_question) lifts it; discussion does not.
-	pi.on("before_agent_start", async (event) => {
+	pi.on("before_agent_start", async (event, ctx) => {
 		const prompt = String((event as any).prompt ?? "");
 		const p = pedagogy();
-		if (/<skill name="teach"/.test(prompt) || /^\s*\/skill:teach\b/.test(prompt)) p.floorNeeded = true;
-		else if (/<skill name="review"/.test(prompt) || /^\s*\/skill:review\b/.test(prompt)) {
+		if (/<skill name="teach"/.test(prompt) || /^\s*\/skill:teach\b/.test(prompt)) {
+			p.floorNeeded = true;
+			// Continuing a lesson ("Continue the lesson … (slug: x)" or 'lesson slug "x"'):
+			// its first pending node is new material and must be read before it is
+			// tested, exactly as after lesson_plan. A lesson with no nodes yet arms nothing.
+			const m = prompt.match(/lesson slug "([^"]+)"|\(slug: ([^)\s]+)\)/);
+			const slug = m?.[1] ?? m?.[2];
+			if (slug) armForLesson(p, (ctx as any)?.cwd ?? process.cwd(), slug);
+		} else if (/<skill name="review"/.test(prompt) || /^\s*\/skill:review\b/.test(prompt)) {
 			p.floorNeeded = false; // review is not new material
 			p.readNeeded = undefined;
 		} else if (isReady(prompt)) readyAnswered(p);
