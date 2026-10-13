@@ -10,6 +10,8 @@
  */
 
 import { Editor, type EditorTheme, Key, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { isReady } from "./pedagogy.ts";
+import { plainMath } from "./plainmath.ts";
 import { type PromptAnswer, setPending } from "./prompts.ts";
 
 function editorTheme(theme: any): EditorTheme {
@@ -58,7 +60,7 @@ export function webSelect(ctx: any, title: string, options: string[]): Promise<s
 			render(width: number) {
 				const lines: string[] = [];
 				lines.push(truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
-				wrap(lines, theme.fg("text", title), width);
+				title.split("\n").forEach((t, i) => (t.trim() ? wrap(lines, theme.fg(i === 0 ? "text" : "muted", t), width) : lines.push("")));
 				lines.push("");
 				options.forEach((o, i) => lines.push(truncateToWidth(i === index ? theme.fg("accent", ` → ${o}`) : theme.fg("text", `   ${o}`), width)));
 				lines.push("");
@@ -124,6 +126,80 @@ export function webInput(ctx: any, title: string, placeholder?: string): Promise
 			},
 			handleInput(data: string) {
 				if (matchesKey(data, Key.enter)) return finish(editor.getText().trim() || undefined);
+				if (matchesKey(data, Key.escape)) return finish(undefined);
+				editor.handleInput(data);
+				tui.requestRender();
+			},
+		};
+	});
+}
+
+export const READ_BUTTON = "Read it, ask me";
+
+/**
+ * A reading (lesson_read): the text, one button "Read it, ask me", and a box
+ * for a question. Resolves { read: true } on the button / Enter / a typed
+ * "ready", { question } when he types anything else, undefined on Esc.
+ */
+export function webRead(ctx: any, r: { title: string; body: string; figure?: string }): Promise<{ read: true } | { read: false; question: string } | undefined> {
+	const id = `read${Date.now().toString(36)}`;
+	type Out = { read: true } | { read: false; question: string } | undefined;
+	return ctx.ui.custom((tui: any, theme: any, _kb: any, done: (o: Out) => void) => {
+		const editor = new Editor(tui, editorTheme(theme));
+		editor.focused = true;
+		editor.disableSubmit = true;
+		let finished = false;
+		const finish = (o: Out) => {
+			if (finished) return;
+			finished = true;
+			setPending(undefined);
+			done(o);
+		};
+		const fromText = (t: string): Out => (!t || isReady(t) || /^read( it)?$/i.test(t) ? { read: true } : { read: false, question: t });
+		setPending({
+			id,
+			kind: "read",
+			prompt: `## ${r.title}\n\n${r.body}`,
+			figure: r.figure,
+			startedAt: Date.now(),
+			options: [{ index: 1, label: READ_BUTTON }],
+			answer: (a: PromptAnswer) => {
+				if (a.choices?.[0] === 1) {
+					finish({ read: true });
+					return true;
+				}
+				const t = (a.text ?? "").trim();
+				if (!t) return false;
+				finish(fromText(t));
+				return true;
+			},
+		});
+		return {
+			render(width: number) {
+				const lines: string[] = [];
+				lines.push(truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
+				lines.push(truncateToWidth(theme.fg("accent", ` Reading — ${r.title}`), width));
+				lines.push("");
+				for (const para of plainMath(r.body).split("\n")) {
+					if (!para.trim()) lines.push("");
+					else wrap(lines, theme.fg("text", para), width);
+				}
+				if (r.figure) {
+					lines.push("");
+					wrap(lines, theme.fg("dim", `Figure: ${r.figure} (on the page and in the note)`), width);
+				}
+				lines.push("");
+				for (const l of editor.render(Math.max(1, width - 2))) lines.push(l);
+				lines.push("");
+				lines.push(truncateToWidth(theme.fg("dim", ` Enter (empty) or "ready" = ${READ_BUTTON} · type a question + Enter to discuss · Esc cancel · or tap it on the pad`), width));
+				lines.push(truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
+				return lines;
+			},
+			invalidate() {
+				editor.invalidate();
+			},
+			handleInput(data: string) {
+				if (matchesKey(data, Key.enter)) return finish(fromText(editor.getText().trim()));
 				if (matchesKey(data, Key.escape)) return finish(undefined);
 				editor.handleInput(data);
 				tui.requestRender();

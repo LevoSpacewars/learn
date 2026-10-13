@@ -31,7 +31,25 @@ import { type GradeResult, grade } from "./review/grader.ts";
 import { gradeCard, refreshReviewStatus } from "./review/index.ts";
 import { plainMath } from "./review/plainmath.ts";
 import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
-import { type CheckKind, recordCalibration, recordEvent } from "./review/store.ts";
+import {
+	type Pedagogy,
+	QUICK_GUESS,
+	armReading,
+	creditReading,
+	floorReason,
+	gateReason,
+	isReady,
+	markRead,
+	pedagogy,
+	predictReason,
+	readBodyReason,
+	readingReason,
+	readyAnswered,
+	recordOutcome,
+	resetPedagogy,
+} from "./review/pedagogy.ts";
+import { type CheckKind, loadLearner, recordCalibration, recordEvent } from "./review/store.ts";
+import { webRead } from "./review/ui.ts";
 
 type RecallStatus = "answered" | "hint" | "dontKnow" | "skipped" | "ended" | "cancelled" | "unavailable" | "blocked";
 type Modality = "typed" | "photo" | "audio";
@@ -56,6 +74,8 @@ interface RecallDetails {
 	cardId?: string;
 	cardRating?: string;
 	message?: string;
+	say?: string; // shown to the learner above the question
+	banner?: string; // fixed framing line (predict: quick guess)
 }
 
 const KIND_LABEL: Record<CheckKind, string> = {
@@ -96,6 +116,23 @@ const RecallParams = Type.Object({
 	paper: Type.Optional(Type.Boolean({ description: "Suggest working on paper and sending a photo (default true for 'problem')." })),
 	rubric: Type.Optional(Type.String({ description: "Extra grading guidance for the grader, one line." })),
 	retention: Type.Optional(Type.Boolean({ description: "True when review_due marked this card RETENTION CHECK (unannounced long-delay test). Recorded as the outcome metric." })),
+	say: Type.Optional(
+		Type.String({
+			description:
+				"1-3 lines shown to the learner ABOVE the question (LaTeX math): your diagnosis of the last miss, or the one line of framing he needs. Your thinking is invisible to him; this is how a diagnosis reaches him. Counts as text written since the last miss.",
+		}),
+	),
+});
+
+const ReadParams = Type.Object({
+	slug: Type.String({ description: "Lesson slug (as in lesson_plan)." }),
+	node: Type.String({ description: "Node id this reading teaches (as in lesson_plan)." }),
+	title: Type.String({ description: "Section title, a few words (e.g. 'Why the slice probability is k dt')." }),
+	body: Type.String({
+		description:
+			"The reading, markdown + LaTeX ($...$, $$...$$), at least 1200 characters: a textbook page, not a paragraph. (1) Why we need this node now. (2) The derivation or guided derivation, every move motivated (how could he have discovered it?). (3) ONE worked instance with concrete numbers, each step with its reason. (4) What it hangs off: the earlier node or handle he already owns.",
+	}),
+	figure: Type.Optional(Type.String({ description: "Optional figure under viz/ (e.g. viz/decay.svg, from the plot tool), shown under the text." })),
 });
 
 function createEditorTheme(theme: any): EditorTheme {
@@ -134,7 +171,7 @@ interface UiOutcome {
 
 async function askRecall(
 	ctx: any,
-	opts: { kind: CheckKind; prompt: string; paper: boolean; reference: string; runGrade: (a: PromptAnswer, confidence: number) => Promise<GradeResult> },
+	opts: { kind: CheckKind; prompt: string; paper: boolean; reference: string; say?: string; banner?: string; runGrade: (a: PromptAnswer, confidence: number) => Promise<GradeResult> },
 ): Promise<UiOutcome> {
 	const startedAt = Date.now();
 	const promptId = `p${startedAt.toString(36)}`;
@@ -213,7 +250,7 @@ async function askRecall(
 				});
 		}
 
-		setPending({ id: promptId, kind: opts.kind, prompt: opts.prompt, paper: opts.paper, startedAt, answer: receive });
+		setPending({ id: promptId, kind: opts.kind, prompt: opts.prompt, paper: opts.paper, say: opts.say, banner: opts.banner, startedAt, answer: receive });
 
 		function handleInput(data: string) {
 			if (phase === "answer") {
@@ -285,7 +322,12 @@ async function askRecall(
 			add(theme.fg("accent", "─".repeat(width)));
 			add(theme.fg("accent", ` ${KIND_LABEL[opts.kind]}`) + (opts.paper ? theme.fg("dim", "  · work on paper and send a photo from your phone, or type") : ""));
 			lines.push("");
+			if (opts.say) {
+				addWrapped(lines, theme.fg("muted", plainMath(opts.say)), width, " ");
+				lines.push("");
+			}
 			addWrapped(lines, theme.fg("text", plainMath(opts.prompt)), width, " ");
+			if (opts.banner) addWrapped(lines, theme.fg("warning", opts.banner), width, " ");
 			lines.push("");
 			if (phase === "answer") {
 				if (showQr) {
@@ -367,57 +409,11 @@ function result(text: string, details: RecallDetails) {
 	return { content: [{ type: "text" as const, text }], details };
 }
 
-// ---------- pedagogy gate ----------
-// The teach skill says: after a miss, diagnose and drill down before testing
-// again; after two misses, teach (a worked example) before testing again. The
-// model ignores that under pressure, so the tool enforces it: it counts the
-// assistant text written since the last miss and refuses a new recall until
-// enough has been said. State lives on globalThis (one instance per extension
-// file otherwise) so a future extension can read it too.
-interface Pedagogy {
-	floorNeeded?: boolean; // new material: the learner gets to discuss before the first question
-	missStreak: number; // consecutive partial/incorrect/dontKnow verdicts
-	sinceMissChars: number; // assistant prose written since the last miss
-	lastMiss?: { prompt: string; firstError?: string; verdict: string };
-}
-function pedagogy(): Pedagogy {
-	const g = globalThis as any;
-	if (!g.__learnPedagogy) g.__learnPedagogy = { missStreak: 0, sinceMissChars: 0 } satisfies Pedagogy;
-	return g.__learnPedagogy as Pedagogy;
-}
-/** Sub-questions in a prompt: numbered lines, plus bullet lines that ask something. */
-export function countParts(prompt: string): number {
-	const numbered = prompt.match(/^\s*\d+[.)]\s+/gm)?.length ?? 0;
-	const bullets = prompt.match(/^\s*[-*•]\s+.*(\?|=\s*\?)\s*$/gm)?.length ?? 0;
-	return Math.max(1, numbered + bullets);
-}
-/** The learner said they are ready for the first question. */
-const READY = /^\s*(?:ok(?:ay)?[,!. ]*)?(?:go|ready|start|begin|i'?m ready|let'?s (?:go|start|begin|do it)|ask (?:me )?(?:the |a )?(?:first )?question|first question|no(?:pe)?,? (?:questions?|i'?m good)|ready[^a-z]*ask|ready)(?![a-z'])/i;
-export function isReady(text: string): boolean {
-	return READY.test(text.trim());
-}
-export const FLOOR_MESSAGE =
-	"Blocked: this is new material, and he gets to discuss it before the first question. Introduce what we are about to learn in a few lines (what it is, why it matters for his goal, what it hangs off), then call ask_user_question with the question \"Anything you want to discuss before the first question?\" and options \"Ready, ask the first question\" and \"I want to discuss first\" (he can also type his own question). If he discusses, answer him, then offer the same choice again with ask_user_question. Pose the first recall only after he picks ready.";
-export function floorReason(p: Pedagogy): string | undefined {
-	return p.floorNeeded ? FLOOR_MESSAGE : undefined;
-}
-const DIAGNOSE_CHARS = 60; // "one to three lines" of diagnosis
-const TEACH_CHARS = 350; // a worked example, not a sentence
-/** Why the next recall may not be posed yet, or undefined if it may. */
-export function gateReason(p: Pedagogy, prompt: string): string | undefined {
-	if (p.missStreak === 0) return undefined;
-	if (p.missStreak >= 2 && p.sinceMissChars < TEACH_CHARS) {
-		return `Blocked: that is ${p.missStreak} misses in a row and you have not taught since the last one (${p.sinceMissChars} characters of text). Testing again now would be a third miss. Before the next recall, write a WORKED EXAMPLE of exactly the step that failed (${p.lastMiss?.firstError ?? "see the grader's first error"}): every move with its reason, using concrete numbers. Then pose a completion problem: the same structure with one blank for him to fill.`;
-	}
-	if (p.sinceMissChars < DIAGNOSE_CHARS) {
-		return `Blocked: the last answer was a miss and you have said nothing since (${p.sinceMissChars} characters). First, in one to three lines, tell him what went wrong and why (not the grader's words: yours, and what the right move was). Then, in the SAME turn, call recall with a narrower question on that one step. Never ask it as plain text: he answers on the web page, which only has an answer box while a recall is open.`;
-	}
-	const parts = countParts(prompt);
-	if (parts > 2) {
-		return `Blocked: after a miss, drill down. This prompt has ${parts} parts; pose ONE step (at most two parts) on exactly what failed (${p.lastMiss?.firstError ?? "the first error"}). Multi-part questions after a miss hide which step is broken.`;
-	}
-	return undefined;
-}
+// ---------- pedagogy gates ----------
+// The gates (open floor, reading, miss/diagnose/teach, predict) live in
+// review/pedagogy.ts so quiz.ts shares the same globalThis state. Re-exported
+// here for the tests and older imports.
+export { FLOOR_MESSAGE, countParts, floorReason, gateReason, isReady } from "./review/pedagogy.ts";
 
 // ---------- turn-end guard ----------
 // The tutor sometimes stops on a question written as prose ("Say go when you're
@@ -435,7 +431,48 @@ function lastAssistant(messages: any[]): any | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) if (messages[i]?.role === "assistant") return messages[i];
 	return undefined;
 }
-const PROMPT_TOOLS = new Set(["recall", "quiz", "ask_user_question"]);
+const PROMPT_TOOLS = new Set(["recall", "quiz", "ask_user_question", "lesson_read"]);
+
+/** Every refusal recall applies before posing, in order. Predict is a pretest: it comes before the reading. */
+export function recallBlock(p: Pedagogy, o: { kind: CheckKind; prompt: string; paper?: boolean; say?: string }): string | undefined {
+	if (o.kind === "predict") {
+		const r = predictReason(o.prompt, o.paper);
+		if (r) return r;
+	}
+	return (o.kind === "predict" ? undefined : readingReason(p)) ?? floorReason(p) ?? gateReason(p, o.prompt, o.say?.length ?? 0);
+}
+
+/** After lesson_plan / lesson_node: the first pending node of the lesson needs a reading. */
+function armForLesson(p: Pedagogy, cwd: string, slug: string): void {
+	try {
+		const lesson = loadLearner(cwd).lessons.find((l) => l.slug === slug);
+		armReading(p, slug, lesson?.nodes.find((n) => n.status === "pending")?.id);
+	} catch {
+		// unreadable learner file: no gate rather than a stuck lesson
+	}
+}
+
+/** A figure for lesson_read: a file under viz/ inside the vault. */
+function figurePath(cwd: string, fig: string | undefined): { rel?: string; error?: string } {
+	if (!fig?.trim()) return {};
+	const rel = fig.trim().replace(/^\.?\/+/, "").replace(/^!\[\[|\]\]$/g, "").split("|")[0];
+	const abs = path.resolve(cwd, rel);
+	if (!rel.startsWith("viz/") || !abs.startsWith(path.resolve(cwd, "viz") + path.sep)) return { error: `figure must be a path under viz/ (got "${fig}")` };
+	if (!fs.existsSync(abs)) return { error: `figure ${rel} does not exist; make it first (plot tool) or drop the figure` };
+	return { rel };
+}
+
+interface ReadDetails {
+	status: "read" | "question" | "refused" | "cancelled" | "unavailable";
+	phase?: "shown";
+	slug: string;
+	node: string;
+	title: string;
+	body: string;
+	figure?: string;
+	question?: string;
+	message?: string;
+}
 
 export default function recall(pi: ExtensionAPI) {
 	if (process.env.PI_SUBAGENT_AGENT) return;
@@ -496,30 +533,36 @@ export default function recall(pi: ExtensionAPI) {
 		if (chars) pedagogy().sinceMissChars += chars;
 	});
 	pi.on("session_start", async () => {
-		const p = pedagogy();
-		p.missStreak = 0;
-		p.sinceMissChars = 0;
-		p.lastMiss = undefined;
-		p.floorNeeded = false;
+		resetPedagogy();
 	});
 
-	// Open floor before new material: a teach session start, an approved plan
-	// (teaching begins), or a finished node (the next one is new) all mean the
-	// next question would be the first on something new. The learner's "ready"
-	// (typed, or picked in ask_user_question) lifts it; discussion does not.
+	// Open floor at the start of a teach session: the learner gets to discuss
+	// before the first question. His "ready" (typed, or picked in
+	// ask_user_question) lifts it; discussion does not.
 	pi.on("before_agent_start", async (event) => {
 		const prompt = String((event as any).prompt ?? "");
-		if (/<skill name="teach"/.test(prompt) || /^\s*\/skill:teach\b/.test(prompt)) pedagogy().floorNeeded = true;
-		else if (/<skill name="review"/.test(prompt) || /^\s*\/skill:review\b/.test(prompt)) pedagogy().floorNeeded = false; // review is not new material
-		else if (isReady(prompt)) pedagogy().floorNeeded = false;
+		const p = pedagogy();
+		if (/<skill name="teach"/.test(prompt) || /^\s*\/skill:teach\b/.test(prompt)) p.floorNeeded = true;
+		else if (/<skill name="review"/.test(prompt) || /^\s*\/skill:review\b/.test(prompt)) {
+			p.floorNeeded = false; // review is not new material
+			p.readNeeded = undefined;
+		} else if (isReady(prompt)) readyAnswered(p);
 	});
-	pi.on("tool_result", async (event) => {
+	// Reading gate: an approved plan, or a finished node, means the next check
+	// would be the first on a new node. That node must be READ first
+	// (lesson_read + the learner's tap). This replaces re-arming the open floor
+	// here: one "ready" per node, never two.
+	pi.on("tool_result", async (event, ctx) => {
 		const e = event as any;
 		const name = e.toolName;
-		if (name === "lesson_plan" || (name === "lesson_node" && e.input?.status === "confirmed")) pedagogy().floorNeeded = true;
+		const p = pedagogy();
+		if (!e.isError && (name === "lesson_plan" || (name === "lesson_node" && (e.input?.status === "confirmed" || e.input?.status === "shaky")))) {
+			const slug = String(e.details?.slug ?? e.input?.slug ?? "");
+			if (slug) armForLesson(p, (ctx as any)?.cwd ?? process.cwd(), slug);
+		}
 		if (name === "ask_user_question") {
 			const answers: any[] = e.details?.answers ?? [];
-			if (answers.some((a) => isReady(String(a?.label ?? "")))) pedagogy().floorNeeded = false;
+			if (answers.some((a) => isReady(String(a?.label ?? "")))) readyAnswered(p);
 		}
 	});
 
@@ -539,11 +582,14 @@ export default function recall(pi: ExtensionAPI) {
 		async execute(_id, params, _signal, onUpdate, ctx) {
 			const kind = (params.kind ?? "recall") as CheckKind;
 			const paper = params.paper ?? kind === "problem";
-			const base: RecallDetails = { status: "unavailable", kind, prompt: params.prompt, paper, topic: params.topic, cardId: params.cardId };
+			const say = params.say?.trim() || undefined;
+			const banner = kind === "predict" ? QUICK_GUESS : undefined;
+			const base: RecallDetails = { status: "unavailable", kind, prompt: params.prompt, paper, topic: params.topic, cardId: params.cardId, say, banner };
 			const ped = pedagogy();
-			const blocked = floorReason(ped) ?? gateReason(ped, params.prompt);
+			const blocked = recallBlock(ped, { kind, prompt: params.prompt, paper: params.paper, say });
 			if (blocked) return result(blocked, { ...base, status: "blocked", message: blocked });
 			if (!ctx.hasUI) return result("recall requires interactive mode UI", { ...base, message: "no UI" });
+			if (say) ped.sinceMissChars += say.length; // he reads it above the question
 
 			onUpdate?.({ content: [{ type: "text", text: "asked" }], details: { ...base, phase: "asked" } });
 
@@ -553,6 +599,8 @@ export default function recall(pi: ExtensionAPI) {
 				prompt: params.prompt,
 				paper,
 				reference: params.reference,
+				say,
+				banner,
 				runGrade: (a, confidence) =>
 					grade({
 						cwd: ctx.cwd,
@@ -584,6 +632,7 @@ export default function recall(pi: ExtensionAPI) {
 				ped.missStreak = 0;
 				ped.sinceMissChars = 0;
 				ped.lastMiss = undefined;
+				ped.readSinceMiss = false;
 				let started = "";
 				try {
 					started = (globalThis as any).__learnStartLesson?.(ctx) ?? "";
@@ -603,6 +652,7 @@ export default function recall(pi: ExtensionAPI) {
 				ped.missStreak = 0;
 				ped.sinceMissChars = 0;
 				ped.lastMiss = undefined;
+				ped.readSinceMiss = false;
 				return result(
 					"Learner SKIPPED this check: he wants to learn something new now. Do NOT re-pose it, a variant, or a drill-down, and don't ask whether he wants to continue. Note it and move on: if this was a node's check, lesson_node with status shaky; if no review card covers the idea, save one with review_add_cards (that is where it gets tested, later). Then go straight to teaching the next new idea. If he skips twice in a row, check in once with ask_user_question about the pace (more explanation, fewer checks?).",
 					details,
@@ -617,9 +667,7 @@ export default function recall(pi: ExtensionAPI) {
 			}
 			if (outcome.status === "dontKnow") {
 				logEvent("dontKnow");
-				ped.missStreak += 1;
-				ped.sinceMissChars = 0;
-				ped.lastMiss = { prompt: params.prompt, verdict: "dontKnow" };
+				recordOutcome(ped, { correct: false, prompt: params.prompt, verdict: "dontKnow" });
 				if (params.cardId) {
 					const g = gradeCard(ctx.cwd, { id: params.cardId, rating: "again", note: "I don't know", check: kind, modality: "typed", latencyMs: outcome.latencyMs });
 					details.cardRating = g.rating;
@@ -635,14 +683,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (g) {
 				Object.assign(details, { verdict: g.verdict, score: g.score, reading: g.reading, firstError: g.firstError, feedback: g.feedback });
 				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading, confidence });
-				if (g.verdict === "correct") {
-					ped.missStreak = 0;
-					ped.lastMiss = undefined;
-				} else {
-					ped.missStreak += 1;
-					ped.sinceMissChars = 0;
-					ped.lastMiss = { prompt: params.prompt, firstError: g.firstError, verdict: g.verdict };
-				}
+				recordOutcome(ped, { correct: g.verdict === "correct", prompt: params.prompt, verdict: g.verdict, firstError: g.firstError });
 				try {
 					recordCalibration(ctx.cwd, { topic: params.topic, confidence, correct: g.verdict === "correct", source: "recall", check: kind, cardId: params.cardId, latencyMs: outcome.latencyMs });
 				} catch {
@@ -670,9 +711,9 @@ export default function recall(pi: ExtensionAPI) {
 							`Grader feedback (already shown to learner): ${g.feedback}`,
 							g.verdict !== "correct" && confidence >= 70 ? "HIGH-CONFIDENCE MISS: give richer feedback on the mechanism and re-test this soon." : "",
 							g.verdict !== "correct" && ped.missStreak >= 2
-								? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers), then, in the SAME turn, call recall with a completion problem (one blank). The next recall is refused until the worked example is written. Never end your turn on a question written as plain text: he cannot answer it from the web page.`
+								? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers): call lesson_read with it (slug, node, title, body), or write it as chat text of at least 350 characters; your thinking is invisible to him. Then call recall with a completion problem (one blank). The next recall is refused until the worked example is visible to him. Never end your turn on a question written as plain text: he cannot answer it from the web page.`
 								: g.verdict !== "correct"
-									? "NEXT STEP (enforced): in 1-3 lines say what went wrong and why (your words, and what the right move was). Then drill down with ONE narrower recall (at most two parts) on exactly the step that failed. Write the diagnosis and call recall in the SAME turn; never ask the follow-up as plain text (the web page has no answer box without an open recall). A multi-part prompt, or a prompt with no text before it, is refused. Do not move to a different strand until he has had another go at this one."
+									? "NEXT STEP (enforced): drill down with ONE narrower recall (at most two parts) on exactly the step that failed, and put your diagnosis in its `say` field (1-3 lines: what went wrong and why, in your words, and what the right move was; your thinking is invisible to him). Never ask the follow-up as plain text (the web page has no answer box without an open recall). A multi-part prompt, or one with no diagnosis he can read, is refused. Do not move to a different strand until he has had another go at this one."
 									: "",
 							g.verdict !== "correct" && g.firstError && /slip|instead of|dropped|off by|should be|mislabel|complement|sign|factor|width/i.test(g.firstError)
 								? "ATTENTION-TO-DETAIL: the first error looks like a slip inside otherwise-right working. Consider kind 'flaw' with HIS OWN line as the argument (\"Here is your step 1: ... Is it right? If not, where does it go wrong?\") so he finds it himself."
@@ -692,7 +733,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (!d) return new Text(theme.fg("dim", "recall"), 0, 0);
 			if (d.phase === "asked") return new Text(theme.fg("dim", "awaiting answer…"), 0, 0);
 			if (d.status === "unavailable") return new Text(theme.fg("warning", d.message || "recall unavailable"), 0, 0);
-			if (d.status === "blocked") return new Text(theme.fg("warning", "refused: teach before re-testing"), 0, 0);
+			if (d.status === "blocked") return new Text(theme.fg("warning", `refused: ${(d.message ?? "").replace(/^(Blocked|Refused): /, "").slice(0, 90)}`), 0, 0);
 			if (d.status === "hint") return new Text(theme.fg("warning", "hint requested"), 0, 0);
 			if (d.status === "skipped") return new Text(theme.fg("dim", "skipped: moving on"), 0, 0);
 			if (d.status === "ended") return new Text(theme.fg("accent", "recall ended: starting the lesson"), 0, 0);
@@ -701,6 +742,66 @@ export default function recall(pi: ExtensionAPI) {
 			const color = d.verdict === "correct" ? "success" : d.verdict === "partial" ? "warning" : "error";
 			const head = theme.fg(color, `${d.verdict ?? "ungraded"} ${d.score !== undefined ? Math.round(d.score * 100) + "%" : ""}`) + theme.fg("dim", ` · conf ${d.confidence}% · ${Math.round((d.latencyMs ?? 0) / 1000)}s · ${d.modality}`);
 			return new Text(expanded && d.feedback ? `${head}\n${d.feedback}` : head, 0, 0);
+		},
+	});
+
+	pi.registerTool({
+		name: "lesson_read",
+		label: "lesson read",
+		description:
+			"Give the learner a READING for a new node: a textbook page (markdown + LaTeX, at least 1200 characters) with the motivated derivation, one worked instance with every move explained, and what it hangs off. It is written into the lesson note as a section and shown on his page with one button, \"Read it, ask me\"; he can also type a question. After lesson_plan, and after each node is confirmed, the next recall/quiz is refused until the current node's reading has been read. Also the way to teach a worked example after two misses.",
+		promptSnippet: "Use lesson_read to teach each new node as a readable section (derivation + worked instance) before testing it.",
+		promptGuidelines: [
+			"Your thinking is invisible to the learner. Anything he must read (derivations, worked examples, the plan) goes in lesson_read, chat text, or a tool's `say` field.",
+			"One lesson_read per node, before its check. If he types a question instead of tapping the button, answer it in chat text, then offer ask_user_question with a ready option; do not call lesson_read again for that node.",
+		],
+		parameters: ReadParams,
+		async execute(_id, params, _signal, onUpdate, ctx) {
+			const body = params.body.trim();
+			const title = params.title.trim() || params.node;
+			const base: ReadDetails = { status: "refused", slug: params.slug, node: params.node, title, body };
+			const short = readBodyReason(body);
+			if (short) return { content: [{ type: "text" as const, text: short }], details: { ...base, message: short } };
+			const fig = figurePath(ctx.cwd, params.figure);
+			if (fig.error) return { content: [{ type: "text" as const, text: `Refused: ${fig.error}.` }], details: { ...base, message: fig.error } };
+			if (!ctx.hasUI) return { content: [{ type: "text" as const, text: "lesson_read requires interactive mode UI" }], details: { ...base, status: "unavailable" as const } };
+			const shown: ReadDetails = { ...base, status: "read", phase: "shown", figure: fig.rel };
+			onUpdate?.({ content: [{ type: "text", text: "reading shown" }], details: shown });
+			const out = await withUILock(() => webRead(ctx, { title, body, figure: fig.rel }));
+			const p = pedagogy();
+			if (!out) {
+				return { content: [{ type: "text" as const, text: "He closed the reading without marking it read (Esc). Ask what he'd like to do with ask_user_question." }], details: { ...shown, phase: undefined, status: "cancelled" as const } };
+			}
+			if (out.read) {
+				markRead(p, params.slug, params.node, body.length);
+				return {
+					content: [{ type: "text" as const, text: `He read "${title}" and tapped "Read it, ask me". Pose the node's check now (recall / quiz). Do not ask whether he is ready: he already said go.` }],
+					details: { ...shown, phase: undefined, status: "read" as const },
+				};
+			}
+			creditReading(p, body.length);
+			p.readNeeded = { slug: params.slug, node: params.node, shown: true };
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `He has a question about the reading instead of marking it read:\n"${out.question}"\nAnswer it properly in chat text (he cannot see your thinking). Then call ask_user_question ("Ready for the question?" with options "Ready, ask me" and "I have another question"). His ready unlocks the check; do NOT call lesson_read again for this node.`,
+					},
+				],
+				details: { ...shown, phase: undefined, status: "question" as const, question: out.question },
+			};
+		},
+		renderCall(args: any, theme: any) {
+			return new Text(theme.fg("dim", `reading · ${args?.title ?? args?.node ?? ""}`), 0, 0);
+		},
+		renderResult(res: any, _o: any, theme: any) {
+			const d = res.details as ReadDetails | undefined;
+			if (!d) return new Text(theme.fg("dim", "reading"), 0, 0);
+			if (d.phase === "shown") return new Text(theme.fg("dim", "reading…"), 0, 0);
+			if (d.status === "refused") return new Text(theme.fg("warning", `refused: ${(d.message ?? "").slice(0, 90)}`), 0, 0);
+			if (d.status === "question") return new Text(theme.fg("accent", `question: ${d.question ?? ""}`), 0, 0);
+			if (d.status === "read") return new Text(theme.fg("success", "read ✓"), 0, 0);
+			return new Text(theme.fg("dim", d.status), 0, 0);
 		},
 	});
 }

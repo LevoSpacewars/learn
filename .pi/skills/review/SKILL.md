@@ -5,6 +5,8 @@ description: Run a spaced review session over due review cards — pose each car
 
 # Review
 
+**Your thinking is invisible to him.** Anything he must read (a repair, a worked example, a diagnosis) goes in chat text, a tool's `say` field, or `lesson_read`. Whatever you write only in your thinking never reaches him, and the tools do not count it.
+
 Spaced review brings back what was learned in past lessons right before it would be forgotten. Your job is to make each retrieval *effortful and honest*, let the independent grader score it, repair any gap you find — briefly — and keep going until every missed card has been recalled once (successive relearning). Interleaving is built in: cards arrive mixed across topics, and **you never say which topic a card is from** — choosing the method is part of the task.
 
 The session opens with a hidden `<learner>` message (open misconceptions, calibration, cards due) and a first user message with the time budget. Read both; then start.
@@ -13,6 +15,7 @@ The session opens with a hidden `<learner>` message (open misconceptions, calibr
 
 1. Call `review_due` (pass the topic only if one was given). It returns the session mode, a mixed batch of due cards, and for **each card the CHECK assigned for this session**: `recall`, `problem`, `flaw`, or `transfer`. The extension decides; you execute. Keep a session to roughly the budget, ~10–20 cards by default.
 2. For each card, **pose it with `recall` — never reveal the BACK first**, and pass `cardId` so the card is graded automatically:
+   - Never rely on a single qualifier word to carry the structure ("nothing else leaves B"); state it explicitly ("B has exactly two exits: to A at 3/s and to C at 1/s").
    - **recall** — rephrase the FRONT so the wording itself isn't the cue; he types the answer (or photographs it). `quiz` only when the idea genuinely has crisp, diagnostic distractors (see the teach skill's construction procedure) — recognition inflates grades, so this is rare.
    - **problem** — generate a *fresh variant* (new numbers, new setup) of the problem described in the card — never the identical instance twice, or he memorizes the answer instead of the method. `paper: true`; typed is fine if he prefers.
    - **flaw** — do NOT ask the question. Present a confident, plausible answer or derivation for the FRONT with ONE planted error and ask "Is this right? If not, where does it go wrong?" The `reference` states the planted error exactly. Accepting it is a miss. Only stable, well-known cards get this, and it is deliberately unannounced.

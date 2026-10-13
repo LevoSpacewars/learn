@@ -79,6 +79,16 @@ main { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr
 .timer { float:right; font-variant-numeric:tabular-nums; color:var(--muted); font-size:14px; }
 .prompt { margin-top:8px; font-size:17px; } .prompt p { margin:0 0 8px; } .prompt p:last-child { margin:0; }
 .idle { color:var(--muted); text-align:center; padding:18px 0; }
+/* the tutor's 1-3 lines above a question (recall/quiz `say`) */
+.say { margin:0 0 10px; padding:8px 12px; border-left:3px solid var(--accent); background:var(--soft); border-radius:8px; font-size:15.5px; } .say p { margin:0 0 6px; } .say p:last-child { margin:0; }
+/* fixed framing line on the card (predict: quick guess) */
+.banner { margin-top:10px; padding:7px 12px; border-radius:8px; border:1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); background:color-mix(in srgb, var(--warn) 10%, var(--card)); color:var(--fg); font-size:14px; font-weight:600; }
+/* a reading (lesson_read): a textbook page on the card */
+#qcard.reading .prompt { font-family: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-size:17px; line-height:1.6; }
+#qcard.reading .prompt h2 { font-family:-apple-system, system-ui, sans-serif; font-size:19px; margin:4px 0 10px; }
+#qcard.reading .prompt p { margin:0 0 12px; } #qcard.reading .prompt .katex-display { margin:12px 0 14px; overflow-x:auto; overflow-y:hidden; }
+#qcard.reading .prompt img { max-width:100%; display:block; margin:10px auto; }
+#quiz button.readbtn { justify-content:center; text-align:center; background:var(--accent); border-color:var(--accent); color:#fff; font-size:17px; }
 .opts { display:flex; flex-direction:column; gap:8px; }
 .opts button { text-align:left; justify-content:flex-start; min-height:48px; padding:10px 12px; }
 .opts button.sel { border-color:var(--accent); background:var(--soft); }
@@ -137,7 +147,7 @@ body.role-scratch #draw { display:flex !important; flex:1; min-height:0; }
 body.role-scratch .scratch-host { flex:1; min-height:0; height:auto; }
 body.role-scratch .draw.on { flex:1; min-height:0; }
 body.role-scratch #result { position:fixed; left:10px; right:10px; bottom:90px; z-index:6; box-shadow:0 8px 30px rgba(0,0,0,.25); }
-body.role-scratch #quiz { display:none !important; }
+body.role-scratch #quiz:not(.readq) { display:none !important; }
 body.role-scratch #actions { grid-template-columns: 1fr; }
 </style>
 </head><body class="view-pad">
@@ -152,8 +162,10 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   <section id="lesson"><div class="idle">No lesson open yet.</div></section>
   <section id="pad">
     <div id="qcard" class="card">
+      <div id="say" class="say hidden"></div>
       <span id="kind" class="kind"></span><span id="timer" class="timer"></span>
       <div id="prompt" class="prompt"></div>
+      <div id="banner" class="banner hidden"></div>
       <div id="idle" class="idle">Waiting for the tutor. Menus, questions and answers all appear here.</div>
     </div>
     <div id="result" class="card result hidden"></div>
@@ -305,13 +317,14 @@ $("tabPad").onclick = () => { document.body.className = "view-pad"; $("tabPad").
 // ---------- prompt ----------
 function setStatus(msg, cls) { $("status").textContent = msg || ""; $("status").className = "status " + (cls || ""); }
 function fmt(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
-const KIND = { recall: "Recall", explain: "Explain it back", predict: "Predict", boundary: "Boundary", flaw: "Find the flaw", transfer: "Transfer", problem: "Problem", quiz: "Quiz", menu: "Choose", input: "Your turn", ask: "Question" };
-const isChoice = (p) => p && (p.kind === "quiz" || p.kind === "menu" || p.kind === "ask");
-const isGraded = (p) => p && !["menu", "input", "ask"].includes(p.kind);
+const KIND = { recall: "Recall", explain: "Explain it back", predict: "Predict", boundary: "Boundary", flaw: "Find the flaw", transfer: "Transfer", problem: "Problem", quiz: "Quiz", menu: "Choose", input: "Your turn", ask: "Question", read: "Reading" };
+const UNGRADED = ["menu", "input", "ask", "read"];
+const isChoice = (p) => p && (p.kind === "quiz" || p.kind === "menu" || p.kind === "ask" || p.kind === "read");
+const isGraded = (p) => p && !UNGRADED.includes(p.kind);
 function hasAnswer() {
   if (!pending) return false;
   if (pending.kind === "input") return !!$("text").value.trim();
-  if (pending.kind === "ask") return selected.size > 0 || !!$("text").value.trim();
+  if (pending.kind === "ask" || pending.kind === "read") return selected.size > 0 || !!$("text").value.trim();
   if (pending.kind === "quiz" || pending.kind === "menu") return role !== "scratch" && selected.size > 0;
   if (mode === "draw") return pages.some((p) => p.strokes.length);
   return !!(files.length || audio || $("text").value.trim());
@@ -321,7 +334,7 @@ function updateButtons() {
   const scratchFree = role === "scratch" && !pending && pages.some((p) => p.strokes.length);
   const waitConf = pending && hasAnswer() && needsConf();
   $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer() || needsConf());
-  $("send").textContent = waitConf ? "Set confidence to send" : pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
+  $("send").textContent = waitConf ? "Set confidence to send" : pending && pending.kind === "read" ? "Ask about it" : pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
   for (const id of ["hint", "idk", "skip", "endrecall", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
   $("endrecall").classList.toggle("hidden", !pending || !isGraded(pending) || pending.kind === "quiz");
   $("skip").classList.toggle("hidden", !pending || !isGraded(pending) || pending.kind === "quiz");
@@ -331,6 +344,10 @@ function updateButtons() {
 }
 function showPrompt(p) {
   $("kind").textContent = KIND[p.kind] || p.kind; $("prompt").innerHTML = renderMd(p.prompt + (p.context ? "\n\n" + p.context : ""));
+  if (p.figure) { const img = document.createElement("img"); img.src = api("/file?p=" + encodeURIComponent(p.figure)); img.alt = p.figure; $("prompt").appendChild(img); }
+  $("say").classList.toggle("hidden", !p.say); $("say").innerHTML = p.say ? renderMd(p.say) : "";
+  $("banner").classList.toggle("hidden", !p.banner); $("banner").textContent = p.banner || "";
+  $("qcard").classList.toggle("reading", p.kind === "read"); document.querySelector("#answer .modes").classList.toggle("hidden", p.kind === "read");
   $("idle").classList.add("hidden"); $("prompt").classList.remove("hidden"); $("kind").classList.remove("hidden");
   $("qcard").classList.remove("collapsed");
   $("result").classList.add("hidden");
@@ -338,15 +355,18 @@ function showPrompt(p) {
   if (p.kind === "input") {
     $("quiz").classList.add("hidden"); $("answer").classList.remove("hidden"); setMode("type"); $("text").placeholder = p.context || "Type here…";
   } else if (isChoice(p)) {
-    $("answer").classList.toggle("hidden", p.kind !== "ask"); $("quiz").classList.remove("hidden"); $("quiz").innerHTML = ""; selected = new Set();
+    $("answer").classList.toggle("hidden", p.kind !== "ask" && p.kind !== "read"); $("quiz").classList.remove("hidden"); $("quiz").innerHTML = ""; selected = new Set();
     if (p.kind === "ask") { setMode("type"); $("text").placeholder = "Other: type your own answer…"; }
+    $("quiz").classList.toggle("readq", p.kind === "read");
+    if (p.kind === "read") { setMode("type"); $("text").placeholder = "A question about the reading? Type it here and tap Ask about it."; }
     for (const o of p.options || []) {
-      const b = document.createElement("button"); b.innerHTML = (p.kind === "menu" ? "" : o.index + ". ") + renderMd(o.label).replace(/^<p>|<\/p>\s*$/g, "");
+      const b = document.createElement("button"); b.innerHTML = (p.kind === "menu" || p.kind === "read" ? "" : o.index + ". ") + renderMd(o.label).replace(/^<p>|<\/p>\s*$/g, "");
+      if (p.kind === "read") b.className = "readbtn";
       b.onclick = () => {
         if (p.multi) { selected.has(o.index) ? selected.delete(o.index) : selected.add(o.index); } else { selected = new Set([o.index]); }
         [...$("quiz").children].forEach((c, i) => c.classList.toggle("sel", selected.has((p.options[i] || {}).index)));
         updateButtons();
-        if (p.kind === "menu" && !p.multi) $("send").click(); // a menu choice sends itself
+        if ((p.kind === "menu" || p.kind === "read") && !p.multi) $("send").click(); // a menu choice / "Read it, ask me" sends itself
       };
       $("quiz").appendChild(b);
     }
@@ -360,6 +380,7 @@ function showPrompt(p) {
 }
 function hidePrompt() {
   pending = null; $("idle").classList.remove("hidden"); $("prompt").classList.add("hidden"); $("kind").classList.add("hidden"); $("timer").textContent = "";
+  $("say").classList.add("hidden"); $("banner").classList.add("hidden"); $("qcard").classList.remove("reading");
   $("quiz").classList.add("hidden"); $("answer").classList.add("hidden"); $("confrow").classList.add("hidden"); $("actions").classList.add("hidden"); $("freephoto").classList.remove("hidden");
   if (role === "scratch") { $("answer").classList.remove("hidden"); $("actions").classList.remove("hidden"); $("idle").textContent = "No open question — you can still draw and send it to the tutor."; }
   else $("idle").textContent = "Waiting for the tutor. Menus, questions and answers all appear here.";
@@ -391,7 +412,7 @@ async function poll() {
     const p = j.pending;
     if (p && (!pending || pending.id !== p.id)) { pending = p; showPrompt(p); }
     else if (!p && pending) hidePrompt();
-    if (j.last && j.last.id !== lastShownId && (!p || p.id !== j.last.id) && Date.now() - skew - j.last.at < 10 * 60 * 1000 && !["menu", "input", "ask"].includes(j.last.kind)) { lastShownId = j.last.id; showResult(j.last); }
+    if (j.last && j.last.id !== lastShownId && (!p || p.id !== j.last.id) && Date.now() - skew - j.last.at < 10 * 60 * 1000 && !UNGRADED.includes(j.last.kind)) { lastShownId = j.last.id; showResult(j.last); }
   } catch (e) { $("conn").textContent = "Can't reach your Mac — is Tailscale on?"; $("conn").className = "conn bad"; }
 }
 setInterval(poll, 1500); poll();
@@ -476,6 +497,7 @@ $("send").onclick = async () => {
   if (pending.kind === "menu") return submit({ choices: [...selected] });
   if (pending.kind === "input") return submit({ text: $("text").value });
   if (pending.kind === "ask") return submit(selected.size ? { choices: [...selected] } : { text: $("text").value });
+  if (pending.kind === "read") return submit(selected.size ? { choices: [...selected] } : { text: $("text").value }, selected.size ? "Marked read…" : "Sending your question…");
   if (pending.kind === "quiz") return submit({ choices: [...selected], confidence });
   const images = mode === "draw" ? exportPages() : files.map((f) => ({ data: f.data, mimeType: f.mimeType }));
   submit({ text: mode === "type" ? $("text").value : "", confidence, images, audio: mode === "voice" ? audio : null }, audio ? "Transcribing on the Mac…" : "Sending…");

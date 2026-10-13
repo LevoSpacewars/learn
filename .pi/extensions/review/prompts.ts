@@ -11,13 +11,16 @@
 
 export interface PendingPrompt {
 	id: string;
-	kind: string; // recall kinds, or "quiz"
+	kind: string; // recall kinds, "quiz", "menu", "input", "ask", or "read" (lesson_read)
 	prompt: string;
 	startedAt: number;
 	paper?: boolean;
 	options?: Array<{ index: number; label: string }>; // quiz only
 	multi?: boolean; // quiz multi-select
 	context?: string;
+	say?: string; // tutor's 1-3 lines shown above the question
+	banner?: string; // fixed framing line on the card (predict: quick guess)
+	figure?: string; // read: vault-relative figure path (viz/...)
 	/** Deliver an answer from any surface. Returns false if already answered. */
 	answer(a: PromptAnswer): boolean;
 }
@@ -30,8 +33,8 @@ export interface PromptAnswer {
 	confidence?: number;
 	dontKnow?: boolean;
 	hint?: boolean;
-	skip?: boolean;
-	endRecall?: boolean; // stop the whole recall phase and start the lesson // learner wants to move on to new material without this check
+	skip?: boolean; // learner wants to move on to new material without this check
+	endRecall?: boolean; // stop the whole recall phase and start the lesson
 	choices?: number[]; // quiz: 1-based option indices
 }
 

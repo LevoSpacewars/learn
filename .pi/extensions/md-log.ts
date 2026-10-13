@@ -10,6 +10,8 @@
  *   - user prompts
  *   - assistant text (lesson prose)
  *   - quiz / ask_user_question Q&A blocks
+ *   - lesson_read sections (as prose: "## Reading — <title>" + the body)
+ *   - the `say` lines of recall / quiz (as tutor prose, before the question)
  * Other tools (bash, read, write, edit, ...) are omitted.
  *
  * Quiz/ask questions are written BEFORE the user answers (on tool_call), so the
@@ -29,7 +31,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const QA_TOOLS = new Set(["quiz", "ask_user_question", "recall"]);
+const QA_TOOLS = new Set(["quiz", "ask_user_question", "recall", "lesson_read"]);
 
 const RECALL_LABEL: Record<string, string> = {
 	recall: "Recall",
@@ -129,6 +131,20 @@ export default function mdLog(pi: ExtensionAPI) {
 		return `> [!abstract] PI\n\n${text}`;
 	}
 
+	/** A lesson_read section: tutor prose (not a callout), readable as a textbook page. */
+	function readingBlock(d: any): string {
+		const fig = d?.figure ? `\n\n![[${d.figure}|600]]` : "";
+		return assistantBlock(`## Reading — ${String(d?.title ?? "").trim()}\n\n${String(d?.body ?? "").trim()}${fig}`);
+	}
+
+	function answerCalloutRead(details: any): string | undefined {
+		const status = details?.status;
+		if (status === "read") return callout("example", "Reading — read ✓", ["Read it; ready for the question."]);
+		if (status === "question") return userBlock(String(details?.question ?? ""));
+		if (status === "cancelled") return callout("warning", "Reading — closed", ["(closed without marking it read)"]);
+		return undefined; // refused / unavailable: he never saw it
+	}
+
 	function optionsList(options: Array<{ label: string }>): string[] {
 		return options.map((o, i) => `${i + 1}. ${o.label}`);
 	}
@@ -204,7 +220,7 @@ export default function mdLog(pi: ExtensionAPI) {
 
 	function recallQuestionCallout(details: any): string {
 		const label = `Recall — ${RECALL_LABEL[details?.kind] ?? details?.kind ?? ""}`.trim();
-		const context = details?.paper ? "Work it on paper and send a photo from your phone, or type your answer." : undefined;
+		const context = [details?.paper ? "Work it on paper and send a photo from your phone, or type your answer." : "", details?.banner ? `*${details.banner}*` : ""].filter(Boolean).join("\n") || undefined;
 		return questionCallout(label, String(details?.prompt ?? ""), context, []);
 	}
 
@@ -324,7 +340,17 @@ export default function mdLog(pi: ExtensionAPI) {
 			const d = (event as any).partialResult?.details;
 			if (!d || d.phase !== "asked" || loggedQuizQuestion.has(toolCallId)) return;
 			loggedQuizQuestion.add(toolCallId);
-			await withLock(() => appendToFile(recallQuestionCallout(d)));
+			await withLock(() => {
+				if (d.say) appendToFile(assistantBlock(String(d.say)));
+				appendToFile(recallQuestionCallout(d));
+			});
+			return;
+		}
+		if (toolName === "lesson_read") {
+			const d = (event as any).partialResult?.details;
+			if (!d || d.phase !== "shown" || loggedQuizQuestion.has(toolCallId)) return;
+			loggedQuizQuestion.add(toolCallId);
+			await withLock(() => appendToFile(readingBlock(d)));
 			return;
 		}
 		if (toolName !== "quiz") return;
@@ -337,7 +363,11 @@ export default function mdLog(pi: ExtensionAPI) {
 		const context: string | undefined = input.details?.trim() || undefined;
 		const options = shuffled.map((o) => ({ label: o.label }));
 		const block = questionCallout("Quiz", question, context, options);
-		await withLock(() => appendToFile(block));
+		const say = typeof input.say === "string" && input.say.trim() ? input.say.trim() : undefined;
+		await withLock(() => {
+			if (say) appendToFile(assistantBlock(say));
+			appendToFile(block);
+		});
 	});
 
 	pi.on("tool_result", async (event, _ctx) => {
@@ -347,6 +377,12 @@ export default function mdLog(pi: ExtensionAPI) {
 		const details = (event as any).details;
 		// A recall the gate refused never reached the learner: nothing to log.
 		if (toolName === "recall" && details?.status === "blocked") return;
+		if (toolName === "quiz" && /^(Blocked|Refused)/.test(String(details?.message ?? ""))) return;
+		if (toolName === "lesson_read") {
+			const b = answerCalloutRead(details);
+			if (b) await withLock(() => appendToFile(b));
+			return;
+		}
 		const block = toolName === "quiz"
 			? answerCalloutQuiz(details)
 			: toolName === "recall"
@@ -504,10 +540,21 @@ export default function mdLog(pi: ExtensionAPI) {
 				// shuffles, so its tool-call args are already the true order.
 				if (tc && tc.name === "recall") {
 					const a = tc.args || {};
-					blocks.push(recallQuestionCallout({ kind: a.kind ?? "recall", prompt: a.prompt, paper: a.paper ?? a.kind === "problem" }));
+					if (msg.details?.status === "blocked") continue;
+					if (a.say) blocks.push(assistantBlock(String(a.say)));
+					blocks.push(recallQuestionCallout({ kind: a.kind ?? "recall", prompt: a.prompt, paper: a.paper ?? a.kind === "problem", banner: msg.details?.banner }));
 					blocks.push(answerCalloutRecall(msg.details));
 					continue;
 				}
+				if (msg.toolName === "lesson_read") {
+					const d = msg.details;
+					if (!d || d.status === "refused" || d.status === "unavailable") continue;
+					blocks.push(readingBlock(d));
+					const b = answerCalloutRead(d);
+					if (b) blocks.push(b);
+					continue;
+				}
+				if (msg.toolName === "quiz" && /^(Blocked|Refused)/.test(String(msg.details?.message ?? ""))) continue;
 				if (tc) {
 					const a = tc.args || {};
 					const label = tc.name === "quiz" ? "Quiz" : "Question";
@@ -517,6 +564,7 @@ export default function mdLog(pi: ExtensionAPI) {
 					const options = shuffled && shuffled.length > 0
 						? shuffled.map((o) => ({ label: o.label }))
 						: (Array.isArray(a.options) ? a.options : []);
+					if (tc.name === "quiz" && a.say) blocks.push(assistantBlock(String(a.say)));
 					blocks.push(questionCallout(label, a.question || "", a.details?.trim() || undefined, options));
 				}
 				if (msg.toolName === "quiz") {

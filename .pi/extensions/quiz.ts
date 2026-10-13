@@ -10,6 +10,7 @@ import {
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { plainMath } from "./review/plainmath.ts";
+import { floorReason, pedagogy, readingReason, recordOutcome } from "./review/pedagogy.ts";
 import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import { recordCalibration, recordEvent } from "./review/store.ts";
 
@@ -119,6 +120,12 @@ const QuizParams = Type.Object({
 			"REQUIRED. Explanation revealed AFTER the user answers (shown whether they got it right or wrong). Use it to reinforce why the correct answer is correct.",
 	}),
 	topic: Type.Optional(Type.String({ description: "Topic slug, for calibration tracking (e.g. the lesson slug)." })),
+	say: Type.Optional(
+		Type.String({
+			description:
+				"1-3 lines shown to the learner ABOVE the question (LaTeX math): your diagnosis of the last miss, or the one line of framing he needs. Your thinking is invisible to him; this is how it reaches him. Counts as text written since the last miss.",
+		}),
+	),
 	shuffle: Type.Optional(
 		Type.Boolean({
 			description:
@@ -431,8 +438,12 @@ function renderFeedback(
 }
 
 // Top border + question + optional context. Shared by both components.
-function pushHeader(lines: string[], theme: any, width: number, question: string, context: string | undefined): void {
+function pushHeader(lines: string[], theme: any, width: number, question: string, context: string | undefined, say?: string): void {
 	lines.push(truncateToWidth(theme.fg("accent", "─".repeat(width)), width));
+	if (say) {
+		addWrapped(lines, theme.fg("muted", plainMath(say)), width, " ");
+		lines.push("");
+	}
 	addWrapped(lines, theme.fg("text", plainMath(question)), width, " ");
 	if (context) {
 		lines.push("");
@@ -478,6 +489,7 @@ async function askSingleChoice(
 	options: QuizOption[],
 	correctIndices: number[],
 	explanation: string | undefined,
+	say?: string,
 ): Promise<QuizResponse | null> {
 	const allOptions: DisplayOption[] = options.map((option, index) => ({
 		...option,
@@ -505,6 +517,7 @@ async function askSingleChoice(
 				kind: "quiz",
 				prompt: question,
 				context,
+				say,
 				startedAt: Date.now(),
 				options: allOptions.map((o) => ({ index: o.index, label: o.label })),
 				answer: (a: PromptAnswer) => {
@@ -627,7 +640,7 @@ async function askSingleChoice(
 
 				const lines: string[] = [];
 				const add = (text: string) => lines.push(truncateToWidth(text, width));
-				pushHeader(lines, theme, width, question, context);
+				pushHeader(lines, theme, width, question, context, say);
 
 				if (phase === "confidence") {
 					pushConfidence(lines, theme, width, conf.confidence);
@@ -706,6 +719,7 @@ async function askMultiChoice(
 	options: QuizOption[],
 	correctIndices: number[],
 	explanation: string | undefined,
+	say?: string,
 ): Promise<QuizResponse | null> {
 	const DONT_KNOW_ID = "dont-know";
 	const choiceItems: DisplayOption[] = options.map((option, index) => ({
@@ -759,6 +773,7 @@ async function askMultiChoice(
 				kind: "quiz",
 				prompt: question,
 				context,
+				say,
 				startedAt: Date.now(),
 				multi: true,
 				options: choiceItems.map((o) => ({ index: o.index, label: o.label })),
@@ -897,7 +912,7 @@ async function askMultiChoice(
 
 				const lines: string[] = [];
 				const add = (text: string) => lines.push(truncateToWidth(text, width));
-				pushHeader(lines, theme, width, question, context);
+				pushHeader(lines, theme, width, question, context, say);
 
 				if (phase === "confidence") {
 					pushConfidence(lines, theme, width, conf.confidence);
@@ -1027,7 +1042,7 @@ export default function quiz(pi: ExtensionAPI) {
 		name: "quiz",
 		label: "quiz",
 		description:
-			"Ask the user a GRADED question with a known correct answer, then instantly grade and give feedback. Unlike ask_user_question (which collects preferences/decisions with no right answer), quiz always has a correct answer supplied by you, marks the user's selection right/wrong (✓/✗), reveals the correct answer, and can show an explanation. Use it to (1) assess what the learner already understands before teaching, and (2) run tight practice/retrieval loops after explaining, or probe understanding whenever you're unsure they've got it. Options-only: single-select or multi-select, plus an automatic 'I don't know' choice so the user can signal a genuine gap instead of guessing. An always-present optional note field (Tab to focus it) lets the user attach a free-text note to ANY answer; it reaches you only when non-empty. No free-text answers — for non-graded questions use ask_user_question instead.",
+			"Ask the user a GRADED question with a known correct answer, then instantly grade and give feedback. Unlike ask_user_question (which collects preferences/decisions with no right answer), quiz always has a correct answer supplied by you, marks the user's selection right/wrong (✓/✗), reveals the correct answer, and can show an explanation. Use it to (1) assess what the learner already understands before teaching, and (2) run tight practice/retrieval loops after explaining, or probe understanding whenever you're unsure they've got it. Options-only: single-select or multi-select, plus an automatic 'I don't know' choice so the user can signal a genuine gap instead of guessing. An always-present optional note field (Tab to focus it) lets the user attach a free-text note to ANY answer; it reaches you only when non-empty. No free-text answers — for non-graded questions use ask_user_question instead. Never rely on a single qualifier word (\"nothing else leaves B\"); state the structure explicitly (\"B has exactly two exits: to A at 3/s and to C at 1/s\").",
 		promptSnippet:
 			"Use the quiz tool to test the user with a graded multiple-choice or multi-select question (required correct answer + required explanation). For non-graded questions, use ask_user_question.",
 		promptGuidelines: [
@@ -1046,14 +1061,18 @@ export default function quiz(pi: ExtensionAPI) {
 			"Options are shuffled before display by default, so don't worry about which position you list the correct answer in. Set shuffle: false only when option order is meaningful (ordered values, or an 'All/None of the above' option that must stay last).",
 			"To probe nuance, ask several quick quiz questions and adapt each one based on the previous answers, rather than writing one giant question.",
 			"Don't leak the answer through formatting: keep option phrasing/length even and don't hint which is correct.",
+			"Never rely on a single qualifier word to carry the structure (\"Nothing else leaves B\" reads as \"nothing leaves B\"). State the structure explicitly: \"B has exactly two exits: to A at 3/s and to C at 1/s.\"",
+			"Your thinking is invisible to the learner. A diagnosis or framing line he must read goes in `say` (shown above the question) or chat text.",
 		],
 		parameters: QuizParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			// Same open-floor rule as recall (state shared via globalThis): no first question on new material until he says ready.
-			if ((globalThis as any).__learnPedagogy?.floorNeeded) {
-				return { content: [{ type: "text" as const, text: "Blocked: new material. Open the floor first with ask_user_question (\"Anything you want to discuss before the first question?\" with options \"Ready, ask the first question\" / \"I want to discuss first\"); quiz only after he picks ready." }], details: { status: "unavailable", message: "open the floor first" } as any };
-			}
+			// And the reading gate: a new node is read (lesson_read) before it is tested.
+			const ped = pedagogy();
+			const gate = readingReason(ped) ?? (floorReason(ped) ? "Blocked: new material. Open the floor first with ask_user_question (\"Anything you want to discuss before the first question?\" with options \"Ready, ask the first question\" / \"I want to discuss first\"); quiz only after he picks ready." : undefined);
+			if (gate) return { content: [{ type: "text" as const, text: gate }], details: { status: "unavailable", message: gate } as any };
+			const say = params.say?.trim() || undefined;
 			const context = params.details?.trim() || undefined;
 			const explanation = params.explanation.trim();
 			const mode: QuizMode = params.multiSelect ? "multi-select" : "single-select";
@@ -1113,13 +1132,24 @@ export default function quiz(pi: ExtensionAPI) {
 				const t0 = Date.now();
 				const response =
 					mode === "single-select"
-						? await askSingleChoice(ctx, params.question, context, options, correctIndices, explanation)
-						: await askMultiChoice(ctx, params.question, context, options, correctIndices, explanation);
+						? await askSingleChoice(ctx, params.question, context, options, correctIndices, explanation, say)
+						: await askMultiChoice(ctx, params.question, context, options, correctIndices, explanation, say);
 				const latencyMs = Date.now() - t0;
 				if (!response) {
 					return cancelledResult(params.question, mode, correctIndices, context);
 				}
 				const built = buildResult(params.question, context, mode, options, response, correctIndices, explanation, latencyMs);
+				// Feed the same miss streak recall uses: a right answer clears the
+				// drill-down / worked-example pressure, a wrong one adds to it.
+				if (say) ped.sinceMissChars += say.length;
+				const wrong = response.answers.find((a) => !correctIndices.includes(a.index));
+				const wrongWhy = wrong ? options[wrong.index - 1]?.description : undefined;
+				recordOutcome(ped, {
+					correct: !response.dontKnow && built.details.correct === true,
+					prompt: params.question,
+					verdict: response.dontKnow ? "dontKnow" : built.details.correct ? "correct" : "incorrect",
+					firstError: response.dontKnow ? undefined : built.details.correct ? undefined : wrongWhy || `chose: ${response.answers.map((a) => a.label).join(" | ")}; correct: ${correctIndices.map((i) => options[i - 1]?.label).join(" | ")}`,
+				});
 				setLastResult({
 					id: `q${t0.toString(36)}`,
 					at: Date.now(),

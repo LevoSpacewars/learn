@@ -80,6 +80,8 @@ function serveVaultFile(cwd: string, rel: string, res: http.ServerResponse) {
 
 /** Resolve an Obsidian embed name (work-….jpg) to a vault-relative path. */
 function findEmbed(cwd: string, name: string): string | undefined {
+	// A vault-relative path (viz/sub/plot.svg, from lesson_read) is used as is.
+	if (SERVABLE_DIRS.includes(name.split("/")[0]) && !name.includes("..") && fs.existsSync(path.join(cwd, name))) return name;
 	for (const d of SERVABLE_DIRS) {
 		const p = path.join(cwd, d, name);
 		if (fs.existsSync(p)) return `${d}/${name}`;
@@ -343,6 +345,11 @@ export default function phoneWork(pi: ExtensionAPI) {
 		if (payload.id && payload.id !== pending.id) return json(res, 409, { error: "That question has already been answered" });
 
 		if (payload.hint) return json(res, 200, { ok: true, answered: answerPending({ source: "pad", hint: true }) });
+		if (pending.kind === "read" && Array.isArray(payload.choices) && payload.choices[0] === 1) {
+			const ok = answerPending({ source: "pad", choices: [1] });
+			if (ok) ctx.ui.notify("📱 Reading marked read", "info");
+			return ok ? json(res, 200, { ok: true, answered: true }) : json(res, 409, { error: "That reading has already been answered" });
+		}
 		if (payload.endRecall) {
 			ctx.ui.notify("📱 Recall ended: starting the lesson", "info");
 			return json(res, 200, { ok: true, answered: answerPending({ source: "pad", endRecall: true }) });
@@ -434,7 +441,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 				const last = getLastResult();
 				return json(res, 200, {
 					now: Date.now(),
-					pending: p ? { id: p.id, kind: p.kind, prompt: p.prompt, context: p.context, startedAt: p.startedAt, paper: p.paper, options: p.options, multi: p.multi } : null,
+					pending: p ? { id: p.id, kind: p.kind, prompt: p.prompt, context: p.context, startedAt: p.startedAt, paper: p.paper, options: p.options, multi: p.multi, say: p.say, banner: p.banner, figure: p.figure } : null,
 					last: last ?? null,
 				});
 			}
