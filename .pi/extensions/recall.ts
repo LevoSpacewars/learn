@@ -37,7 +37,9 @@ import {
 	armReading,
 	creditReading,
 	floorReason,
+	clearMiss,
 	gateReason,
+	isMiss,
 	isReady,
 	markRead,
 	pedagogy,
@@ -66,7 +68,7 @@ interface RecallDetails {
 	photos?: string[]; // basenames inside work/, for ![[embed]]
 	confidence?: number;
 	latencyMs?: number;
-	verdict?: GradeResult["verdict"];
+	verdict?: GradeResult["verdict"] | "notAnswer";
 	score?: number;
 	reading?: string;
 	firstError?: string;
@@ -114,7 +116,12 @@ const RecallParams = Type.Object({
 	topic: Type.Optional(Type.String({ description: "Topic slug (for calibration tracking)." })),
 	cardId: Type.Optional(Type.String({ description: "Review card id when this answers a due card; the card is graded automatically." })),
 	paper: Type.Optional(Type.Boolean({ description: "Suggest working on paper and sending a photo (default true for 'problem')." })),
-	rubric: Type.Optional(Type.String({ description: "Extra grading guidance for the grader, one line." })),
+	rubric: Type.Optional(
+		Type.String({
+			description:
+				"Optional, one line: what the SUBSTANCE of a right answer must contain (the idea, the method, the result). Never a checklist of secondary items (units written out, a step named, a number restated, a label spelled out): those are notes, not errors, and a rubric that lists them turns right answers into misses.",
+		}),
+	),
 	retention: Type.Optional(Type.Boolean({ description: "True when review_due marked this card RETENTION CHECK (unannounced long-delay test). Recorded as the outcome metric." })),
 	say: Type.Optional(
 		Type.String({
@@ -153,10 +160,11 @@ function addWrapped(lines: string[], text: string, width: number, indent = ""): 
 	for (const line of wrapTextWithAnsi(text, contentWidth)) lines.push(truncateToWidth(`${indent}${line}`, width));
 }
 
-function ratingFor(r: GradeResult, latencyMs: number): "again" | "hard" | "good" | "easy" {
+/** FSRS rating from the grader's score: the substance decides, not the verdict label. */
+export function ratingFor(r: Pick<GradeResult, "verdict" | "score">, latencyMs: number): "again" | "hard" | "good" | "easy" {
 	if (r.verdict === "incorrect" || r.score < 0.4) return "again";
-	if (r.verdict === "partial" || r.score < 0.8) return "hard";
-	if (latencyMs < 15000 && r.score >= 0.95) return "easy";
+	if (r.score < 0.75) return "hard";
+	if (r.verdict === "correct" && latencyMs < 15000 && r.score >= 0.95) return "easy";
 	return "good";
 }
 
@@ -243,7 +251,8 @@ async function askRecall(
 				.finally(() => {
 					phase = "feedback";
 					// Publish for the web surface as soon as grading is done (not when Enter is pressed here).
-					setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: graded?.verdict ?? "ungraded", score: graded?.score, feedback: graded?.feedback ?? gradeError, reading: graded?.reading, firstError: graded?.firstError, reference: opts.reference, confidence, latencyMs });
+					if (graded && !graded.attempted) setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: "notAnswer", feedback: "Not graded: that wasn't an answer. The tutor will reply.", confidence, latencyMs });
+					else setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: graded?.verdict ?? "ungraded", score: graded?.score, feedback: graded?.feedback ?? gradeError, reading: graded?.reading, firstError: graded?.firstError, reference: opts.reference, confidence, latencyMs });
 					refresh();
 					// Answered from the phone/iPad: the result is on that screen, so don't wait for a keypress here.
 					if (answer?.source !== "tui") setTimeout(() => { if (phase === "feedback") finish({ status: "answered", answer, confidence, latencyMs, graded }); }, 8000);
@@ -351,6 +360,8 @@ async function askRecall(
 			} else {
 				if (gradeError || !graded) {
 					addWrapped(lines, theme.fg("warning", ` Grader unavailable: ${gradeError ?? "no result"}. The teacher will grade this by hand.`), width, " ");
+				} else if (!graded.attempted) {
+					add(theme.fg("muted", ` — not graded: that wasn't an answer. The tutor will reply.`));
 				} else {
 					const color = graded.verdict === "correct" ? "success" : graded.verdict === "partial" ? "warning" : "error";
 					const mark = graded.verdict === "correct" ? "✓" : graded.verdict === "partial" ? "◐" : "✗";
@@ -544,6 +555,7 @@ export default function recall(pi: ExtensionAPI) {
 		const p = pedagogy();
 		if (/<skill name="teach"/.test(prompt) || /^\s*\/skill:teach\b/.test(prompt)) {
 			p.floorNeeded = true;
+			p.reviewMode = false;
 			// Continuing a lesson ("Continue the lesson … (slug: x)" or 'lesson slug "x"'):
 			// its first pending node is new material and must be read before it is
 			// tested, exactly as after lesson_plan. A lesson with no nodes yet arms nothing.
@@ -553,6 +565,7 @@ export default function recall(pi: ExtensionAPI) {
 		} else if (/<skill name="review"/.test(prompt) || /^\s*\/skill:review\b/.test(prompt)) {
 			p.floorNeeded = false; // review is not new material
 			p.readNeeded = undefined;
+			p.reviewMode = true; // misses need a visible diagnosis, nothing more; the retry list relearns
 		} else if (isReady(prompt)) readyAnswered(p);
 	});
 	// Reading gate: an approved plan, or a finished node, means the next check
@@ -636,10 +649,7 @@ export default function recall(pi: ExtensionAPI) {
 				}
 			};
 			if (outcome.status === "ended") {
-				ped.missStreak = 0;
-				ped.sinceMissChars = 0;
-				ped.lastMiss = undefined;
-				ped.readSinceMiss = false;
+				clearMiss(ped);
 				let started = "";
 				try {
 					started = (globalThis as any).__learnStartLesson?.(ctx) ?? "";
@@ -656,10 +666,7 @@ export default function recall(pi: ExtensionAPI) {
 			}
 			if (outcome.status === "skipped") {
 				// He chose learning over testing: clear the drill-down pressure entirely.
-				ped.missStreak = 0;
-				ped.sinceMissChars = 0;
-				ped.lastMiss = undefined;
-				ped.readSinceMiss = false;
+				clearMiss(ped);
 				return result(
 					"Learner SKIPPED this check: he wants to learn something new now. Do NOT re-pose it, a variant, or a drill-down, and don't ask whether he wants to continue. Note it and move on: if this was a node's check, lesson_node with status shaky; if no review card covers the idea, save one with review_add_cards (that is where it gets tested, later). Then go straight to teaching the next new idea. If he skips twice in a row, check in once with ask_user_question about the pace (more explanation, fewer checks?).",
 					details,
@@ -687,10 +694,25 @@ export default function recall(pi: ExtensionAPI) {
 			const confidence = outcome.confidence ?? 50;
 			details.confidence = confidence;
 
+			if (g && !g.attempted) {
+				// A reaction, not an answer: nobody grades it, nothing escalates.
+				Object.assign(details, { verdict: "notAnswer", reading: g.reading });
+				clearMiss(ped);
+				return result(
+					[
+						`NOT AN ANSWER: he wrote "${(answerText ?? g.reading ?? "").trim().slice(0, 300)}".`,
+						"Not graded: no card rating, no miss, no calibration. Do not re-pose, drill, or lecture.",
+						"Reply to him as a person in 1-3 lines of chat text. If he says his earlier work already showed it, look at that work (the grader's earlier reading) and say plainly whether he is right; if he is, grade that card with review_grade (good) and say so.",
+						"Then call ask_user_question with options \"Next card\" and \"Let me redo this one\" (he can also type). Never end the turn on a plain-text question.",
+					].join("\n"),
+					details,
+				);
+			}
 			if (g) {
+				const miss = isMiss(g.verdict, g.score);
 				Object.assign(details, { verdict: g.verdict, score: g.score, reading: g.reading, firstError: g.firstError, feedback: g.feedback });
 				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading, confidence });
-				recordOutcome(ped, { correct: g.verdict === "correct", prompt: params.prompt, verdict: g.verdict, firstError: g.firstError });
+				recordOutcome(ped, { correct: !miss, prompt: params.prompt, verdict: g.verdict, firstError: g.firstError });
 				try {
 					recordCalibration(ctx.cwd, { topic: params.topic, confidence, correct: g.verdict === "correct", source: "recall", check: kind, cardId: params.cardId, latencyMs: outcome.latencyMs });
 				} catch {
@@ -716,13 +738,18 @@ export default function recall(pi: ExtensionAPI) {
 							g.reading ? `Grader read: ${g.reading}` : "",
 							g.firstError ? `First error: ${g.firstError}` : "",
 							`Grader feedback (already shown to learner): ${g.feedback}`,
-							g.verdict !== "correct" && confidence >= 70 ? "HIGH-CONFIDENCE MISS: give richer feedback on the mechanism and re-test this soon." : "",
-							g.verdict !== "correct" && ped.missStreak >= 2
-								? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers): call lesson_read with it (slug, node, title, body), or write it as chat text of at least 350 characters; your thinking is invisible to him. Then call recall with a completion problem (one blank). The next recall is refused until the worked example is visible to him. Never end your turn on a question written as plain text: he cannot answer it from the web page.`
-								: g.verdict !== "correct"
-									? "NEXT STEP (enforced): drill down with ONE narrower recall (at most two parts) on exactly the step that failed, and put your diagnosis in its `say` field (1-3 lines: what went wrong and why, in your words, and what the right move was; your thinking is invisible to him). Never ask the follow-up as plain text (the web page has no answer box without an open recall). A multi-part prompt, or one with no diagnosis he can read, is refused. Do not move to a different strand until he has had another go at this one."
-									: "",
-							g.verdict !== "correct" && g.firstError && /slip|instead of|dropped|off by|should be|mislabel|complement|sign|factor|width/i.test(g.firstError)
+							g.verdict === "partial" && !isMiss(g.verdict, g.score)
+								? "MINOR GAP, not a miss: the substance was right. At most one line about it in your next `say` (or nothing), then the next card. Do not drill, re-test, or lecture on it."
+								: "",
+							isMiss(g.verdict, g.score) && confidence >= 70 ? "HIGH-CONFIDENCE MISS: give richer feedback on the mechanism and re-test this soon." : "",
+							isMiss(g.verdict, g.score) && ped.reviewMode
+								? "NEXT STEP: put 1-3 lines he can read (what went wrong and why, and the right move) in the next recall's `say` or in chat text; the next recall is refused without it. Then either ONE narrower follow-up on that step or the next card: a missed card comes back in the retry list anyway. If the grader misread him or the card is badly cut (see LAST/REPEATED in review_due), say so and override with review_grade instead of drilling."
+								: isMiss(g.verdict, g.score) && ped.missStreak >= 2
+									? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers): call lesson_read with it (slug, node, title, body), or write it as chat text of at least 350 characters; your thinking is invisible to him. Then call recall with a completion problem (one blank). The next recall is refused until the worked example is visible to him. Never end your turn on a question written as plain text: he cannot answer it from the web page.`
+									: isMiss(g.verdict, g.score)
+										? "NEXT STEP (enforced): drill down with ONE narrower recall (at most two parts) on exactly the step that failed, and put your diagnosis in its `say` field (1-3 lines: what went wrong and why, in your words, and what the right move was; your thinking is invisible to him). Never ask the follow-up as plain text (the web page has no answer box without an open recall). A multi-part prompt, or one with no diagnosis he can read, is refused. Do not move to a different strand until he has had another go at this one."
+										: "",
+							isMiss(g.verdict, g.score) && g.firstError && /slip|instead of|dropped|off by|should be|mislabel|complement|sign|factor|width/i.test(g.firstError)
 								? "ATTENTION-TO-DETAIL: the first error looks like a slip inside otherwise-right working. Consider kind 'flaw' with HIS OWN line as the argument (\"Here is your step 1: ... Is it right? If not, where does it go wrong?\") so he finds it himself."
 								: "",
 						].join("\n")
@@ -746,6 +773,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (d.status === "ended") return new Text(theme.fg("accent", "recall ended: starting the lesson"), 0, 0);
 			if (d.status === "dontKnow") return new Text(theme.fg("warning", "I don't know"), 0, 0);
 			if (d.status === "cancelled") return new Text(theme.fg("dim", "cancelled"), 0, 0);
+			if (d.verdict === "notAnswer") return new Text(theme.fg("warning", "not an answer (not graded)"), 0, 0);
 			const color = d.verdict === "correct" ? "success" : d.verdict === "partial" ? "warning" : "error";
 			const head = theme.fg(color, `${d.verdict ?? "ungraded"} ${d.score !== undefined ? Math.round(d.score * 100) + "%" : ""}`) + theme.fg("dim", ` · conf ${d.confidence}% · ${Math.round((d.latencyMs ?? 0) / 1000)}s · ${d.modality}`);
 			return new Text(expanded && d.feedback ? `${head}\n${d.feedback}` : head, 0, 0);

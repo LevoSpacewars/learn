@@ -48,8 +48,42 @@ import {
 	updateNode,
 	upsertLesson,
 } from "./store.ts";
+import { clearMiss, pedagogy } from "./pedagogy.ts";
 
 type CardKind = "recall" | "problem";
+
+/** Minutes a card costs him: a paper problem is a quarter of an hour, a quick card a few minutes. */
+export const CHECK_MINUTES: Record<CheckKind, number> = { problem: 12, flaw: 5, transfer: 5, recall: 4, explain: 4, predict: 2, boundary: 4 };
+const DEFAULT_LIMIT = 10;
+const MAX_PROBLEMS_NO_BUDGET = 3;
+
+/**
+ * Size the batch to the time budget: 30 minutes is two paper problems and a
+ * couple of quick cards, not fifteen cards. Without a budget, `limit` cards
+ * with at most a few problems. Always at least one card.
+ */
+export function sizeBatch<T>(cards: T[], checkOf: (c: T) => CheckKind, budgetMin: number | undefined, limit?: number, reserveMin = 0): T[] {
+	const out: T[] = [];
+	let minutes = 0;
+	let problems = 0;
+	const maxProblems = budgetMin ? Math.max(1, Math.floor(budgetMin / 15)) : MAX_PROBLEMS_NO_BUDGET;
+	const max = Math.max(1, Math.floor(limit ?? DEFAULT_LIMIT));
+	const room = budgetMin ? Math.max(CHECK_MINUTES.recall, budgetMin - reserveMin) : Infinity;
+	for (const c of cards) {
+		if (out.length >= max) break;
+		const check = checkOf(c);
+		const cost = CHECK_MINUTES[check] ?? CHECK_MINUTES.recall;
+		if (check === "problem" && problems >= maxProblems) continue;
+		if (out.length > 0 && minutes + cost > room) {
+			if (cost > CHECK_MINUTES.recall) continue; // a cheaper card may still fit
+			break;
+		}
+		out.push(c);
+		minutes += cost;
+		if (check === "problem") problems++;
+	}
+	return out;
+}
 type RatingName = "again" | "hard" | "good" | "easy";
 type Modality = "choice" | "typed" | "photo" | "audio" | "implicit";
 
@@ -521,7 +555,10 @@ export default function review(pi: ExtensionAPI) {
 			const sessionStart = new Date(session.at);
 			const due = dueCards(store, now, params.topic).filter((c) => c.lastCriterionSession !== session!.id);
 			const retry = relearnCards(store, session.id, sessionStart).filter((c) => !params.topic || c.topic === params.topic.toLowerCase());
-			const batch = interleave(due.filter((c) => !retry.includes(c)).slice(0, Math.max(1, Math.floor(params.limit ?? 10))));
+			const pool = interleave(due.filter((c) => !retry.includes(c)));
+			const checkOf = (c: ReviewCard) => assignCardCheck(c, session!.id);
+			const batch = sizeBatch(pool, checkOf, session.budgetMin, params.limit, retry.length * CHECK_MINUTES.recall);
+			const onPaper = batch.filter((c) => checkOf(c) === "problem").length;
 
 			const header = [
 				`Session ${session.id}${session.unaided ? " — UNAIDED TEST: no hints, no repair until the session summary; grade strictly." : ""}${session.budgetMin ? ` — budget ${session.budgetMin} min.` : ""}`,
@@ -542,6 +579,8 @@ export default function review(pi: ExtensionAPI) {
 				const lapses = c.fsrs.lapses ? `, lapses ${c.fsrs.lapses}` : "";
 				const last = c.history.at(-1);
 				const retention = isRetention(c);
+				const recent = c.history.slice(-2);
+				const repeated = recent.length === 2 && recent.every((h) => h.rating === "hard" || h.rating === "again");
 				return [
 					`### ${c.id} [${c.kind}] topic: ${c.topic} (${state}, reps ${c.fsrs.reps}${lapses}, criterion sessions ${c.criterionSessions}${c.graduated ? ", graduated" : ""})${retention ? " RETENTION CHECK" : ""}`,
 					retention ? "RETENTION: pose it unaided and unannounced — no hint, no warm-up, no reaction beyond 'noted' until the close; pass `retention: true` to `recall`. This is the outcome metric." : "",
@@ -549,6 +588,9 @@ export default function review(pi: ExtensionAPI) {
 					`FRONT: ${c.front}`,
 					`BACK (hidden from learner): ${c.back}`,
 					last ? `LAST: ${last.rating}${last.note ? ` — ${last.note}` : ""}` : "",
+					repeated
+						? `REPEATED: rated ${recent.map((h) => h.rating).join(" then ")} in its last two sessions${recent[0]?.note ? ` (before: ${recent[0].note})` : ""}. If the main idea was right each time and only a sub-part or a wording slipped, the card is badly cut: grade the main idea, say so, and split or rewrite it with review_add_cards instead of drilling the sub-part again.`
+						: "",
 				]
 					.filter(Boolean)
 					.join("\n");
@@ -557,7 +599,7 @@ export default function review(pi: ExtensionAPI) {
 			const retryLines = retry.map((c) => fmt(c, c.kind === "problem" ? "problem" : "recall"));
 			const text = [
 				...header,
-				`${due.length} due, showing ${batch.length}.`,
+				`${due.length} due, showing ${batch.length}${session.budgetMin ? ` (sized to ${session.budgetMin} min: ${onPaper} on paper at ~${CHECK_MINUTES.problem} min each, ${batch.length - onPaper} quick)` : ""}. A card not shown is simply due next time; do not call review_due again for more until the retry list is empty.`,
 				"",
 				...lines,
 				...(retryLines.length
@@ -579,6 +621,9 @@ export default function review(pi: ExtensionAPI) {
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const r = gradeCard(ctx.cwd, params);
 			refreshStatus(ctx);
+			// The tutor is the final judge: an upward override also clears the miss
+			// streak, so the gate never demands a lecture on something he got right.
+			if (r.rating === "good" || r.rating === "easy") clearMiss(pedagogy());
 			return textResult(r.text, r.details);
 		},
 	});

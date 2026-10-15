@@ -232,6 +232,9 @@ export default function mdLog(pi: ExtensionAPI) {
 		if (status === "skipped") return callout("example", "Recall — skipped", ["Skipped to move on; saved for review."]);
 		if (status === "ended") return callout("example", "Recall — ended", ["Recall phase ended; starting the lesson."]);
 		if (status === "dontKnow") return callout("question", "Recall — I don't know", ["Your answer: I don't know"]);
+		if (details?.verdict === "notAnswer") {
+			return callout("note", "Recall — not graded", [details?.answerText ? `You wrote: ${String(details.answerText).split("\n")[0]}` : "(nothing to grade)", "Not an answer, so not graded; the tutor replies instead."]);
+		}
 		const verdict = details?.verdict as string | undefined;
 		const type = verdict === "correct" ? "success" : verdict === "partial" ? "warning" : verdict === "incorrect" ? "failure" : "note";
 		const mark = verdict === "correct" ? "✓" : verdict === "partial" ? "◐" : verdict === "incorrect" ? "✗" : "";

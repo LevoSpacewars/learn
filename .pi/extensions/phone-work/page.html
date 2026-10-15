@@ -390,7 +390,8 @@ function showResult(r) {
   const el = $("result"); const v = r.verdict || "ungraded";
   el.className = "card result " + v;
   const mark = v === "correct" ? "✓" : v === "partial" ? "◐" : v === "incorrect" ? "✗" : "";
-  let html = '<div class="v">' + mark + " " + esc(v) + (r.score !== undefined ? " (" + Math.round(r.score * 100) + "%)" : "") + '</div>';
+  const label = v === "notAnswer" ? "not graded" : v;
+  let html = '<div class="v">' + mark + " " + esc(label) + (r.score !== undefined ? " (" + Math.round(r.score * 100) + "%)" : "") + '</div>';
   const meta = []; if (r.confidence !== undefined) meta.push("confidence " + r.confidence + "%"); if (r.latencyMs) meta.push(Math.round(r.latencyMs / 1000) + "s");
   if (meta.length) html += '<div class="m">' + meta.join(" · ") + "</div>";
   if (r.chosen && r.chosen.length) html += "<p><b>You chose:</b> " + esc(r.chosen.join(" | ")) + "</p>";

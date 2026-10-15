@@ -35,6 +35,8 @@ export interface GradeResult {
 	reasoning: string;
 	verdict: Verdict;
 	score: number; // 0..1
+	/** False when the answer is not an attempt (a complaint, a question back, a meta-comment, nothing). Not graded. */
+	attempted: boolean;
 	firstError?: string;
 	feedback: string; // 1-3 sentences for the learner
 	raw?: string;
@@ -66,7 +68,14 @@ function bridgeExtensionPath(): string | undefined {
 
 export function buildGraderPrompt(input: GradeInput): string {
 	const lines = [
-		"You are a strict, independent grader for a one-on-one tutoring system. You have NO context beyond this message. You will be audited on false positives: marking wrong or vague work as correct is the worst failure. Do not be swayed by confident tone, length, or notation density.",
+		"You are an independent grader for a one-on-one tutoring system. You have NO context beyond this message. Grade the SUBSTANCE: does the learner have the idea, the method, the result? Do not be swayed by confident tone, length, or notation density, and do not invent gaps.",
+		"",
+		"Rules of substance:",
+		"- Secondary omissions are NOTES in feedback, never errors: units not written out, a label or name not spelled out, a quantity present in the working but not restated in the final line, one ambiguous digit when the working shows the value, a step used correctly but not named. They do not lower the verdict when the idea and method are right.",
+		"- 'correct' = the idea/method/result is right (score 0.85-1). 'partial' = a real piece of the idea is missing or wrong, the rest right (0.4-0.8; a correct method with an arithmetic slip is 0.7-0.8). 'incorrect' = the wrong idea, or essentially nothing (0-0.3).",
+		"- If the question is ambiguous or ill-posed and the learner's answer is reasonable under one honest reading, grade under that reading and say so in reasoning.",
+		"- Do not assert claims beyond the reference. If the learner says something the reference does not cover, do not call it wrong unless it is plainly false.",
+		"- Not an attempt: if the answer is mainly a reaction (a complaint about the tutoring or the question, an objection that he already answered this, a question back, a refusal, shouting) and contains no NEW attempt at what this question asks, set attempted=false, verdict 'incorrect', score 0, feedback \"\" (empty), and put what he wrote in reading. Restating a claim from an earlier answer inside a complaint is still a reaction, not an attempt. Nobody grades a reaction; the tutor replies to it.",
 		"",
 		`## Check kind: ${input.kind}`,
 		KIND_RUBRIC[input.kind] ?? KIND_RUBRIC.recall,
@@ -87,6 +96,7 @@ export function buildGraderPrompt(input: GradeInput): string {
 		"Reply with ONLY a JSON object, no prose, no code fence:",
 		'{"reading": "<what you read/understood the learner to have answered, one or two sentences; for photos, transcribe the key lines>",',
 		' "reasoning": "<compare against the reference step by step, briefly>",',
+		' "attempted": true | false,',
 		' "verdict": "correct" | "partial" | "incorrect",',
 		' "score": <number 0 to 1>,',
 		' "first_error": "<the first place it goes wrong, or empty string>",',
@@ -97,7 +107,7 @@ export function buildGraderPrompt(input: GradeInput): string {
 	return lines.filter((l) => l !== undefined).join("\n");
 }
 
-function parseJson(text: string): any | undefined {
+export function parseJson(text: string): any | undefined {
 	const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
 	const candidates = [fenced?.[1], text, text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)];
 	for (const c of candidates) {
@@ -115,7 +125,7 @@ export async function grade(input: GradeInput): Promise<GradeResult> {
 	const model = process.env.PI_GRADER_MODEL || DEFAULT_MODEL;
 	const tmpDir = path.join(input.cwd, ".learn", "tmp");
 	fs.mkdirSync(tmpDir, { recursive: true });
-	const promptFile = path.join(tmpDir, `grader-${Date.now().toString(36)}.md`);
+	const promptFile = path.join(tmpDir, `grader-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.md`);
 	fs.writeFileSync(promptFile, buildGraderPrompt(input), "utf8");
 
 	const args = ["-p", "--no-extensions", "--no-skills", "--no-tools", "--no-session", "--no-context-files", "--no-prompt-templates", "--no-themes", "--thinking", "medium", "--model", model];
@@ -142,14 +152,16 @@ export async function grade(input: GradeInput): Promise<GradeResult> {
 
 	const j = parseJson(raw);
 	if (!j || !["correct", "partial", "incorrect"].includes(j.verdict)) {
-		return { reading: "", reasoning: "", verdict: "partial", score: 0.5, feedback: "The grader returned an unreadable result; the teacher should grade this one by hand.", raw, error: "unparseable" };
+		return { reading: "", reasoning: "", verdict: "partial", score: 0.5, attempted: true, feedback: "The grader returned an unreadable result; the teacher should grade this one by hand.", raw, error: "unparseable" };
 	}
 	const score = Math.max(0, Math.min(1, Number(j.score)));
+	const attempted = j.attempted !== false && !/^\s*(false|no)\s*$/i.test(String(j.attempted ?? ""));
 	return {
 		reading: String(j.reading ?? ""),
 		reasoning: String(j.reasoning ?? ""),
-		verdict: j.verdict,
-		score: Number.isFinite(score) ? score : j.verdict === "correct" ? 1 : j.verdict === "partial" ? 0.5 : 0,
+		verdict: attempted ? j.verdict : "incorrect",
+		score: !attempted ? 0 : Number.isFinite(score) ? score : j.verdict === "correct" ? 1 : j.verdict === "partial" ? 0.5 : 0,
+		attempted,
 		firstError: j.first_error ? String(j.first_error) : undefined,
 		feedback: String(j.feedback ?? ""),
 		raw,

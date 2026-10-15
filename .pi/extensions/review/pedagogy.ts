@@ -14,7 +14,9 @@
 
 export interface Pedagogy {
 	floorNeeded?: boolean; // teach-session start: the learner gets to discuss before the first question
-	missStreak: number; // consecutive misses (recall partial/incorrect/dontKnow, quiz incorrect/dontKnow)
+	/** A review session (cards, not new material): misses need a visible diagnosis, nothing more. The retry list does the relearning. */
+	reviewMode?: boolean;
+	missStreak: number; // consecutive misses (recall incorrect/dontKnow or partial below MISS_SCORE, quiz incorrect/dontKnow)
 	sinceMissChars: number; // text the learner could read since the last miss (chat text, `say`, readings)
 	lastMiss?: { prompt: string; firstError?: string; verdict: string };
 	readSinceMiss?: boolean; // a lesson_read was read since the last miss (counts as teaching)
@@ -38,6 +40,27 @@ export function resetPedagogy(p: Pedagogy = pedagogy()): void {
 	p.floorNeeded = false;
 	p.readNeeded = undefined;
 	p.readNodes = [];
+	p.reviewMode = false;
+}
+
+/** The miss streak is cleared: the tutor overrode a grade upward, he chose to move on, or the last answer was not an attempt. */
+export function clearMiss(p: Pedagogy = pedagogy()): void {
+	p.missStreak = 0;
+	p.sinceMissChars = 0;
+	p.lastMiss = undefined;
+	p.readSinceMiss = false;
+}
+
+/**
+ * A partial verdict with the substance right is a note, not a miss. Only a
+ * wrong or missing idea (incorrect, "I don't know", or a partial scored below
+ * MISS_SCORE) counts toward the streak and the drill-down rules.
+ */
+export const MISS_SCORE = 0.6;
+export function isMiss(verdict: string, score?: number): boolean {
+	if (verdict === "correct") return false;
+	if (verdict === "partial") return (score ?? 0.5) < MISS_SCORE;
+	return true; // incorrect, dontKnow
 }
 
 /** Sub-questions in a prompt: numbered lines, plus bullet lines that ask something. */
@@ -131,6 +154,15 @@ export const TEACH_CHARS = 350; // a worked example, not a sentence
 export function gateReason(p: Pedagogy, prompt: string, extraChars = 0): string | undefined {
 	if (p.missStreak === 0) return undefined;
 	const chars = p.sinceMissChars + extraChars;
+	if (p.reviewMode) {
+		// Review: he must be able to read what went wrong, then the tutor decides
+		// (one narrower follow-up, or the next card; the retry list brings a missed
+		// card back anyway). No forced worked examples, no part counting.
+		if (chars < DIAGNOSE_CHARS) {
+			return `Blocked: the last answer was a miss and he has read nothing from you since (${chars} characters; your thinking is invisible to him). Put 1-3 lines in this recall's \`say\` field (what went wrong and why, and what the right move was) or in chat text, then pose the next card or one narrower follow-up.`;
+		}
+		return undefined;
+	}
 	if (p.missStreak >= 2 && chars < TEACH_CHARS && !p.readSinceMiss) {
 		return `Blocked: that is ${p.missStreak} misses in a row and you have not taught since the last one (${chars} characters he could read; your thinking does not count, he cannot see it). Testing again now would be a third miss. Teach exactly the step that failed (${p.lastMiss?.firstError ?? "see the grader's first error"}): call lesson_read with a WORKED EXAMPLE (every move with its reason, concrete numbers), or write it as chat text (at least ${TEACH_CHARS} characters). Then pose a completion problem with recall: the same structure with one blank for him to fill.`;
 	}
