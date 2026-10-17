@@ -42,11 +42,15 @@ import {
 	isMiss,
 	isReady,
 	markRead,
+	creditReply,
+	isQuestionText,
+	oweReply,
 	pedagogy,
 	predictReason,
 	readBodyReason,
 	readingReason,
 	readyAnswered,
+	replyReason,
 	recordOutcome,
 	resetPedagogy,
 } from "./review/pedagogy.ts";
@@ -495,14 +499,22 @@ export default function recall(pi: ExtensionAPI) {
 	let closedThisRun = false; // the session was wrapped up: closing remarks may end on a question
 	pi.on("tool_call", async (event) => {
 		const name = (event as any).toolName;
-		if (PROMPT_TOOLS.has(name)) lessonActive = true;
 		if (name === "session_close") closedThisRun = true;
+		if (!PROMPT_TOOLS.has(name)) return;
+		lessonActive = true;
+		const input = (event as any).input ?? {};
+		const own = String(input.details ?? input.say ?? input.body ?? "").trim().length;
+		const reason = replyReason(pedagogy(), name, own);
+		if (reason) return { block: true, reason };
 	});
 	pi.on("agent_start", async () => {
 		closedThisRun = false;
 	});
-	pi.on("input", async () => {
+	pi.on("input", async (event) => {
 		nudged = false;
+		// A message typed mid-lesson is usually a question about the material.
+		const text = String((event as any).text ?? "");
+		if (lessonActive && isQuestionText(text)) oweReply(pedagogy(), text);
 	});
 	pi.on("agent_before_settle", async (event) => {
 		const e = event as any;
@@ -542,6 +554,13 @@ export default function recall(pi: ExtensionAPI) {
 			.map((c: any) => String(c.text ?? "").trim())
 			.reduce((n: number, t: string) => n + t.length, 0);
 		if (chars) pedagogy().sinceMissChars += chars;
+		creditReply(
+			pedagogy(),
+			(msg.content || [])
+				.filter((c: any) => c.type === "text")
+				.map((c: any) => String(c.text ?? ""))
+				.join("\n\n"),
+		);
 	});
 	pi.on("session_start", async () => {
 		resetPedagogy();
@@ -583,6 +602,9 @@ export default function recall(pi: ExtensionAPI) {
 		if (name === "ask_user_question") {
 			const answers: any[] = e.details?.answers ?? [];
 			if (answers.some((a) => isReady(String(a?.label ?? "")))) readyAnswered(p);
+			// Typed "Other" text (or a free-text answer) that asks something is owed a visible reply.
+			const typed = answers.find((a) => (a?.type === "other" || a?.type === "text") && isQuestionText(String(a?.label ?? "")));
+			if (typed) oweReply(p, String(typed.label));
 		}
 	});
 
@@ -816,6 +838,7 @@ export default function recall(pi: ExtensionAPI) {
 			}
 			creditReading(p, body.length);
 			p.readNeeded = { slug: params.slug, node: params.node, shown: true };
+			oweReply(p, out.question);
 			return {
 				content: [
 					{

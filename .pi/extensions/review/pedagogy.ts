@@ -24,6 +24,10 @@ export interface Pedagogy {
 	readNeeded?: { slug: string; node: string; shown?: boolean };
 	/** "slug/node" keys that have been read (tapped) this pi session: never asked twice. */
 	readNodes?: string[];
+	/** He asked something; no new card or check until he has seen the answer (chat text he can read). */
+	owedReply?: { question: string; chars: number; text: string };
+	/** The visible answer to his last question, shown on the next ask_user_question card. */
+	replyForCard?: string;
 }
 
 export function pedagogy(): Pedagogy {
@@ -41,6 +45,8 @@ export function resetPedagogy(p: Pedagogy = pedagogy()): void {
 	p.readNeeded = undefined;
 	p.readNodes = [];
 	p.reviewMode = false;
+	p.owedReply = undefined;
+	p.replyForCard = undefined;
 }
 
 /** The miss streak is cleared: the tutor overrode a grade upward, he chose to move on, or the last answer was not an attempt. */
@@ -199,4 +205,40 @@ export function predictReason(prompt: string, paper: boolean | undefined): strin
 		return `Refused: this predict prompt is ${prompt.trim().length} characters (max ${PREDICT_MAX_CHARS}). Predict comes BEFORE teaching, so it must be answerable from intuition alone in one line: "What do you expect X to do when Y, and why (one line)?" No derivation, no multi-part setup. Shorten it and pose again.`;
 	}
 	return undefined;
+}
+
+// ---------- owed reply ----------
+// He asked a question (about a reading, in a card's "Other" box, or as a
+// message). The model has answered in its thinking, which he never sees, and
+// gone straight to "Ready?". So no card or check opens until the answer is
+// somewhere he can read: chat text, the card's details, a `say`, a reading.
+export const REPLY_CHARS = 150;
+export function oweReply(p: Pedagogy, question: string): void {
+	p.owedReply = { question: question.replace(/\s+/g, " ").trim().slice(0, 300), chars: 0, text: "" };
+	p.replyForCard = undefined;
+}
+/** Chat text from the tutor (message_end). */
+export function creditReply(p: Pedagogy, text: string): void {
+	const t = text.trim();
+	if (!p.owedReply || !t) return;
+	p.owedReply.chars += t.length;
+	p.owedReply.text = p.owedReply.text ? `${p.owedReply.text}\n\n${t}` : t;
+}
+/** Why `tool` may not open yet, or undefined (and the debt is paid). `ownChars` = text the call itself shows him. */
+export function replyReason(p: Pedagogy, tool: string, ownChars = 0): string | undefined {
+	const o = p.owedReply;
+	if (!o) return undefined;
+	if (o.chars + ownChars >= REPLY_CHARS) {
+		p.replyForCard = o.chars >= REPLY_CHARS ? o.text : undefined;
+		p.owedReply = undefined;
+		return undefined;
+	}
+	return `Blocked: he asked "${o.question}" and has not seen a reply yet (${o.chars} characters of chat text since he asked; only chat text reaches his screen). Reply to him first: answer his question in chat text, fully, the way you would explain it out loud. Then call ${tool} again.`;
+}
+/** Not a question: a ready, a menu pick, or a session-start prompt. */
+export function isQuestionText(text: string): boolean {
+	const t = text.trim();
+	if (!t || isReady(t) || t.startsWith("<skill") || t.startsWith("/")) return false;
+	if (/^(Continue the lesson|Teach me|Review:|Next on the path)/i.test(t)) return false;
+	return t.includes("?") || t.length >= 25;
 }

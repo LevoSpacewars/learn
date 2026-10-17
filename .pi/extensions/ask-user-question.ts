@@ -9,6 +9,7 @@ import {
 	wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import { pedagogy } from "./review/pedagogy.ts";
 import { type PromptAnswer, setPending } from "./review/prompts.ts";
 import { webInput } from "./review/ui.ts";
 
@@ -207,6 +208,7 @@ async function askSingleChoice(
 	question: string,
 	context: string | undefined,
 	options: AskOption[],
+	say?: string,
 ): Promise<AskAnswer | null> {
 	const otherLabel = getOtherLabel(options);
 	const allOptions: DisplayOption[] = [
@@ -233,6 +235,7 @@ async function askSingleChoice(
 			kind: "ask",
 			prompt: question,
 			context,
+			say,
 			startedAt: Date.now(),
 			options: options.map((o, i) => ({ index: i + 1, label: o.label })),
 			answer: (a: PromptAnswer) => {
@@ -665,7 +668,11 @@ export default function askUserQuestion(pi: ExtensionAPI) {
 				}
 
 				if (mode === "single-select") {
-					const answer = await askSingleChoice(ctx, params.question, context, options);
+					// His last question's answer goes on the card, so it is on the Answer tab, not only in the lesson pane.
+					const p = pedagogy();
+					const say = p.replyForCard;
+					p.replyForCard = undefined;
+					const answer = await askSingleChoice(ctx, params.question, context, options, say);
 					if (!answer) {
 						return cancelledResult(params.question, mode, context);
 					}
