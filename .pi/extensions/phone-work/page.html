@@ -149,12 +149,34 @@ body.role-scratch .draw.on { flex:1; min-height:0; }
 body.role-scratch #result { position:fixed; left:10px; right:10px; bottom:90px; z-index:6; box-shadow:0 8px 30px rgba(0,0,0,.25); }
 body.role-scratch #quiz:not(.readq) { display:none !important; }
 body.role-scratch #actions { grid-template-columns: 1fr; }
+/* side chat: questions about the material, outside the lesson */
+#askBtn { min-height:30px; padding:0 12px; font-size:13px; border-radius:8px; border-color:var(--accent); color:var(--accent); }
+@media (max-width: 899px) { header { flex-wrap:wrap; row-gap:8px; gap:8px; padding-left:12px; padding-right:12px; } header h1 { flex-basis:100%; order:-1; } .modeSel button { padding:0 8px; } }
+#chat { position:fixed; top:0; right:0; bottom:0; width:min(460px, 100vw); z-index:30; background:var(--card); border-left:1px solid var(--line); box-shadow:-10px 0 40px rgba(0,0,0,.18); display:flex; flex-direction:column; transform:translateX(105%); transition:transform .18s ease; }
+#chat.open { transform:none; }
+#chat .chead { display:flex; align-items:center; gap:8px; padding:max(10px, env(safe-area-inset-top)) 12px 10px; border-bottom:1px solid var(--line); }
+#chat .chead b { flex:1; font-size:15px; }
+#chat .chead button { min-height:32px; padding:0 10px; font-size:13px; border-radius:8px; }
+#chat select { width:100%; min-height:34px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-size:14px; padding:0 8px; }
+#chat .cscope { padding:8px 12px; border-bottom:1px solid var(--line); }
+#chatlog { flex:1; overflow:auto; padding:12px 14px; display:flex; flex-direction:column; gap:12px; }
+#chatlog .m { max-width:92%; padding:9px 12px; border-radius:12px; font-size:15.5px; line-height:1.5; overflow-wrap:anywhere; }
+#chatlog .m p { margin:0 0 8px; } #chatlog .m p:last-child { margin:0; } #chatlog .m .katex-display { overflow-x:auto; overflow-y:hidden; margin:8px 0; }
+#chatlog .m ul, #chatlog .m ol { margin:0 0 8px; padding-left:22px; }
+#chatlog .m.you { align-self:flex-end; background:var(--accent); color:#fff; } #chatlog .m.you blockquote { border-left:3px solid rgba(255,255,255,.5); margin:0 0 6px; padding-left:8px; opacity:.9; }
+#chatlog .m.tutor { align-self:flex-start; background:var(--soft); font-family: Charter, "Iowan Old Style", Georgia, serif; font-size:16.5px; }
+#chatlog .m.wait { color:var(--muted); font-style:italic; background:transparent; padding-left:0; }
+#chatlog .empty { color:var(--muted); font-size:14px; text-align:center; margin-top:20px; }
+#chat .cin { padding:10px 12px max(12px, env(safe-area-inset-bottom)); border-top:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
+#chat .cin textarea { min-height:70px; }
+#askSel { position:absolute; z-index:25; min-height:34px; padding:0 12px; font-size:13px; border-radius:10px; background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.2); }
 </style>
 </head><body class="view-pad">
 <header>
   <h1 id="title">learn</h1>
   <div class="tabs"><button id="tabLesson">Lesson</button><button id="tabPad" class="on">Answer</button></div>
   <div class="modeSel"><button id="roleFull" title="Lesson and answers on this device">Both</button><button id="roleViewer" title="Lesson + questions; answers typed or on another device">Viewer</button><button id="roleScratch" title="Full-screen drawing pad; the question shows at the top">Scratchpad</button></div>
+  <button id="askBtn" title="Ask about the material on the side (not graded, does not interrupt the lesson)">Ask</button>
   <a id="mapLink" href="#" style="color:var(--accent); text-decoration:none; font-weight:600; font-size:14px;">Map</a>
   <div id="conn" class="conn">Connecting…</div>
 </header>
@@ -200,6 +222,17 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
     </div>
   </section>
 </main>
+<aside id="chat" aria-label="Side chat">
+  <div class="chead"><b>Side chat</b><button id="chatNew" title="Start a fresh conversation">New</button><button id="chatClose">Close</button></div>
+  <div class="cscope"><select id="chatLesson" title="Which lesson's material to talk about"></select></div>
+  <div id="chatlog"></div>
+  <div class="cin">
+    <textarea id="chatText" placeholder="Ask about something in the lessons you don't get…"></textarea>
+    <button id="chatSend" class="primary" disabled>Ask</button>
+    <div class="small">Not graded and doesn't interrupt the lesson. The open question stays with the tutor.</div>
+  </div>
+</aside>
+<button id="askSel" class="hidden">Ask about this</button>
 <script>
 const token = new URLSearchParams(location.search).get("t");
 const $ = (id) => document.getElementById(id);
@@ -512,5 +545,56 @@ $("freesend").onclick = async () => { busy = true; updateButtons(); setStatus("S
 if (matchMedia("(min-width: 900px)").matches) document.body.className = "view-pad view-lesson";
 if (new URLSearchParams(location.search).get("view") === "lesson") $("tabLesson").click(); // open on the lesson tab (phone)
 hidePrompt();
+
+// ---------- side chat ----------
+let chatThread = null, chatBusy = false, chatLoaded = false, selText = "";
+function chatMsg(role, text) {
+  const d = document.createElement("div"); d.className = "m " + role; d.innerHTML = renderMd(text); $("chatlog").appendChild(d);
+  $("chatlog").querySelector(".empty")?.remove(); $("chatlog").scrollTop = $("chatlog").scrollHeight; return d;
+}
+async function loadChat() {
+  try {
+    const r = await fetch(api("/chat" + (chatThread ? "?thread=" + encodeURIComponent(chatThread) : "")), { cache: "no-store" }); if (!r.ok) return;
+    const j = await r.json(); chatThread = j.thread || chatThread;
+    const sel = $("chatLesson"), keep = sel.value; sel.innerHTML = "";
+    for (const l of j.lessons) { const o = document.createElement("option"); o.value = l.slug; o.textContent = l.title + (l.status === "open" ? "" : " · " + l.status); sel.appendChild(o); }
+    const lastLesson = [...j.turns].reverse().find((t) => t.lesson)?.lesson;
+    const want = keep || (j.lessons.some((l) => l.slug === j.viewing) ? j.viewing : lastLesson);
+    if (want && j.lessons.some((l) => l.slug === want)) sel.value = want;
+    $("chatlog").innerHTML = "";
+    if (!j.turns.length) $("chatlog").innerHTML = '<div class="empty">Ask anything about what the lessons taught: a step you didn&rsquo;t follow, what a symbol means, why something is true. Select text in the lesson to quote it.</div>';
+    for (const t of j.turns) chatMsg(t.role, t.text);
+    chatLoaded = true;
+  } catch {}
+}
+function openChat(quote) {
+  $("chat").classList.add("open"); if (!chatLoaded) loadChat();
+  if (quote) { const q = quote.trim().split("\n").map((l) => "> " + l).join("\n"); $("chatText").value = q + "\n\n" + $("chatText").value; }
+  setTimeout(() => { $("chatText").focus(); $("chatText").setSelectionRange($("chatText").value.length, $("chatText").value.length); }, 200);
+  updateChat();
+}
+function updateChat() { $("chatSend").disabled = chatBusy || !$("chatText").value.trim(); $("chatSend").textContent = chatBusy ? "Thinking…" : "Ask"; }
+$("askBtn").onclick = () => openChat(); $("chatClose").onclick = () => $("chat").classList.remove("open");
+$("chatText").oninput = updateChat;
+$("chatText").onkeydown = (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("chatSend").click(); };
+$("chatNew").onclick = async () => { if (chatBusy) return; try { const j = await post("/chat", { new: true }); chatThread = j.thread; $("chatlog").innerHTML = '<div class="empty">New conversation.</div>'; } catch {} };
+$("chatSend").onclick = async () => {
+  const text = $("chatText").value.trim(); if (!text || chatBusy) return;
+  chatBusy = true; updateChat(); chatMsg("you", text); $("chatText").value = "";
+  const wait = chatMsg("wait", "Thinking it through…");
+  try { const j = await post("/chat", { text, lesson: $("chatLesson").value, thread: chatThread }); wait.remove(); chatThread = j.turn.thread; chatMsg("tutor", j.turn.text); }
+  catch (e) { wait.remove(); chatMsg("wait", "Couldn't answer: " + e.message); $("chatText").value = text; }
+  chatBusy = false; updateChat();
+};
+// select text in the lesson -> "Ask about this"
+document.addEventListener("selectionchange", () => {
+  const s = getSelection(); const b = $("askSel");
+  if (!s || s.isCollapsed || !s.toString().trim() || !$("lesson").contains(s.anchorNode)) { setTimeout(() => b.classList.add("hidden"), 250); return; }
+  selText = s.toString();
+  const r = s.getRangeAt(0).getBoundingClientRect();
+  b.style.top = (window.scrollY + r.bottom + 8) + "px"; b.style.left = Math.max(8, Math.min(window.innerWidth - 140, r.left)) + "px"; b.classList.remove("hidden");
+});
+$("askSel").onmousedown = (e) => e.preventDefault();
+$("askSel").onclick = () => { const t = getSelection().toString() || selText; $("askSel").classList.add("hidden"); openChat(t.slice(0, 1500)); };
 </script>
 </body></html>

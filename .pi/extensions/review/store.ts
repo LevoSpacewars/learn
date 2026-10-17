@@ -550,6 +550,29 @@ export function recentStruggles(cwd: string, topics: Set<string>, limit = 6): st
 		.map((e) => `- ${e.at.slice(0, 10)} [${e.topic ?? "?"}${e.check ? `/${e.check}` : ""}] ${verdictMark(e.verdict)}${e.confidence !== undefined ? ` conf ${e.confidence}%` : ""}: ${clip(e.prompt, 120)}${e.firstError ? ` → ${clip(e.firstError, 140)}` : ""}`);
 }
 
+/** Recent side-chat questions (sidechat.ts writes .learn/sidechat.jsonl), newest last. */
+export function recentSideQuestions(cwd: string, lesson?: string, limit = 5): string[] {
+	let rows: Array<{ at: string; role: string; lesson?: string; text: string }> = [];
+	try {
+		rows = fs
+			.readFileSync(path.join(cwd, ".learn", "sidechat.jsonl"), "utf8")
+			.split("\n")
+			.flatMap((l) => {
+				try {
+					return l.trim() ? [JSON.parse(l)] : [];
+				} catch {
+					return [];
+				}
+			});
+	} catch {
+		return [];
+	}
+	return rows
+		.filter((t) => t.role === "you" && (!lesson || !t.lesson || t.lesson === lesson))
+		.slice(-limit)
+		.map((t) => `- ${t.at.slice(0, 10)}${t.lesson ? ` [${t.lesson}]` : ""}: ${clip(t.text, 220)}`);
+}
+
 // ── Curriculum logic (the scheduler lives here, in code) ───────────────────
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -1025,6 +1048,9 @@ export function learnerSlice(cwd: string, opts: { lesson?: string; topics?: stri
 
 	const struggles = recentStruggles(cwd, topics);
 	if (struggles.length) out.push("## Recent struggles (what was asked → where it went wrong; re-test these, don't assume)", ...struggles);
+
+	const side = recentSideQuestions(cwd, opts.lesson);
+	if (side.length) out.push("## Asked in the side chat (material that didn't land; already answered there, don't re-answer unprompted)", ...side);
 
 	const cal = store.calibration.filter((e) => topics.size === 0 || (e.topic && topics.has(e.topic)));
 	out.push(`## ${calibrationLine(cal.length >= 5 ? cal : store.calibration)}`);

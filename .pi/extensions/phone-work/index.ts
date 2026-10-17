@@ -18,6 +18,11 @@
  * Commands:
  *   /phone       — show the pad link + QR code (starts the server if needed)
  *   /phone hide  — hide the QR code
+ *   /ask <q>     — side chat from the terminal (/ask hide to dismiss the answer)
+ *
+ * Side chat (review/sidechat.ts): GET /chat returns the current thread and the
+ * lesson list; POST /chat {text, lesson?, thread?} asks and waits for the
+ * reply; POST /chat {new: true} starts a fresh thread.
  *
  * Env: PI_PHONE_PORT (default 8787), PI_PHONE_BIND (override bind address),
  *      PI_WHISPER_MODEL (default ~/.cache/whisper/ggml-medium.en.bin),
@@ -36,6 +41,8 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import qrcode from "qrcode-terminal";
 import { answerPending, getLastResult, getPending } from "../review/prompts.ts";
+import { askSide, chatLessons, currentThread, loadChat, newThreadId } from "../review/sidechat.ts";
+import { plainMath } from "../review/plainmath.ts";
 import { buildGraph } from "../review/store.ts";
 
 const PORT = Number(process.env.PI_PHONE_PORT) || 8787;
@@ -397,6 +404,26 @@ export default function phoneWork(pi: ExtensionAPI) {
 		json(res, 200, { ok: true, answered: true, transcript: audio?.transcript, files: saved.map((s) => s.name) });
 	}
 
+	/** Side chat: questions about the material, answered by a separate process. */
+	async function handleChat(req: http.IncomingMessage, res: http.ServerResponse) {
+		const cwd = latestCtx?.cwd ?? process.cwd();
+		let body: { text?: string; lesson?: string; thread?: string; new?: boolean };
+		try {
+			body = JSON.parse((await readBody(req)).toString("utf8"));
+		} catch {
+			return json(res, 400, { error: "Bad request" });
+		}
+		if (body.new) return json(res, 200, { ok: true, thread: newThreadId() });
+		const text = body.text?.trim();
+		if (!text) return json(res, 400, { error: "Nothing to ask" });
+		try {
+			const turn = await askSide({ cwd, question: text.slice(0, 8000), lesson: body.lesson || undefined, thread: body.thread || undefined });
+			json(res, 200, { ok: true, turn });
+		} catch (e: any) {
+			json(res, 500, { error: String(e?.message ?? e).split("\n")[0] });
+		}
+	}
+
 	function start(ctx: any): void {
 		if (server) return;
 		const host = process.env.PI_PHONE_BIND || tailscaleIPv4();
@@ -460,6 +487,16 @@ export default function phoneWork(pi: ExtensionAPI) {
 			if (req.method === "GET" && u.pathname === "/file") {
 				const p = u.searchParams.get("p") ?? "";
 				return serveVaultFile(latestCtx?.cwd ?? process.cwd(), p, res);
+			}
+			if (req.method === "GET" && u.pathname === "/chat") {
+				const cwd = latestCtx?.cwd ?? process.cwd();
+				const thread = u.searchParams.get("thread") || currentThread(cwd);
+				const logFile = (globalThis as any).__learnLogFile as string | null | undefined;
+				return json(res, 200, { thread: thread ?? null, turns: thread ? loadChat(cwd).filter((x) => x.thread === thread) : [], lessons: chatLessons(cwd), viewing: logFile ? path.basename(logFile, ".md") : null });
+			}
+			if (req.method === "POST" && u.pathname === "/chat") {
+				handleChat(req, res).catch((e) => json(res, 500, { error: String(e?.message ?? e) }));
+				return;
 			}
 			if (req.method === "POST" && u.pathname === "/upload") {
 				handleUpload(req, res).catch((e) => json(res, 500, { error: String(e?.message ?? e) }));
@@ -532,6 +569,49 @@ export default function phoneWork(pi: ExtensionAPI) {
 				return;
 			}
 			showWidget(ctx);
+		},
+	});
+	pi.registerCommand("ask", {
+		description: "Side chat: ask about the lesson material without interrupting the lesson (/ask hide to dismiss)",
+		handler: async (args, ctx: any) => {
+			latestCtx = ctx;
+			const q = args.trim();
+			if (!q || q === "hide") {
+				ctx.ui.setWidget("side-chat", undefined);
+				if (!q) ctx.ui.notify("Usage: /ask <your question about the material>. The app has a Side chat too (Ask button).", "info");
+				return;
+			}
+			const box = (lines: string[]) =>
+				ctx.ui.setWidget("side-chat", () => ({
+					render: (width: number) => {
+						const w = Math.max(10, width - 2);
+						return lines.flatMap((l) => {
+							if (!l) return [""];
+							const out: string[] = [];
+							let rest = l;
+							while (rest.length > w) {
+								const cut = rest.lastIndexOf(" ", w) > w / 2 ? rest.lastIndexOf(" ", w) : w;
+								out.push(" " + rest.slice(0, cut));
+								rest = rest.slice(cut).trimStart();
+							}
+							out.push(" " + rest);
+							return out;
+						});
+					},
+					invalidate: () => {},
+				}));
+			box([ctx.ui.theme.fg("accent", "Side chat") + ctx.ui.theme.fg("dim", " · thinking…"), `> ${q}`]);
+			// Not awaited: the answer takes a while and the terminal stays usable meanwhile.
+			void (async () => {
+				try {
+					const lesson = ((globalThis as any).__learnLogFile as string | undefined)?.split("/").pop()?.replace(/\.md$/, "");
+					const known = chatLessons(ctx.cwd).some((l) => l.slug === lesson);
+					const turn = await askSide({ cwd: ctx.cwd, question: q, lesson: known ? lesson : undefined });
+					box([ctx.ui.theme.fg("accent", "Side chat") + ctx.ui.theme.fg("dim", " · /ask hide to dismiss · full thread in the app"), `> ${q}`, "", ...plainMath(turn.text).split("\n")]);
+				} catch (e: any) {
+					box([ctx.ui.theme.fg("accent", "Side chat"), `> ${q}`, ctx.ui.theme.fg("error", String(e?.message ?? e).split("\n")[0])]);
+				}
+			})();
 		},
 	});
 }
