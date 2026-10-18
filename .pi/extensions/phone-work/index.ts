@@ -18,6 +18,8 @@
  * Commands:
  *   /phone       — show the pad link + QR code (starts the server if needed)
  *   /phone hide  — hide the QR code
+ *   The start menu's "Connect my phone" item does the same through
+ *   globalThis.__learnPhone.show / hide (each extension is its own module).
  *   /ask <q>     — side chat from the terminal (/ask hide to dismiss the answer)
  *
  * Side chat (review/sidechat.ts): GET /chat returns the current thread and the
@@ -214,6 +216,10 @@ interface PhoneShared {
 	localUrl?: string;
 	qrLines?: string[];
 	connected: boolean;
+	/** Show the QR code (starting the server if needed). Resolves to an error message, or undefined when shown. */
+	show?: (ctx: any) => Promise<string | undefined>;
+	/** Hide a QR code that was shown on request (the one shown at startup stays until a device connects). */
+	hide?: (ctx: any) => void;
 }
 function shared(): PhoneShared {
 	const g = globalThis as any;
@@ -229,6 +235,8 @@ export default function phoneWork(pi: ExtensionAPI) {
 	let latestCtx: any;
 	let startError: string | undefined;
 	let widgetShown = false;
+	let manualShown = false; // shown via the menu or /phone, not the startup auto-show
+	const seenHosts = new Set<string>();
 
 	function qrLines(): string[] {
 		const sh = shared();
@@ -272,16 +280,42 @@ export default function phoneWork(pi: ExtensionAPI) {
 		ctx.ui.setWidget("phone-work", undefined);
 	}
 
-	/** The phone reached us: remember it and drop the QR code from the screen. */
-	function phoneSeen() {
+	/** A device reached us: remember it. The first device, or a NEW one, drops the QR code from the screen. */
+	function phoneSeen(req?: http.IncomingMessage) {
 		const sh = shared();
 		const first = !sh.connected;
 		sh.connected = true;
-		if (first && latestCtx) {
+		const host = req?.socket?.remoteAddress;
+		const fresh = !!host && !seenHosts.has(host);
+		if (host) seenHosts.add(host);
+		if ((first || fresh) && latestCtx) {
+			manualShown = false;
 			hideWidget(latestCtx);
 			setStatus();
 		}
 	}
+
+	/** Show the QR code on request (menu item or /phone). Returns an error message when the pad is unavailable. */
+	async function show(ctx: any): Promise<string | undefined> {
+		latestCtx = ctx;
+		start(ctx);
+		// listen() is async; give it a moment on first start.
+		for (let i = 0; i < 20 && !url && !startError; i++) await new Promise((r) => setTimeout(r, 50));
+		if (!url) {
+			return startError === "tailscale not connected"
+				? "Tailscale isn't connected on this Mac. Install/sign in to Tailscale on the Mac and your phone, then try again."
+				: `Answer pad unavailable: ${startError ?? "server not started"}`;
+		}
+		manualShown = true;
+		showWidget(ctx);
+		return undefined;
+	}
+	shared().show = show;
+	shared().hide = (ctx: any) => {
+		if (!manualShown) return;
+		manualShown = false;
+		hideWidget(ctx);
+	};
 
 	function setStatus() {
 		const ctx = latestCtx;
@@ -459,11 +493,11 @@ export default function phoneWork(pi: ExtensionAPI) {
 				}
 			}
 			if (req.method === "GET" && u.pathname === "/ping") {
-				phoneSeen();
+				phoneSeen(req);
 				return json(res, 200, { ok: true });
 			}
 			if (req.method === "GET" && u.pathname === "/prompt") {
-				phoneSeen();
+				phoneSeen(req);
 				const p = getPending();
 				const last = getLastResult();
 				return json(res, 200, {
@@ -508,11 +542,14 @@ export default function phoneWork(pi: ExtensionAPI) {
 			}
 			send(res, 404, "text/plain", "Not found");
 		});
-		// Also reachable from this Mac's own browser.
-		const local = http.createServer((req, res) => s.emit("request", req, res));
-		local.on("error", () => {});
-		local.listen(PORT, "127.0.0.1");
-		s.on("close", () => local.close());
+		// Also reachable from this Mac's own browser (unless the main server already
+		// binds loopback, e.g. PI_PHONE_BIND=127.0.0.1: a second listener would EADDRINUSE).
+		if (host !== "127.0.0.1" && host !== "localhost") {
+			const local = http.createServer((req, res) => s.emit("request", req, res));
+			local.on("error", () => {});
+			local.listen(PORT, "127.0.0.1");
+			s.on("close", () => local.close());
+		}
 		// Claim the slot before listen() resolves so a quick /phone can't start a second server.
 		server = s;
 		s.on("error", (e: any) => {
@@ -553,22 +590,12 @@ export default function phoneWork(pi: ExtensionAPI) {
 			latestCtx = ctx;
 			if (args.trim() === "hide") {
 				widgetShown = true;
+				manualShown = false;
 				hideWidget(ctx);
 				return;
 			}
-			start(ctx);
-			// listen() is async; give it a moment on first start.
-			for (let i = 0; i < 20 && !url && !startError; i++) await new Promise((r) => setTimeout(r, 50));
-			if (!url) {
-				ctx.ui.notify(
-					startError === "tailscale not connected"
-						? "Tailscale isn't connected on this Mac. Install/sign in to Tailscale on the Mac and your phone, then run /phone again."
-						: `Answer pad unavailable: ${startError ?? "server not started"}`,
-					"warning",
-				);
-				return;
-			}
-			showWidget(ctx);
+			const err = await show(ctx);
+			if (err) ctx.ui.notify(err, "warning");
 		},
 	});
 	pi.registerCommand("ask", {

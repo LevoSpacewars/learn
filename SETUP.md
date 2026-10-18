@@ -10,7 +10,7 @@ cd ~/learn && bin/setup        # checks tools, installs extension deps, offers t
 pi                              # first start creates .learn/phone-token for this machine
 ```
 
-Then in pi: `/phone` prints the links and QR code. Sign in to the Claude bridge once (`pi` will prompt) and make sure Tailscale is running.
+Then in pi: pick "Connect my phone (show the QR code)" in the start menu, or type `/phone`; either prints the links and QR code. Sign in to the Claude bridge once (`pi` will prompt) and make sure Tailscale is running.
 
 ## Hosting on a server (PC at home, laptop + iPad remote)
 

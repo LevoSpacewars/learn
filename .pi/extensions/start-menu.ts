@@ -153,6 +153,7 @@ export default function startMenu(pi: ExtensionAPI) {
 		const REVIEW = `Review (${due} due)`;
 		const BRING = "Bring something (paper, idea, question)";
 		const SETUP = "Set up my goals (one-time)";
+		const PHONE = "Connect my phone (show the QR code)";
 		const continues = open.map((l) => ({
 			label: `Continue: ${l.title} (${l.nodes.length ? `${l.nodes.filter((n) => n.status === "confirmed").length}/${l.nodes.length}` : "still mapping"})`,
 			lesson: l,
@@ -176,12 +177,26 @@ export default function startMenu(pi: ExtensionAPI) {
 			next: NEXT && pick ? { label: NEXT, titles: [pick.fundamental?.title ?? "", pick.milestone.title, pick.fundamental?.slug ?? ""] } : undefined,
 		});
 		const options = orderOptions(
-			[...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ORIENT, ...(hasGoals ? [] : [SETUP])],
+			[...(due > 0 ? [REVIEW] : []), ...continues.map((c) => c.label), ...(NEXT ? [NEXT] : []), ...(hasGoals ? [BRING] : []), LEARN, ORIENT, ...(hasGoals ? [] : [SETUP]), PHONE],
 			preferred,
 			due > 0 ? REVIEW : undefined,
 		);
 		const choice = await webSelect(ctx, `What would you like to do?${lastNext ? `\n\nLast session — ${lastNext}` : ""}`, options);
 		if (!choice) return;
+
+		// The phone-work extension (its own module instance) shares show/hide on globalThis.
+		const phone = (globalThis as any).__learnPhone as { show?: (ctx: any) => Promise<string | undefined>; hide?: (ctx: any) => void } | undefined;
+		if (choice === PHONE) {
+			const err = phone?.show ? await phone.show(ctx) : "Phone server not running (phone-work extension not loaded).";
+			ctx.ui.notify(
+				err ?? "Scan the QR code above with your phone or iPad (Tailscale on). It disappears once the device connects; /phone hide dismisses it.",
+				err ? "warning" : "info",
+			);
+			// Back to the menu so this doesn't end the session.
+			setTimeout(() => run(ctx).catch(() => {}), 0);
+			return;
+		}
+		phone?.hide?.(ctx); // a QR code shown from this menu should not linger into the session
 
 		if (choice === ORIENT) {
 			const g = buildGraph(ctx.cwd);
