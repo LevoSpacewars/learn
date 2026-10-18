@@ -18,6 +18,8 @@
  * Commands:
  *   /phone       — show the pad link + QR code (starts the server if needed)
  *   /phone hide  — hide the QR code
+ *   alt+q        — toggle the QR code at any time (also mid-lesson)
+ *   GET /qr.svg  — the same QR as an image, for the "Phone" button on the laptop page
  *   The start menu's "Connect my phone" item does the same through
  *   globalThis.__learnPhone.show / hide (each extension is its own module).
  *   /ask <q>     — side chat from the terminal (/ask hide to dismiss the answer)
@@ -116,6 +118,44 @@ function loadToken(cwd: string): string {
 	fs.mkdirSync(path.dirname(file), { recursive: true });
 	fs.writeFileSync(file, token, { mode: 0o600 });
 	return token;
+}
+
+/**
+ * The QR code as an SVG. qrcode-terminal only emits text, so we parse its
+ * "small" output back into modules and draw squares. The text is drawn for a
+ * dark terminal, i.e. INVERTED: a full block is a LIGHT module, a space is a
+ * DARK one, ▀ = top light / bottom dark, ▄ = top dark / bottom light. Each
+ * character covers two module rows; the lib also emits an all-dark half-row
+ * artifact at the top, which is dropped.
+ */
+export function qrSvg(text: string): string {
+	let out = "";
+	qrcode.generate(text, { small: true }, (q: string) => (out = q));
+	const rows: boolean[][] = [];
+	for (const line of out.split("\n")) {
+		if (!line.trim() && rows.length === 0) continue;
+		const top: boolean[] = [];
+		const bottom: boolean[] = [];
+		for (const ch of line) {
+			top.push(ch === " " || ch === "▄");
+			bottom.push(ch === " " || ch === "▀");
+		}
+		if (top.length) rows.push(top, bottom);
+	}
+	// A real QR row always has light quiet-zone cells at both ends; an all-dark row is the lib's artifact.
+	const real = rows.filter((r) => !r.every((m) => m));
+	rows.length = 0;
+	rows.push(...real);
+	// Crop the text's own margin to the dark modules, then add the standard 4-module quiet zone.
+	let minX = Infinity, minY = Infinity, maxX = -1, maxY = -1;
+	rows.forEach((r, y) => r.forEach((m, x) => { if (m) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); } }));
+	if (maxX < 0) return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1" fill="#fff"/></svg>`;
+	const pad = 4;
+	const n = Math.max(maxX - minX, maxY - minY) + 1;
+	const size = n + pad * 2;
+	const rects: string[] = [];
+	rows.forEach((r, y) => r.forEach((m, x) => m && rects.push(`<rect x="${x - minX + pad}" y="${y - minY + pad}" width="1" height="1"/>`)));
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><g fill="#000">${rects.join("")}</g></svg>`;
 }
 
 function tokenOk(given: string | null, token: string): boolean {
@@ -321,7 +361,7 @@ export default function phoneWork(pi: ExtensionAPI) {
 		const ctx = latestCtx;
 		if (!ctx) return;
 		const theme = ctx.ui.theme;
-		if (url) ctx.ui.setStatus("phone-work", theme.fg("accent", "📱 ") + theme.fg("dim", shared().connected ? "phone connected" : "phone ready · type qr in a prompt"));
+		if (url) ctx.ui.setStatus("phone-work", theme.fg("accent", "📱 ") + theme.fg("dim", shared().connected ? "phone connected · alt+q for QR" : "phone ready · alt+q for QR"));
 		else ctx.ui.setStatus("phone-work", startError ? theme.fg("dim", `📱 ${startError}`) : undefined);
 	}
 
@@ -492,6 +532,10 @@ export default function phoneWork(pi: ExtensionAPI) {
 					return send(res, 404, "text/plain", "scratch.js missing");
 				}
 			}
+			if (req.method === "GET" && u.pathname === "/qr.svg") {
+				// Connect another device from the laptop page: the pad link as a QR image.
+				return send(res, 200, "image/svg+xml; charset=utf-8", qrSvg(url ?? shared().url ?? ""));
+			}
 			if (req.method === "GET" && u.pathname === "/ping") {
 				phoneSeen(req);
 				return json(res, 200, { ok: true });
@@ -598,6 +642,20 @@ export default function phoneWork(pi: ExtensionAPI) {
 			if (err) ctx.ui.notify(err, "warning");
 		},
 	});
+	// Any time, including mid-lesson: toggle the QR code with one key.
+	const toggleQr = async (ctx: any) => {
+		latestCtx = ctx;
+		if (widgetShown) {
+			manualShown = false;
+			hideWidget(ctx);
+			return;
+		}
+		const err = await show(ctx);
+		if (err) ctx.ui.notify(err, "warning");
+	};
+	pi.registerShortcut("alt+q", { description: "Phone: show/hide the answer-pad QR code", handler: toggleQr });
+	pi.registerShortcut("f2", { description: "Phone: show/hide the answer-pad QR code", handler: toggleQr });
+
 	pi.registerCommand("ask", {
 		description: "Side chat: ask about the lesson material without interrupting the lesson (/ask hide to dismiss)",
 		handler: async (args, ctx: any) => {

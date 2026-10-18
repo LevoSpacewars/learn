@@ -18,6 +18,11 @@ html, body { height: 100%; }
 body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 -apple-system, system-ui, sans-serif; }
 header { display:flex; align-items:center; gap:12px; padding: max(10px, env(safe-area-inset-top)) 16px 10px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:5; }
 header h1 { font-size:16px; margin:0; font-weight:700; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qr { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:16px; }
+.qr.hidden { display:none; }
+.qrbox { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:14px; padding:20px; max-width:340px; width:100%; display:flex; flex-direction:column; gap:10px; align-items:center; text-align:center; }
+.qrbox img { background:#fff; border-radius:8px; padding:8px; width:260px; height:260px; }
+.qrbox .mono { font-family:ui-monospace, Menlo, monospace; font-size:12px; word-break:break-all; }
 .conn { font-size:12px; color:var(--muted); white-space:nowrap; }
 .conn.ok::before { content:"● "; color:var(--ok); } .conn.bad::before { content:"● "; color:var(--err); }
 .tabs { display:none; gap:6px; }
@@ -177,6 +182,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   <div class="tabs"><button id="tabLesson">Lesson</button><button id="tabPad" class="on">Answer</button></div>
   <div class="modeSel"><button id="roleFull" title="Lesson and answers on this device">Both</button><button id="roleViewer" title="Lesson + questions; answers typed or on another device">Viewer</button><button id="roleScratch" title="Full-screen drawing pad; the question shows at the top">Scratchpad</button></div>
   <button id="askBtn" title="Ask about the material on the side (not graded, does not interrupt the lesson)">Ask</button>
+  <button id="phoneBtn" title="Show the QR code to connect a phone or iPad">Phone</button>
   <a id="mapLink" href="#" style="color:var(--accent); text-decoration:none; font-weight:600; font-size:14px;">Map</a>
   <div id="conn" class="conn">Connecting…</div>
 </header>
@@ -233,11 +239,23 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   </div>
 </aside>
 <button id="askSel" class="hidden">Ask about this</button>
+<div id="qr" class="qr hidden" role="dialog" aria-label="Connect a device">
+  <div class="qrbox">
+    <img id="qrImg" alt="QR code for the answer pad" width="260" height="260">
+    <div class="small">Scan with your phone or iPad (Tailscale on). The link stays the same; bookmark it.</div>
+    <div id="qrUrl" class="small mono"></div>
+    <button id="qrClose">Close</button>
+  </div>
+</div>
 <script>
 const token = new URLSearchParams(location.search).get("t");
 const $ = (id) => document.getElementById(id);
 const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(token);
 document.getElementById("mapLink").href = "/graph?t=" + encodeURIComponent(token);
+// "Phone" button: the pad link as a QR image, so a second device can be connected from the laptop at any time.
+$("phoneBtn").onclick = () => { $("qrImg").src = api("/qr.svg") + "&v=" + Date.now(); $("qrUrl").textContent = location.origin + "/?t=" + token; $("qr").classList.remove("hidden"); };
+$("qrClose").onclick = () => $("qr").classList.add("hidden");
+$("qr").onclick = (e) => { if (e.target === $("qr")) $("qr").classList.add("hidden"); };
 let pending = null, last = null, lastShownId = null, skew = 0, busy = false, mode = "type";
 const files = [], freefiles = []; let audio = null, recorder = null, chunks = [];
 let selected = new Set();
