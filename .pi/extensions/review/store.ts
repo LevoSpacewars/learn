@@ -520,6 +520,7 @@ export function writeDossier(cwd: string, slug: string): string {
 		`**Status:** ${status}${f?.note ? ` — ${f.note}` : ""}`,
 		...(serves.length ? ["", "**Serves:**", ...serves.map((x) => `- ${x}`)] : []),
 		...(lesson ? ["", `**Lesson:** [[${(lesson.file ?? `lessons/${slug}.md`).replace(/^lessons\//, "").replace(/\.md$/, "")}]] (${lesson.status}${lesson.nodes.length ? `, ${lesson.nodes.filter((n) => n.status === "confirmed").length}/${lesson.nodes.length} nodes` : ""})${lesson.summary ? ` — ${lesson.summary}` : ""}`] : []),
+		...(fs.existsSync(path.join(cwd, "book", `${slug}.md`)) ? [`**Book:** [[book/${slug}|${title}]] (the readings only, no cards)`] : []),
 		...(mis.length ? ["", "## Misconceptions", ...mis.map((m) => `- [${m.status}] believed "${m.claim}" — truth: ${m.truth} (for ${m.evidence.filter((e) => e.kind === "for").length} / against ${m.evidence.filter((e) => e.kind === "against").length})`)] : []),
 		"",
 		`## Evidence (${events.length}, latest first)`,
@@ -1000,8 +1001,8 @@ export function learnerSlice(cwd: string, opts: { lesson?: string; topics?: stri
 		if (lesson.goal) out.push(`Goal: ${lesson.goal}`);
 		if (lesson.summary) out.push(`Where we left off: ${lesson.summary}`);
 		if (lesson.nodes.length) {
-			out.push("Nodes (id · label · kind · status · assigned check · hints):");
-			for (const n of lesson.nodes) out.push(`- ${n.id} · ${n.label} · ${n.kind} · ${n.status} · ${n.check} · ${n.hints}${n.note ? ` · ${n.note}` : ""}`);
+			out.push("Nodes (label · internal id · kind · status · assigned check · hints). Ids are for the tools only: in anything he reads, name the idea by its label, never the id.");
+			for (const n of lesson.nodes) out.push(`- "${n.label}" · ${n.id} · ${n.kind} · ${n.status} · ${n.check} · ${n.hints}${n.note ? ` · ${n.note}` : ""}`);
 		}
 		if (lesson.plan) out.push("Plan (mermaid):\n```mermaid\n" + lesson.plan.trim() + "\n```");
 		for (const t of [lesson.slug, ...lesson.title.toLowerCase().split(/\s+/)]) topics.add(t);

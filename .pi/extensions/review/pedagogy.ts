@@ -21,7 +21,7 @@ export interface Pedagogy {
 	lastMiss?: { prompt: string; firstError?: string; verdict: string };
 	readSinceMiss?: boolean; // a lesson_read was read since the last miss (counts as teaching)
 	/** The node whose reading must come before the next recall/quiz (set by lesson_plan / lesson_node). */
-	readNeeded?: { slug: string; node: string; shown?: boolean };
+	readNeeded?: { slug: string; node: string; label?: string; shown?: boolean };
 	/** "slug/node" keys that have been read (tapped) this pi session: never asked twice. */
 	readNodes?: string[];
 	/** He asked something; no new card or check until he has seen the answer (chat text he can read). */
@@ -98,10 +98,11 @@ export function readingReason(p: Pedagogy): string | undefined {
 	const r = p.readNeeded;
 	if (!r) return undefined;
 	if (p.readNodes?.includes(readKey(r.slug, r.node))) return undefined;
+	const name = r.label ? `"${r.label}"` : `node ${r.node}`;
 	if (r.shown) {
-		return `Blocked: he has the reading for ${r.slug}/${r.node} but asked about it instead of marking it read. Answer his question in chat text, then call ask_user_question with options "Ready, ask me" and "I have another question". Pose the check only after he picks ready (do NOT call lesson_read again for this node).`;
+		return `Blocked: he has the reading on ${name} but asked about it instead of marking it read. Answer his question in chat text, then call ask_user_question with options "Ready, ask me" and "I have another question". Pose the check only after he picks ready (do NOT call lesson_read again for this node).`;
 	}
-	return `Blocked: node ${r.node} of lesson ${r.slug} is new and he has not read it yet. Call lesson_read with slug "${r.slug}", node "${r.node}", a title, and a body of at least ${READ_MIN_CHARS} characters (markdown + LaTeX): the motivated derivation or guided derivation, ONE worked instance with every move explained, and what it hangs off. He reads it and taps "Read it, ask me"; then pose the check. Your thinking is invisible to him: anything he must read goes in lesson_read, chat text, or a tool's \`say\`.`;
+	return `Blocked: ${name} (node ${r.node} of lesson ${r.slug}) is new and he has not read it yet. Call lesson_read with slug "${r.slug}", node "${r.node}", a title, and a body of at least ${READ_MIN_CHARS} characters (markdown + LaTeX): the motivated derivation or guided derivation, ONE worked instance with every move explained, and what it hangs off. He reads it and taps "Read it, ask me"; then pose the check. Your thinking is invisible to him: anything he must read goes in lesson_read, chat text, or a tool's \`say\`. When you talk to him, call it ${name}, never "${r.node}": he has never seen node ids.`;
 }
 
 /** Validate a lesson_read body. Returns the refusal text, or undefined if it is long enough. */
@@ -129,7 +130,7 @@ export function creditReading(p: Pedagogy, bodyChars: number): void {
  * Arm the reading gate for the next node after lesson_plan / lesson_node.
  * Nodes already read this session are never asked for again.
  */
-export function armReading(p: Pedagogy, slug: string, node: string | undefined): void {
+export function armReading(p: Pedagogy, slug: string, node: string | undefined, label?: string): void {
 	if (!node) {
 		if (p.readNeeded?.slug === slug) p.readNeeded = undefined;
 		return;
@@ -139,7 +140,7 @@ export function armReading(p: Pedagogy, slug: string, node: string | undefined):
 		return;
 	}
 	if (p.readNeeded && p.readNeeded.slug === slug && p.readNeeded.node === node) return; // keep `shown`
-	p.readNeeded = { slug, node };
+	p.readNeeded = { slug, node, label };
 }
 
 /** The ask_user_question answer after a discussed reading: "ready" clears the node. */
@@ -170,7 +171,7 @@ export function gateReason(p: Pedagogy, prompt: string, extraChars = 0): string 
 		return undefined;
 	}
 	if (p.missStreak >= 2 && chars < TEACH_CHARS && !p.readSinceMiss) {
-		return `Blocked: that is ${p.missStreak} misses in a row and you have not taught since the last one (${chars} characters he could read; your thinking does not count, he cannot see it). Testing again now would be a third miss. Teach exactly the step that failed (${p.lastMiss?.firstError ?? "see the grader's first error"}): call lesson_read with a WORKED EXAMPLE (every move with its reason, concrete numbers), or write it as chat text (at least ${TEACH_CHARS} characters). Then pose a completion problem with recall: the same structure with one blank for him to fill.`;
+		return `Blocked: that is ${p.missStreak} misses in a row and you have not taught since the last one (${chars} characters he could read; your thinking does not count, he cannot see it). Testing again now would be a third miss. Teach exactly the step that failed (${p.lastMiss?.firstError ?? "see the grader's first error"}): call lesson_read with a WORKED EXAMPLE (every move with its reason, concrete numbers), or write it as chat text (at least ${TEACH_CHARS} characters). Then pose a completion problem with recall: the same structure with ONE blank for him to fill, and nothing else to explain in the same prompt (a "say why" tacked on turns a filled blank into another miss; ask the why afterwards, on its own).`;
 	}
 	if (chars < DIAGNOSE_CHARS) {
 		return `Blocked: the last answer was a miss and he has read nothing from you since (${chars} characters; your thinking is invisible to him). Put your diagnosis in this recall's \`say\` field (1-3 lines: what went wrong and why, in your words, and what the right move was), or write it as chat text, and pose a narrower question on that one step in the same call. Never ask it as plain text: he answers on the web page, which only has an answer box while a recall is open.`;
@@ -241,4 +242,44 @@ export function isQuestionText(text: string): boolean {
 	if (!t || isReady(t) || t.startsWith("<skill") || t.startsWith("/")) return false;
 	if (/^(Continue the lesson|Teach me|Review:|Next on the path)/i.test(t)) return false;
 	return t.includes("?") || t.length >= 25;
+}
+
+// ---------- node ids ----------
+// Lesson nodes have short ids (R1, D2, G) for the map and the tools. He has
+// never seen them: "pick up at D3" means nothing to him. Anything he reads
+// must name the idea by its label instead. The tools refuse text that leaks an id.
+export interface NodeRef {
+	slug: string;
+	id: string;
+	label: string;
+}
+export type NodeLessons = Array<{ slug: string; nodes: Array<{ id: string; label: string }> }>;
+/** Ids that can be matched safely in prose: a letter or two followed by digits (R1, D2, EX3); a lone letter is too common. */
+const PROSE_ID = /^[A-Z]{1,2}\d{1,2}$/;
+/** Bare node ids found in learner-visible text (not inside $...$ math). */
+export function findNodeIds(text: string, lessons: NodeLessons): NodeRef[] {
+	if (!text) return [];
+	const prose = text.replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\$[^$\n]*\$/g, " ");
+	const out: NodeRef[] = [];
+	const seen = new Set<string>();
+	for (const l of lessons) {
+		for (const n of l.nodes) {
+			if (!PROSE_ID.test(n.id) || seen.has(n.id)) continue;
+			if (new RegExp(`(?<![A-Za-z0-9_$\\\\])${n.id}(?![A-Za-z0-9_])`).test(prose)) {
+				seen.add(n.id);
+				out.push({ slug: l.slug, id: n.id, label: n.label });
+			}
+		}
+	}
+	return out;
+}
+/** Why a call must be rewritten, or undefined. `fields` = every learner-visible string of the call. */
+export function nodeIdReason(fields: Record<string, string | undefined>, lessons: NodeLessons): string | undefined {
+	const hits: Array<NodeRef & { field: string }> = [];
+	for (const [field, text] of Object.entries(fields)) {
+		for (const h of findNodeIds(text ?? "", lessons)) if (!hits.some((x) => x.id === h.id)) hits.push({ ...h, field });
+	}
+	if (!hits.length) return undefined;
+	const list = hits.map((h) => `"${h.id}" (in ${h.field}) is the node "${h.label}"`).join("; ");
+	return `Refused: node ids are internal and he has never seen them, so ${list}. Name the idea instead (e.g. "the matrix exponential", "the superposition step", "the reading on e^{Qt}"), never the id, and call again.`;
 }

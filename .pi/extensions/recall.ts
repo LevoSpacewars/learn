@@ -44,6 +44,7 @@ import {
 	markRead,
 	creditReply,
 	isQuestionText,
+	nodeIdReason,
 	oweReply,
 	pedagogy,
 	predictReason,
@@ -55,6 +56,7 @@ import {
 	resetPedagogy,
 } from "./review/pedagogy.ts";
 import { type CheckKind, loadLearner, recordCalibration, recordEvent } from "./review/store.ts";
+import { recordReading, writeBook } from "./review/book.ts";
 import { webRead } from "./review/ui.ts";
 
 type RecallStatus = "answered" | "hint" | "dontKnow" | "skipped" | "ended" | "cancelled" | "unavailable" | "blocked";
@@ -447,6 +449,37 @@ function lastAssistant(messages: any[]): any | undefined {
 	return undefined;
 }
 const PROMPT_TOOLS = new Set(["recall", "quiz", "ask_user_question", "lesson_read"]);
+/** Tools whose text reaches him later (the start menu shows the last note's "Next:" line and the pause summary). */
+const LEARNER_TEXT_TOOLS = new Set(["session_close", "lesson_status"]);
+
+/** Every string of a tool call that the learner will read, by field name. */
+export function learnerFields(tool: string, input: any): Record<string, string | undefined> {
+	const opts = Array.isArray(input?.options) ? input.options : [];
+	const optionText = opts.map((o: any) => (typeof o === "string" ? o : [o?.label, o?.description].filter(Boolean).join(" — "))).join("\n") || undefined;
+	switch (tool) {
+		case "recall":
+			return { say: input?.say, prompt: input?.prompt };
+		case "quiz":
+			return { say: input?.say, question: input?.question, details: input?.details, options: optionText };
+		case "ask_user_question":
+			return { question: input?.question, details: input?.details, options: optionText };
+		case "lesson_read":
+			return { title: input?.title, body: input?.body };
+		case "session_close":
+			return { note: input?.note };
+		case "lesson_status":
+			return { summary: input?.summary };
+		default:
+			return {};
+	}
+}
+function lessonsForIds(cwd: string): Array<{ slug: string; nodes: Array<{ id: string; label: string }> }> {
+	try {
+		return loadLearner(cwd).lessons.map((l) => ({ slug: l.slug, nodes: l.nodes.map((n) => ({ id: n.id, label: n.label })) }));
+	} catch {
+		return [];
+	}
+}
 
 /** Every refusal recall applies before posing, in order. Predict is a pretest: it comes before the reading. */
 export function recallBlock(p: Pedagogy, o: { kind: CheckKind; prompt: string; paper?: boolean; say?: string }): string | undefined {
@@ -461,7 +494,8 @@ export function recallBlock(p: Pedagogy, o: { kind: CheckKind; prompt: string; p
 function armForLesson(p: Pedagogy, cwd: string, slug: string): void {
 	try {
 		const lesson = loadLearner(cwd).lessons.find((l) => l.slug === slug);
-		armReading(p, slug, lesson?.nodes.find((n) => n.status === "pending")?.id);
+		const next = lesson?.nodes.find((n) => n.status === "pending");
+		armReading(p, slug, next?.id, next?.label);
 	} catch {
 		// unreadable learner file: no gate rather than a stuck lesson
 	}
@@ -497,12 +531,18 @@ export default function recall(pi: ExtensionAPI) {
 	let lessonActive = false;
 	let nudged = false;
 	let closedThisRun = false; // the session was wrapped up: closing remarks may end on a question
-	pi.on("tool_call", async (event) => {
+	pi.on("tool_call", async (event, ctx) => {
 		const name = (event as any).toolName;
 		if (name === "session_close") closedThisRun = true;
+		const input = (event as any).input ?? {};
+		// Node ids (R1, D2, G) are internal: nothing he reads may use them. The
+		// closing note and the pause summary count too; the start menu shows them.
+		if (PROMPT_TOOLS.has(name) || LEARNER_TEXT_TOOLS.has(name)) {
+			const leak = nodeIdReason(learnerFields(name, input), lessonsForIds((ctx as any)?.cwd ?? process.cwd()));
+			if (leak) return { block: true, reason: leak };
+		}
 		if (!PROMPT_TOOLS.has(name)) return;
 		lessonActive = true;
-		const input = (event as any).input ?? {};
 		const own = String(input.details ?? input.say ?? input.body ?? "").trim().length;
 		const reason = replyReason(pedagogy(), name, own);
 		if (reason) return { block: true, reason };
@@ -824,6 +864,13 @@ export default function recall(pi: ExtensionAPI) {
 			if (!ctx.hasUI) return { content: [{ type: "text" as const, text: "lesson_read requires interactive mode UI" }], details: { ...base, status: "unavailable" as const } };
 			const shown: ReadDetails = { ...base, status: "read", phase: "shown", figure: fig.rel };
 			onUpdate?.({ content: [{ type: "text", text: "reading shown" }], details: shown });
+			// The reading joins the lesson's book (book/<slug>.md): readings only, no cards.
+			try {
+				recordReading(ctx.cwd, { slug: params.slug, node: params.node, title, body, figure: fig.rel });
+				writeBook(ctx.cwd, params.slug);
+			} catch {
+				// the book is a convenience; never fail the reading
+			}
 			const out = await withUILock(() => webRead(ctx, { title, body, figure: fig.rel }));
 			const p = pedagogy();
 			if (!out) {

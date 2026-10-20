@@ -116,13 +116,40 @@ export function lessonMaterial(text: string): string {
 		.trim();
 }
 
-function readMaterial(cwd: string, l: LessonRecord | { slug: string; file?: string }): string {
-	const file = path.join(cwd, l.file ?? `lessons/${l.slug}.md`);
+/**
+ * The notes of a lesson: its file plus the dated continuations the start menu
+ * creates when the note already exists (<name>-YYYY-MM-DD.md, -2, …), oldest first.
+ */
+export function lessonNoteFiles(cwd: string, l: { slug: string; file?: string }): string[] {
+	const first = path.join(cwd, l.file ?? `lessons/${l.slug}.md`);
+	const dir = path.dirname(first);
+	const base = path.basename(first, ".md");
+	let names: string[] = [];
 	try {
-		return lessonMaterial(fs.readFileSync(file, "utf8"));
+		names = fs.readdirSync(dir);
 	} catch {
-		return "";
+		return fs.existsSync(first) ? [first] : [];
 	}
+	const dated = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d{4}-\\d{2}-\\d{2})(?:-(\\d+))?\\.md$`);
+	const key = (n: string): [string, number] => {
+		const m = n.match(dated);
+		return [m?.[1] ?? "", Number(m?.[2] ?? 1)];
+	};
+	const more = names.filter((n) => dated.test(n)).sort((a, b) => key(a)[0].localeCompare(key(b)[0]) || key(a)[1] - key(b)[1]);
+	return [first, ...more.map((n) => path.join(dir, n))].filter((f) => fs.existsSync(f));
+}
+
+function readMaterial(cwd: string, l: LessonRecord | { slug: string; file?: string }): string {
+	return lessonNoteFiles(cwd, l)
+		.map((file) => {
+			try {
+				return lessonMaterial(fs.readFileSync(file, "utf8"));
+			} catch {
+				return "";
+			}
+		})
+		.filter(Boolean)
+		.join("\n\n");
 }
 
 /** Only the "## Reading — …" sections of a lesson's material (used for the other lessons). */

@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.6.0/mermaid.min.js"></script>
 <!--SCRATCH-->
 <script>if (!window.Scratch) document.addEventListener("DOMContentLoaded", () => { const n = document.createElement("div"); n.className = "card"; n.style.color = "var(--err)"; n.textContent = "Scratchpad engine not loaded: the running pi session is older than this page. Quit pi and start it again."; const d = document.getElementById("draw"); (d || document.body).prepend(n); });</script>
 <style>
@@ -175,6 +175,19 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
 #chat .cin { padding:10px 12px max(12px, env(safe-area-inset-bottom)); border-top:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
 #chat .cin textarea { min-height:70px; }
 #askSel { position:absolute; z-index:25; min-height:34px; padding:0 12px; font-size:13px; border-radius:10px; background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+/* the book: a lesson's readings as one document, nothing else */
+#bookBtn { min-height:30px; padding:0 12px; font-size:13px; border-radius:8px; }
+#book { position:fixed; inset:0; z-index:40; background:var(--bg); display:none; flex-direction:column; }
+#book.open { display:flex; }
+#book .bhead { display:flex; align-items:center; gap:8px; padding:max(10px, env(safe-area-inset-top)) 14px 10px; border-bottom:1px solid var(--line); background:var(--card); }
+#book .bhead select { flex:1; min-width:0; min-height:34px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-size:14px; padding:0 8px; }
+#book .bhead button { min-height:32px; padding:0 10px; font-size:13px; border-radius:8px; }
+#bookBody { flex:1; overflow:auto; padding:18px 22px max(60px, env(safe-area-inset-bottom)); max-width:860px; width:100%; margin:0 auto; box-sizing:border-box; font-family: Charter, "Iowan Old Style", Georgia, serif; font-size:17px; line-height:1.6; }
+#bookBody h1 { font-size:26px; margin:0 0 12px; font-family:-apple-system, system-ui, sans-serif; } #bookBody h2 { font-size:21px; margin:28px 0 10px; font-family:-apple-system, system-ui, sans-serif; } #bookBody h3 { font-size:18px; margin:20px 0 8px; font-family:-apple-system, system-ui, sans-serif; }
+#bookBody p { margin:0 0 12px; } #bookBody img { max-width:100%; border-radius:10px; border:1px solid var(--line); }
+#bookBody pre { background:var(--soft); padding:10px 12px; border-radius:10px; overflow:auto; font-size:14px; } #bookBody pre.mermaid { background:transparent; text-align:center; }
+#bookBody .katex-display { overflow-x:auto; overflow-y:hidden; }
+#bookBody .empty { color:var(--muted); text-align:center; margin-top:40px; font-family:-apple-system, system-ui, sans-serif; }
 </style>
 </head><body class="view-pad">
 <header>
@@ -182,6 +195,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   <div class="tabs"><button id="tabLesson">Lesson</button><button id="tabPad" class="on">Answer</button></div>
   <div class="modeSel"><button id="roleFull" title="Lesson and answers on this device">Both</button><button id="roleViewer" title="Lesson + questions; answers typed or on another device">Viewer</button><button id="roleScratch" title="Full-screen drawing pad; the question shows at the top">Scratchpad</button></div>
   <button id="askBtn" title="Ask about the material on the side (not graded, does not interrupt the lesson)">Ask</button>
+  <button id="bookBtn" title="The book of a lesson: its readings only, no questions or cards">Book</button>
   <button id="phoneBtn" title="Show the QR code to connect a phone or iPad">Phone</button>
   <a id="mapLink" href="#" style="color:var(--accent); text-decoration:none; font-weight:600; font-size:14px;">Map</a>
   <div id="conn" class="conn">Connecting…</div>
@@ -239,6 +253,10 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   </div>
 </aside>
 <button id="askSel" class="hidden">Ask about this</button>
+<div id="book" aria-label="Book">
+  <div class="bhead"><select id="bookSel" title="Which lesson's book"></select><button id="bookClose">Close</button></div>
+  <div id="bookBody"><div class="empty">No book yet.</div></div>
+</div>
 <div id="qr" class="qr hidden" role="dialog" aria-label="Connect a device">
   <div class="qrbox">
     <img id="qrImg" alt="QR code for the answer pad" width="260" height="260">
@@ -563,6 +581,31 @@ $("freesend").onclick = async () => { busy = true; updateButtons(); setStatus("S
 if (matchMedia("(min-width: 900px)").matches) document.body.className = "view-pad view-lesson";
 if (new URLSearchParams(location.search).get("view") === "lesson") $("tabLesson").click(); // open on the lesson tab (phone)
 hidePrompt();
+
+// ---------- the book: a lesson's readings only ----------
+let bookSlug = null, bookMtime = 0;
+async function loadBook(slug) {
+  try {
+    const r = await fetch(api("/book" + (slug ? "?slug=" + encodeURIComponent(slug) : "")), { cache: "no-store" }); if (!r.ok) return;
+    const j = await r.json();
+    const sel = $("bookSel"); sel.innerHTML = "";
+    for (const b of j.books) { const o = document.createElement("option"); o.value = b.slug; o.textContent = b.title + " · " + b.readings + (b.readings === 1 ? " reading" : " readings"); sel.appendChild(o); }
+    if (j.slug) sel.value = j.slug;
+    if (j.slug === bookSlug && j.mtime === bookMtime) return;
+    bookSlug = j.slug; bookMtime = j.mtime;
+    const el = $("bookBody");
+    if (!j.slug) { el.innerHTML = '<div class="empty">No book yet. One appears as soon as a lesson has a reading.</div>'; return; }
+    el.innerHTML = renderMd(j.markdown.replace(/#w=\d+\)/g, ")"));
+    try { if (window.mermaid) { mermaid.initialize({ startOnLoad: false, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" }); await mermaid.run({ nodes: el.querySelectorAll("pre.mermaid") }); } } catch {}
+    el.scrollTop = 0;
+    try { localStorage.setItem("learn-book", j.slug); } catch {}
+  } catch {}
+}
+function openBook(slug) { $("book").classList.add("open"); loadBook(slug || bookSlug || (() => { try { return localStorage.getItem("learn-book"); } catch { return null; } })()); }
+$("bookBtn").onclick = () => openBook();
+$("bookClose").onclick = () => $("book").classList.remove("open");
+$("bookSel").onchange = () => loadBook($("bookSel").value);
+if (new URLSearchParams(location.search).get("view") === "book") openBook(new URLSearchParams(location.search).get("slug"));
 
 // ---------- side chat ----------
 let chatThread = null, chatBusy = false, chatLoaded = false, selText = "";

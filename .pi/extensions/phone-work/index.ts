@@ -47,7 +47,8 @@ import qrcode from "qrcode-terminal";
 import { answerPending, getLastResult, getPending } from "../review/prompts.ts";
 import { askSide, chatLessons, currentThread, loadChat, newThreadId } from "../review/sidechat.ts";
 import { plainMath } from "../review/plainmath.ts";
-import { buildGraph } from "../review/store.ts";
+import { buildGraph, loadLearner } from "../review/store.ts";
+import { bookList } from "../review/book.ts";
 
 const PORT = Number(process.env.PI_PHONE_PORT) || 8787;
 const MAX_BODY = 60 * 1024 * 1024;
@@ -561,6 +562,27 @@ export default function phoneWork(pi: ExtensionAPI) {
 					return rel ? `![${name}](/file?p=${encodeURIComponent(rel)}&t=${encodeURIComponent(token)}${w ? `#w=${w}` : ""})` : m;
 				});
 				return json(res, 200, { file: path.relative(cwd, file), title: path.basename(file, ".md"), markdown, mtime: fs.statSync(file).mtimeMs });
+			}
+			if (req.method === "GET" && u.pathname === "/book") {
+				// A lesson's book (readings only, no cards): the picker list plus one book's markdown.
+				const cwd = latestCtx?.cwd ?? process.cwd();
+				try {
+					const books = bookList(cwd);
+					const logFile = (globalThis as any).__learnLogFile as string | null | undefined;
+					const viewing = logFile ? loadLearner(cwd).lessons.find((l) => l.file && path.resolve(cwd, l.file) === path.resolve(logFile))?.slug ?? null : null;
+					const want = u.searchParams.get("slug") || viewing || books[0]?.slug;
+					const entry = books.find((b) => b.slug === want);
+					if (!entry) return json(res, 200, { slug: null, title: null, markdown: "", mtime: 0, books, viewing });
+					const file = path.join(cwd, entry.file);
+					const raw = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+					const markdown = raw.replace(/^---\n[\s\S]*?\n---\n/, "").replace(/!\[\[([^\]|]+)(?:\|(\d+))?\]\]/g, (m, name: string, w?: string) => {
+						const rel = findEmbed(cwd, name.trim());
+						return rel ? `![${name}](/file?p=${encodeURIComponent(rel)}&t=${encodeURIComponent(token)}${w ? `#w=${w}` : ""})` : m;
+					});
+					return json(res, 200, { slug: entry.slug, title: entry.title, markdown, mtime: fs.existsSync(file) ? fs.statSync(file).mtimeMs : 0, books, viewing });
+				} catch (e: any) {
+					return json(res, 500, { error: String(e?.message ?? e) });
+				}
 			}
 			if (req.method === "GET" && u.pathname === "/file") {
 				const p = u.searchParams.get("p") ?? "";

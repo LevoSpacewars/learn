@@ -49,33 +49,67 @@ import {
 	upsertLesson,
 } from "./store.ts";
 import { clearMiss, pedagogy } from "./pedagogy.ts";
+import { bookPath, importSessionReadings, writeAllBooks, writeBook } from "./book.ts";
 
 type CardKind = "recall" | "problem";
 
-/** Minutes a card costs him: a paper problem is a quarter of an hour, a quick card a few minutes. */
-export const CHECK_MINUTES: Record<CheckKind, number> = { problem: 12, flaw: 5, transfer: 5, recall: 4, explain: 4, predict: 2, boundary: 4 };
+/** Node ids are for the map and the tools; the learner has never seen them, and the tools refuse text that uses them. */
+export const NODE_ID_NOTE = "Node ids (R1, D2, G) are internal: in anything he reads, name the idea by its label (\"the matrix exponential\", \"the superposition step\"), never the id.";
+
+/**
+ * Minutes a card costs him when nothing is known yet: a paper problem a quarter
+ * of an hour, a quick card several minutes (his "quick" answers take 5-7 min).
+ * Once there are enough graded answers, measuredMinutes() replaces these.
+ */
+export const CHECK_MINUTES: Record<CheckKind, number> = { problem: 12, flaw: 5, transfer: 6, recall: 6, explain: 7, predict: 3, boundary: 6 };
 const DEFAULT_LIMIT = 10;
 const MAX_PROBLEMS_NO_BUDGET = 3;
+const MEASURE_MIN_SAMPLES = 5;
+const GRADING_OVERHEAD_MIN = 1; // reading the verdict, the tutor's line, the next prompt
+
+/**
+ * Minutes per check from his own answer times: the 75th percentile of the
+ * latencies on file (plus grading overhead), per check kind, when at least
+ * MEASURE_MIN_SAMPLES exist; the default otherwise. A 60-minute budget that
+ * assumed 4-minute cards ran 80 minutes on 2026-10-17.
+ */
+export function measuredMinutes(events: Array<{ check?: string; latencyMs?: number }>): Record<CheckKind, number> {
+	const out = { ...CHECK_MINUTES };
+	const by = new Map<string, number[]>();
+	for (const e of events) {
+		if (!e.check || !e.latencyMs || e.latencyMs <= 0 || e.latencyMs > 3600_000) continue; // >1 h: he walked away
+		const list = by.get(e.check) ?? [];
+		list.push(e.latencyMs / 60000);
+		by.set(e.check, list);
+	}
+	for (const k of Object.keys(out) as CheckKind[]) {
+		const v = (by.get(k) ?? []).sort((a, b) => a - b);
+		if (v.length < MEASURE_MIN_SAMPLES) continue;
+		const p75 = v[Math.min(v.length - 1, Math.floor(v.length * 0.75))];
+		out[k] = Math.min(20, Math.max(2, Math.round(p75 + GRADING_OVERHEAD_MIN)));
+	}
+	return out;
+}
 
 /**
  * Size the batch to the time budget: 30 minutes is two paper problems and a
  * couple of quick cards, not fifteen cards. Without a budget, `limit` cards
  * with at most a few problems. Always at least one card.
  */
-export function sizeBatch<T>(cards: T[], checkOf: (c: T) => CheckKind, budgetMin: number | undefined, limit?: number, reserveMin = 0): T[] {
+export function sizeBatch<T>(cards: T[], checkOf: (c: T) => CheckKind, budgetMin: number | undefined, limit?: number, reserveMin = 0, minutesOf: Record<CheckKind, number> = CHECK_MINUTES): T[] {
 	const out: T[] = [];
 	let minutes = 0;
 	let problems = 0;
 	const maxProblems = budgetMin ? Math.max(1, Math.floor(budgetMin / 15)) : MAX_PROBLEMS_NO_BUDGET;
 	const max = Math.max(1, Math.floor(limit ?? DEFAULT_LIMIT));
-	const room = budgetMin ? Math.max(CHECK_MINUTES.recall, budgetMin - reserveMin) : Infinity;
+	const room = budgetMin ? Math.max(minutesOf.recall, budgetMin - reserveMin) : Infinity;
 	for (const c of cards) {
 		if (out.length >= max) break;
 		const check = checkOf(c);
-		const cost = CHECK_MINUTES[check] ?? CHECK_MINUTES.recall;
+		const cost = minutesOf[check] ?? minutesOf.recall;
 		if (check === "problem" && problems >= maxProblems) continue;
 		if (out.length > 0 && minutes + cost > room) {
-			if (cost > CHECK_MINUTES.recall) continue; // a cheaper card may still fit
+			if (cost > minutesOf.recall) continue; // a cheaper card may still fit
 			break;
 		}
 		out.push(c);
@@ -359,7 +393,7 @@ const LessonPlanParams = Type.Object({
 	plan: Type.Optional(Type.String({ description: "The dependency map as mermaid source (the same one shown in chat)." })),
 	nodes: Type.Array(
 		Type.Object({
-			id: Type.String({ description: "Short id used in the mermaid map, e.g. 'R1', 'D2', 'G'." }),
+			id: Type.String({ description: "Short internal id for the map and the tools, e.g. 'R1', 'D2', 'G'. The learner never sees ids: talk to him in labels." }),
 			label: Type.String(),
 			kind: NodeKind,
 		}),
@@ -557,8 +591,10 @@ export default function review(pi: ExtensionAPI) {
 			const retry = relearnCards(store, session.id, sessionStart).filter((c) => !params.topic || c.topic === params.topic.toLowerCase());
 			const pool = interleave(due.filter((c) => !retry.includes(c)));
 			const checkOf = (c: ReviewCard) => assignCardCheck(c, session!.id);
-			const batch = sizeBatch(pool, checkOf, session.budgetMin, params.limit, retry.length * CHECK_MINUTES.recall);
+			const minutes = measuredMinutes(loadEvents(ctx.cwd));
+			const batch = sizeBatch(pool, checkOf, session.budgetMin, params.limit, retry.length * minutes.recall, minutes);
 			const onPaper = batch.filter((c) => checkOf(c) === "problem").length;
+			const quickMin = Math.round(batch.filter((c) => checkOf(c) !== "problem").reduce((s, c) => s + minutes[checkOf(c)], 0) / Math.max(1, batch.length - onPaper));
 
 			const header = [
 				`Session ${session.id}${session.unaided ? " — UNAIDED TEST: no hints, no repair until the session summary; grade strictly." : ""}${session.budgetMin ? ` — budget ${session.budgetMin} min.` : ""}`,
@@ -599,7 +635,7 @@ export default function review(pi: ExtensionAPI) {
 			const retryLines = retry.map((c) => fmt(c, c.kind === "problem" ? "problem" : "recall"));
 			const text = [
 				...header,
-				`${due.length} due, showing ${batch.length}${session.budgetMin ? ` (sized to ${session.budgetMin} min: ${onPaper} on paper at ~${CHECK_MINUTES.problem} min each, ${batch.length - onPaper} quick)` : ""}. A card not shown is simply due next time; do not call review_due again for more until the retry list is empty.`,
+				`${due.length} due, showing ${batch.length}${session.budgetMin ? ` (sized to ${session.budgetMin} min from his answer times: ${onPaper} on paper at ~${minutes.problem} min each, ${batch.length - onPaper} quick at ~${quickMin} min)` : ""}. A card not shown is simply due next time; do not call review_due again for more until the retry list is empty.`,
 				"",
 				...lines,
 				...(retryLines.length
@@ -663,9 +699,18 @@ export default function review(pi: ExtensionAPI) {
 		renderResult: quietResult(firstLine),
 		parameters: LessonPlanParams,
 		async execute(_id, params, _signal, _onUpdate, ctx) {
-			const lesson = upsertLesson(ctx.cwd, params);
+			// The note md-log is writing to is the lesson's file, whatever path the model guessed.
+			const logFile = (globalThis as any).__learnLogFile as string | undefined;
+			const guessed = params.file ? path.resolve(ctx.cwd, params.file) : undefined;
+			const file = guessed && fs.existsSync(guessed) ? params.file : logFile && fs.existsSync(logFile) ? path.relative(ctx.cwd, logFile) : params.file;
+			const lesson = upsertLesson(ctx.cwd, { ...params, file });
 			const lines = lesson.nodes.map((n) => `- ${n.id} (${n.kind}) "${n.label}": CHECK = ${n.check}${n.status !== "pending" ? ` [${n.status}]` : ""}`);
-			return textResult(`Lesson "${lesson.slug}" saved with ${lesson.nodes.length} nodes.\n${lines.join("\n")}`, { slug: lesson.slug });
+			try {
+				writeBook(ctx.cwd, lesson.slug);
+			} catch {
+				// the book is a convenience
+			}
+			return textResult(`Lesson "${lesson.slug}" saved with ${lesson.nodes.length} nodes.\n${lines.join("\n")}\n${NODE_ID_NOTE}`, { slug: lesson.slug });
 		},
 	});
 
@@ -742,6 +787,16 @@ export default function review(pi: ExtensionAPI) {
 	});
 
 	// ── Commands ─────────────────────────────────────────────────────────
+
+	pi.registerCommand("book", {
+		description: "Rebuild the lesson books (book/<slug>.md: readings only, no cards). `/book import` also recovers readings from past session transcripts.",
+		handler: async (args, ctx: any) => {
+			const imported = /\bimport\b/i.test(args) ? importSessionReadings(ctx.cwd) : undefined;
+			const files = writeAllBooks(ctx.cwd);
+			const where = files.length === 1 ? path.relative(ctx.cwd, files[0]) : path.relative(ctx.cwd, bookPath(ctx.cwd, "")).replace(/\.md$/, "");
+			ctx.ui.notify(`${imported ? `Imported ${imported.added} reading(s) from ${imported.files} transcript(s). ` : ""}${files.length} book(s) written to ${where}.`, "info");
+		},
+	});
 
 	pi.registerCommand("review", {
 		description: "Start a spaced review session (optionally: /review <topic>)",
