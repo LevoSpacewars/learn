@@ -10,7 +10,7 @@ import {
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { plainMath } from "./review/plainmath.ts";
-import { floorReason, pedagogy, readingReason, recordOutcome } from "./review/pedagogy.ts";
+import { floorReason, ladderNext, pedagogy, readingReason, recordOutcome } from "./review/pedagogy.ts";
 import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import { recordEvent } from "./review/store.ts";
 
@@ -993,7 +993,10 @@ export default function quiz(pi: ExtensionAPI) {
 			// Same open-floor rule as recall (state shared via globalThis): no first question on new material until he says ready.
 			// And the reading gate: a new node is read (lesson_read) before it is tested.
 			const ped = pedagogy();
-			const gate = readingReason(ped) ?? (floorReason(ped) ? "Blocked: new material. Open the floor first with ask_user_question (\"Anything you want to discuss before the first question?\" with options \"Ready, ask the first question\" / \"I want to discuss first\"); quiz only after he picks ready." : undefined);
+			const gate =
+				readingReason(ped) ??
+				(floorReason(ped) ? "Blocked: new material. Open the floor first with ask_user_question (\"Anything you want to discuss before the first question?\" with options \"Ready, ask the first question\" / \"I want to discuss first\"); quiz only after he picks ready." : undefined) ??
+				(ped.ladder ? `Blocked: the node he just read is on its practice ladder, which is made of recall checks (next move, completion, the assigned check, the derivation on paper); a quiz is not one of its rungs. ${ladderNext(ped.ladder)}` : undefined);
 			if (gate) return { content: [{ type: "text" as const, text: gate }], details: { status: "unavailable", message: gate } as any };
 			const say = params.say?.trim() || undefined;
 			const context = params.details?.trim() || undefined;

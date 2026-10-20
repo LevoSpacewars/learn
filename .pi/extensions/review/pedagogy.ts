@@ -28,6 +28,8 @@ export interface Pedagogy {
 	owedReply?: { question: string; chars: number; text: string };
 	/** The visible answer to his last question, shown on the next ask_user_question card. */
 	replyForCard?: string;
+	/** The practice ladder of the node just read: next-move checks, a completion, the node's check, then the derivation on paper. */
+	ladder?: Ladder;
 }
 
 export function pedagogy(): Pedagogy {
@@ -47,6 +49,7 @@ export function resetPedagogy(p: Pedagogy = pedagogy()): void {
 	p.reviewMode = false;
 	p.owedReply = undefined;
 	p.replyForCard = undefined;
+	p.ladder = undefined;
 }
 
 /** The miss streak is cleared: the tutor overrode a grade upward, he chose to move on, or the last answer was not an attempt. */
@@ -282,4 +285,143 @@ export function nodeIdReason(fields: Record<string, string | undefined>, lessons
 	if (!hits.length) return undefined;
 	const list = hits.map((h) => `"${h.id}" (in ${h.field}) is the node "${h.label}"`).join("; ");
 	return `Refused: node ids are internal and he has never seen them, so ${list}. Name the idea instead (e.g. "the matrix exponential", "the superposition step", "the reading on e^{Qt}"), never the id, and call again.`;
+}
+
+// ---------- practice ladder ----------
+// Reading a derivation once does not make it reproducible, and reproducing it
+// from memory is not understanding it. After each reading the node is practised
+// in rungs, in this order, and the tools refuse checks out of order:
+//   1. next-move checks: the derivation is shown up to a decision point and he
+//      says what the next move is and why that one (meaning before mechanics);
+//   2. a completion problem: the derivation with one step blank;
+//   3. the node's assigned critical-thinking check (boundary / flaw / transfer);
+//   4. the explain-back: the whole derivation on paper from a handle he owns.
+// A miss on the explain-back restarts at the completion rung, not a lecture.
+export type LadderStage = "nextmove" | "completion" | "check" | "explain";
+export type LadderRung = "nextmove" | "completion";
+export interface Ladder {
+	slug: string;
+	node: string;
+	label?: string;
+	check?: string; // the node's assigned check; predict/explain mean the rung is skipped
+	stage: LadderStage;
+	nextmove: { asked: number; right: number };
+	completion: { asked: number; right: number };
+	restarts: number;
+}
+export const NEXTMOVE_RIGHT = 2; // next-move checks that must land before the completion rung
+export const NEXTMOVE_MAX = 3; // ... or this many asked
+export const NEXTMOVE_BANNER = "Next move only: say what the next step is and why that one, not the whole derivation.";
+export const COMPLETION_BANNER = "Fill the one blank.";
+
+function name(l: Ladder): string {
+	return l.label ? `"${l.label}"` : `node ${l.node}`;
+}
+function hasCheckRung(l: Ladder): boolean {
+	return !!l.check && l.check !== "predict" && l.check !== "explain";
+}
+function advance(l: Ladder, from: LadderStage): void {
+	if (from === "nextmove") l.stage = "completion";
+	else if (from === "completion") l.stage = hasCheckRung(l) ? "check" : "explain";
+	else if (from === "check") l.stage = "explain";
+}
+
+/** A reading was read: its node's ladder starts (an existing ladder for the same node is kept). */
+export function startLadder(p: Pedagogy, slug: string, node: string, label?: string, check?: string): Ladder {
+	if (p.ladder && p.ladder.slug === slug && p.ladder.node === node) {
+		if (label) p.ladder.label = label;
+		if (check) p.ladder.check = check;
+		return p.ladder;
+	}
+	p.ladder = { slug, node, label, check, stage: "nextmove", nextmove: { asked: 0, right: 0 }, completion: { asked: 0, right: 0 }, restarts: 0 };
+	return p.ladder;
+}
+/** The node was recorded (confirmed / shaky), the plan changed, or he moved on: no ladder. */
+export function endLadder(p: Pedagogy, slug?: string, node?: string): void {
+	if (!p.ladder) return;
+	if (slug && p.ladder.slug !== slug) return;
+	if (node && p.ladder.node !== node) return;
+	p.ladder = undefined;
+}
+
+/** What the next rung is, for the tutor. */
+export function ladderNext(l: Ladder): string {
+	switch (l.stage) {
+		case "nextmove":
+			return `NEXT RUNG for ${name(l)}: a next-move check (${l.nextmove.right}/${NEXTMOVE_RIGHT} landed so far). Quote the derivation from the reading up to a decision point, in LaTeX, and ask "What is the next move, and why that one?" (reference = the move and its reason). Call recall with stage "nextmove". Pick a different decision point each time.`;
+		case "completion":
+			return `NEXT RUNG for ${name(l)}: a completion problem. The derivation with ONE step blank (a decision or a computation), fresh numbers, nothing else to explain in the same prompt. Call recall with stage "completion".`;
+		case "check":
+			return `NEXT RUNG for ${name(l)}: the node's assigned check, kind "${l.check}" (no stage).`;
+		case "explain":
+			return `NEXT RUNG for ${name(l)}: the explain-back as a derivation ON PAPER. Name the handle he already owns and ask him to get from it to the result with fresh numbers, saying at each move why it is the move (kind "explain", paper: true, no stage). Lands → lesson_node confirmed. Misses → the ladder restarts at a completion problem on the step that failed; no lecture.`;
+	}
+}
+
+/** Why this recall is out of order on the ladder, or undefined. */
+export function ladderReason(p: Pedagogy, o: { kind: string; stage?: LadderRung; paper?: boolean; cardId?: string }): string | undefined {
+	const l = p.ladder;
+	if (!l) {
+		if (o.stage) return `Refused: stage "${o.stage}" is a practice-ladder rung, and no node is on the ladder (a ladder starts when he reads a lesson_read). Drop the stage, or give the reading first.`;
+		return undefined;
+	}
+	if (o.cardId) return undefined; // a review card mid-lesson is not part of the ladder
+	if (o.kind === "predict") return undefined; // the pretest of the next node may come at any time
+	const next = ladderNext(l);
+	switch (l.stage) {
+		case "nextmove":
+			if (o.stage === "nextmove") return undefined;
+			return `Blocked: ${name(l)} was just read and its ladder starts with next-move checks, not ${o.stage ? `a ${o.stage}` : `a "${o.kind}" check`}. Reading once does not make a derivation reproducible; first he shows he can see what comes next and why. ${next}`;
+		case "completion":
+			if (o.stage === "completion") return undefined;
+			if (o.stage === "nextmove") return undefined; // one more next-move is always allowed
+			return `Blocked: the next rung for ${name(l)} is a completion problem, not ${`a "${o.kind}" check`}. ${next}`;
+		case "check":
+			if (o.stage) return `Blocked: the ladder rungs for ${name(l)} are done; what is due now is the node's assigned check. ${next}`;
+			if (o.kind !== l.check) return `Blocked: the node's assigned check for ${name(l)} is "${l.check}", not "${o.kind}". ${next}`;
+			return undefined;
+		case "explain":
+			if (o.stage === "completion") return undefined; // one more completion before the derivation is fine
+			if (o.stage) return `Blocked: ${name(l)} is past its next-move rung; what is due is the explain-back. ${next}`;
+			if (o.kind !== "explain") return `Blocked: the only check left for ${name(l)} is the explain-back (kind "explain"), not "${o.kind}". ${next}`;
+			if (!o.paper) return `Refused: the explain-back is a derivation on paper, not prose. Set paper: true, name the handle he owns, ask for the derivation with fresh numbers and the reason for each move. ${next}`;
+			return undefined;
+	}
+}
+
+/**
+ * A graded outcome on the ladder. Returns the line to append to the tool
+ * result (what rung comes next), or undefined when the ladder is not involved.
+ */
+export function ladderOutcome(p: Pedagogy, o: { kind: string; stage?: LadderRung; correct: boolean; cardId?: string }): string | undefined {
+	const l = p.ladder;
+	if (!l || o.cardId) return undefined;
+	if (o.stage === "nextmove") {
+		l.nextmove.asked++;
+		if (o.correct) l.nextmove.right++;
+		if (l.stage === "nextmove" && (l.nextmove.right >= NEXTMOVE_RIGHT || l.nextmove.asked >= NEXTMOVE_MAX)) advance(l, "nextmove");
+		return ladderNext(l);
+	}
+	if (o.stage === "completion") {
+		l.completion.asked++;
+		if (o.correct) l.completion.right++;
+		if (l.stage === "completion" && (o.correct || l.completion.asked >= 2)) advance(l, "completion");
+		return ladderNext(l);
+	}
+	if (l.stage === "check" && o.kind === l.check) {
+		if (o.correct) advance(l, "check");
+		return o.correct ? ladderNext(l) : `The check missed: diagnose and drill down as usual; the explain-back waits until this lands. ${ladderNext(l)}`;
+	}
+	if (l.stage === "explain" && o.kind === "explain") {
+		if (o.correct) {
+			p.ladder = undefined;
+			return `The derivation landed: the ladder for ${name(l)} is complete. Record the node with lesson_node (confirmed) and save its cards.`;
+		}
+		l.stage = "completion";
+		l.completion = { asked: 0, right: 0 };
+		l.restarts++;
+		clearMiss(p);
+		return `The derivation did not land (restart ${l.restarts}). No lecture: put 1-3 lines of diagnosis in the next \`say\`, then the ladder restarts at a completion problem on exactly the step that failed, then the derivation again. ${ladderNext(l)}`;
+	}
+	return undefined;
 }

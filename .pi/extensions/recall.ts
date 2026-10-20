@@ -33,15 +33,22 @@ import { gradeCard, refreshReviewStatus } from "./review/index.ts";
 import { plainMath } from "./review/plainmath.ts";
 import { type PromptAnswer, setLastResult, setPending } from "./review/prompts.ts";
 import {
+	COMPLETION_BANNER,
+	type LadderRung,
+	NEXTMOVE_BANNER,
 	type Pedagogy,
 	QUICK_GUESS,
 	armReading,
 	creditReading,
+	endLadder,
 	floorReason,
 	clearMiss,
 	gateReason,
 	isMiss,
 	isReady,
+	ladderNext,
+	ladderOutcome,
+	ladderReason,
 	markRead,
 	creditReply,
 	isQuestionText,
@@ -55,6 +62,7 @@ import {
 	replyReason,
 	recordOutcome,
 	resetPedagogy,
+	startLadder,
 } from "./review/pedagogy.ts";
 import { type CheckKind, loadLearner, recordEvent } from "./review/store.ts";
 import { recordReading, writeBook } from "./review/book.ts";
@@ -82,7 +90,8 @@ interface RecallDetails {
 	cardRating?: string;
 	message?: string;
 	say?: string; // shown to the learner above the question
-	banner?: string; // fixed framing line (predict: quick guess)
+	banner?: string; // fixed framing line (predict: quick guess; ladder rungs)
+	stage?: LadderRung; // practice-ladder rung (lessons only)
 }
 
 const KIND_LABEL: Record<CheckKind, string> = {
@@ -128,6 +137,12 @@ const RecallParams = Type.Object({
 		}),
 	),
 	retention: Type.Optional(Type.Boolean({ description: "True when review_due marked this card RETENTION CHECK (unannounced long-delay test). Recorded as the outcome metric." })),
+	stage: Type.Optional(
+		Type.Union([Type.Literal("nextmove"), Type.Literal("completion")], {
+			description:
+				"Practice-ladder rung after a reading (lessons only; the tool tells you which rung is due). 'nextmove': quote the derivation from the reading up to a decision point and ask what the next move is and why that one (reference = the move + its reason). 'completion': the derivation with ONE step blank for him to fill.",
+		}),
+	),
 	say: Type.Optional(
 		Type.String({
 			description:
@@ -433,12 +448,17 @@ function lessonsForIds(cwd: string): Array<{ slug: string; nodes: Array<{ id: st
 }
 
 /** Every refusal recall applies before posing, in order. Predict is a pretest: it comes before the reading. */
-export function recallBlock(p: Pedagogy, o: { kind: CheckKind; prompt: string; paper?: boolean; say?: string }): string | undefined {
+export function recallBlock(p: Pedagogy, o: { kind: CheckKind; prompt: string; paper?: boolean; say?: string; stage?: LadderRung; cardId?: string }): string | undefined {
 	if (o.kind === "predict") {
 		const r = predictReason(o.prompt, o.paper);
 		if (r) return r;
 	}
-	return (o.kind === "predict" ? undefined : readingReason(p)) ?? floorReason(p) ?? gateReason(p, o.prompt, o.say?.length ?? 0);
+	return (
+		(o.kind === "predict" ? undefined : readingReason(p)) ??
+		floorReason(p) ??
+		ladderReason(p, { kind: o.kind, stage: o.stage, paper: o.paper, cardId: o.cardId }) ??
+		gateReason(p, o.prompt, o.say?.length ?? 0)
+	);
 }
 
 /** After lesson_plan / lesson_node: the first pending node of the lesson needs a reading. */
@@ -449,6 +469,16 @@ function armForLesson(p: Pedagogy, cwd: string, slug: string): void {
 		armReading(p, slug, next?.id, next?.label);
 	} catch {
 		// unreadable learner file: no gate rather than a stuck lesson
+	}
+}
+
+/** The label and assigned check of a lesson node, for the ladder. */
+function nodeInfo(cwd: string, slug: string, node: string): { label?: string; check?: string } {
+	try {
+		const n = loadLearner(cwd).lessons.find((l) => l.slug === slug)?.nodes.find((x) => x.id === node);
+		return { label: n?.label, check: n?.check };
+	} catch {
+		return {};
 	}
 }
 
@@ -588,11 +618,22 @@ export default function recall(pi: ExtensionAPI) {
 		const p = pedagogy();
 		if (!e.isError && (name === "lesson_plan" || (name === "lesson_node" && (e.input?.status === "confirmed" || e.input?.status === "shaky")))) {
 			const slug = String(e.details?.slug ?? e.input?.slug ?? "");
+			// The node is recorded (or the plan replaced): its ladder is over.
+			if (name === "lesson_plan") endLadder(p, slug || undefined);
+			else endLadder(p, slug || undefined, e.input?.id ? String(e.input.id) : undefined);
 			if (slug) armForLesson(p, (ctx as any)?.cwd ?? process.cwd(), slug);
 		}
 		if (name === "ask_user_question") {
 			const answers: any[] = e.details?.answers ?? [];
-			if (answers.some((a) => isReady(String(a?.label ?? "")))) readyAnswered(p);
+			if (answers.some((a) => isReady(String(a?.label ?? "")))) {
+				// "Ready" after asking about a reading marks it read: that node's ladder starts too.
+				const pendingRead = p.readNeeded?.shown ? { slug: p.readNeeded.slug, node: p.readNeeded.node } : undefined;
+				readyAnswered(p);
+				if (pendingRead) {
+					const info = nodeInfo((ctx as any)?.cwd ?? process.cwd(), pendingRead.slug, pendingRead.node);
+					startLadder(p, pendingRead.slug, pendingRead.node, info.label, info.check);
+				}
+			}
 			// Typed "Other" text (or a free-text answer) that asks something is owed a visible reply.
 			const typed = answers.find((a) => (a?.type === "other" || a?.type === "text") && isQuestionText(String(a?.label ?? "")));
 			if (typed) oweReply(p, String(typed.label));
@@ -616,10 +657,11 @@ export default function recall(pi: ExtensionAPI) {
 			const kind = (params.kind ?? "recall") as CheckKind;
 			const paper = params.paper ?? kind === "problem";
 			const say = params.say?.trim() || undefined;
-			const banner = kind === "predict" ? QUICK_GUESS : undefined;
-			const base: RecallDetails = { status: "unavailable", kind, prompt: params.prompt, paper, topic: params.topic, cardId: params.cardId, say, banner };
+			const stage = params.stage as LadderRung | undefined;
+			const banner = kind === "predict" ? QUICK_GUESS : stage === "nextmove" ? NEXTMOVE_BANNER : stage === "completion" ? COMPLETION_BANNER : undefined;
+			const base: RecallDetails = { status: "unavailable", kind, prompt: params.prompt, paper, topic: params.topic, cardId: params.cardId, say, banner, stage };
 			const ped = pedagogy();
-			const blocked = recallBlock(ped, { kind, prompt: params.prompt, paper: params.paper, say });
+			const blocked = recallBlock(ped, { kind, prompt: params.prompt, paper: params.paper, say, stage, cardId: params.cardId });
 			if (blocked) return result(blocked, { ...base, status: "blocked", message: blocked });
 			if (!ctx.hasUI) return result("recall requires interactive mode UI", { ...base, message: "no UI" });
 			if (say) ped.sinceMissChars += say.length; // he reads it above the question
@@ -662,6 +704,7 @@ export default function recall(pi: ExtensionAPI) {
 			};
 			if (outcome.status === "ended") {
 				clearMiss(ped);
+				endLadder(ped);
 				let started = "";
 				try {
 					started = (globalThis as any).__learnStartLesson?.(ctx) ?? "";
@@ -677,8 +720,9 @@ export default function recall(pi: ExtensionAPI) {
 				);
 			}
 			if (outcome.status === "skipped") {
-				// He chose learning over testing: clear the drill-down pressure entirely.
+				// He chose learning over testing: clear the drill-down pressure entirely, ladder included.
 				clearMiss(ped);
+				endLadder(ped);
 				return result(
 					"Learner SKIPPED this check: he wants to learn something new now. Do NOT re-pose it, a variant, or a drill-down, and don't ask whether he wants to continue. Note it and move on: if this was a node's check, lesson_node with status shaky; if no review card covers the idea, save one with review_add_cards (that is where it gets tested, later). Then go straight to teaching the next new idea. If he skips twice in a row, check in once with ask_user_question about the pace (more explanation, fewer checks?).",
 					details,
@@ -694,12 +738,13 @@ export default function recall(pi: ExtensionAPI) {
 			if (outcome.status === "dontKnow") {
 				logEvent("dontKnow");
 				recordOutcome(ped, { correct: false, prompt: params.prompt, verdict: "dontKnow" });
+				const rung = ladderOutcome(ped, { kind, stage, correct: false, cardId: params.cardId });
 				if (params.cardId) {
 					const g = gradeCard(ctx.cwd, { id: params.cardId, rating: "again", note: "I don't know", check: kind, modality: "typed" });
 					details.cardRating = g.rating;
 					refreshReviewStatus(ctx);
 				}
-				return result(`Learner said "I don't know" (genuine gap, not a wrong guess).${details.cardRating ? ` Card ${params.cardId} graded again.` : ""}`, details);
+				return result(`Learner said "I don't know" (genuine gap, not a wrong guess).${details.cardRating ? ` Card ${params.cardId} graded again.` : ""}${rung ? `\n${rung}` : ""}`, details);
 			}
 
 			const g = outcome.graded;
@@ -718,11 +763,13 @@ export default function recall(pi: ExtensionAPI) {
 					details,
 				);
 			}
+			let rung: string | undefined;
 			if (g) {
 				const miss = isMiss(g.verdict, g.score);
 				Object.assign(details, { verdict: g.verdict, score: g.score, reading: g.reading, firstError: g.firstError, feedback: g.feedback });
 				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading });
 				recordOutcome(ped, { correct: !miss, prompt: params.prompt, verdict: g.verdict, firstError: g.firstError });
+				rung = ladderOutcome(ped, { kind, stage, correct: !miss, cardId: params.cardId });
 				if (params.cardId) {
 					try {
 						const r = gradeCard(ctx.cwd, { id: params.cardId, rating: ratingFor(g), check: kind, modality, note: g.firstError || undefined });
@@ -746,7 +793,9 @@ export default function recall(pi: ExtensionAPI) {
 							g.verdict === "partial" && !isMiss(g.verdict, g.score)
 								? "MINOR GAP, not a miss: the substance was right. At most one line about it in your next `say` (or nothing), then the next card. Do not drill, re-test, or lecture on it."
 								: "",
-							isMiss(g.verdict, g.score) && ped.reviewMode
+							rung?.startsWith("The derivation did not land")
+								? "" // the ladder restart below replaces the generic drill-down / lecture rules
+								: isMiss(g.verdict, g.score) && ped.reviewMode
 								? "NEXT STEP: put 1-3 lines he can read (what went wrong and why, and the right move) in the next recall's `say` or in chat text; the next recall is refused without it. Then either ONE narrower follow-up on that step or the next card: a missed card comes back in the retry list anyway. If the grader misread him or the card is badly cut (see LAST/REPEATED in review_due), say so and override with review_grade instead of drilling."
 								: isMiss(g.verdict, g.score) && ped.missStreak >= 2
 									? `NEXT STEP (enforced): ${ped.missStreak} misses in a row. STOP testing. Teach the one step that failed with a worked example (every move with its reason, concrete numbers): call lesson_read with it (slug, node, title, body), or write it as chat text of at least 350 characters; your thinking is invisible to him. Then call recall with a completion problem (one blank). The next recall is refused until the worked example is visible to him. Never end your turn on a question written as plain text: he cannot answer it from the web page.`
@@ -759,6 +808,7 @@ export default function recall(pi: ExtensionAPI) {
 						].join("\n")
 					: "Grader unavailable — grade this answer yourself.",
 				details.cardRating ? `Card ${params.cardId} graded ${details.cardRating} (override with review_grade if you disagree).` : "",
+				rung ?? "",
 				details.message ?? "",
 			].filter(Boolean);
 			return result(lines.join("\n"), details);
@@ -820,8 +870,10 @@ export default function recall(pi: ExtensionAPI) {
 			}
 			if (out.read) {
 				markRead(p, params.slug, params.node, body.length);
+				const info = nodeInfo(ctx.cwd, params.slug, params.node);
+				const ladder = startLadder(p, params.slug, params.node, info.label, info.check);
 				return {
-					content: [{ type: "text" as const, text: `He read "${title}" and tapped "Read it, ask me". Pose the node's check now (recall / quiz). Do not ask whether he is ready: he already said go.` }],
+					content: [{ type: "text" as const, text: `He read "${title}" and tapped "Read it, ask me". Do not ask whether he is ready: he already said go. The node's practice ladder starts now (next-move checks → a completion problem → ${ladder.check && ladder.check !== "predict" && ladder.check !== "explain" ? `the "${ladder.check}" check → ` : ""}the derivation on paper); the tool refuses checks out of order. ${ladderNext(ladder)}` }],
 					details: { ...shown, phase: undefined, status: "read" as const },
 				};
 			}

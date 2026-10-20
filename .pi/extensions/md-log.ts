@@ -212,7 +212,8 @@ export default function mdLog(pi: ExtensionAPI) {
 	}
 
 	function recallQuestionCallout(details: any): string {
-		const label = `Recall — ${RECALL_LABEL[details?.kind] ?? details?.kind ?? ""}`.trim();
+		const rung = details?.stage === "nextmove" ? " · next move" : details?.stage === "completion" ? " · completion" : "";
+		const label = `Recall — ${RECALL_LABEL[details?.kind] ?? details?.kind ?? ""}${rung}`.trim();
 		const context = [details?.paper ? "Work it on paper and send a photo from your phone, or type your answer." : "", details?.banner ? `*${details.banner}*` : ""].filter(Boolean).join("\n") || undefined;
 		return questionCallout(label, String(details?.prompt ?? ""), context, []);
 	}
