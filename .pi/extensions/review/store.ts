@@ -247,7 +247,8 @@ export function reviewSessionCount(store: LearnerStore): number {
  * Every node additionally closes with an explain-back recall (see teach skill).
  */
 export function assignCheck(kind: NodeKind, ordinal: number): CheckKind {
-	if (kind === "foundation") return "predict";
+	// One predict per lesson (the first foundation): predicts mostly recorded guesses on things he could not yet know (18% right).
+	if (kind === "foundation") return ordinal === 0 ? "predict" : "explain";
 	if (kind === "goal") return "transfer";
 	const rotation: CheckKind[] = ["explain", "boundary", "flaw"];
 	return rotation[ordinal % rotation.length];
@@ -968,9 +969,8 @@ export function buildGraph(cwd: string): { nodes: GraphNode[]; links: GraphLink[
 	if (pick) lines.push("", `## Next on the path`, pick.reason);
 	const struggles = recentStruggles(cwd, new Set(), 4);
 	if (struggles.length) lines.push("", "## Recent struggles", ...struggles);
-	lines.push("", `## ${calibrationLine(store.calibration)}`);
 	const ret = retentionSummary(events);
-	if (ret.n) lines.push(`Long-delay retention: ${ret.n} checks, ${Math.round(ret.accuracy * 100)}% correct.`);
+	if (ret.n) lines.push("", `## Long-delay retention: ${ret.n} checks, ${Math.round(ret.accuracy * 100)}% correct.`);
 	const done = store.goals.flatMap((g) => g.milestones).filter((m) => m.status === "done").length;
 	const solid = store.fundamentals.filter((f) => fundamentalStatus(store, f.slug) === "solid").length;
 	lines.push("", `## Totals`, `${store.goals.length} goals · ${done} milestones reached · ${solid}/${store.fundamentals.length} fundamentals solid · ${events.length} graded answers`);
@@ -1053,8 +1053,6 @@ export function learnerSlice(cwd: string, opts: { lesson?: string; topics?: stri
 	const side = recentSideQuestions(cwd, opts.lesson);
 	if (side.length) out.push("## Asked in the side chat (material that didn't land; already answered there, don't re-answer unprompted)", ...side);
 
-	const cal = store.calibration.filter((e) => topics.size === 0 || (e.topic && topics.has(e.topic)));
-	out.push(`## ${calibrationLine(cal.length >= 5 ? cal : store.calibration)}`);
 	const ret = retentionSummary(loadEvents(cwd));
 	if (ret.n) out.push(`## Long-delay retention checks: ${ret.n}, accuracy ${Math.round(ret.accuracy * 100)}% (the real outcome metric)`);
 
@@ -1065,7 +1063,7 @@ export function learnerSlice(cwd: string, opts: { lesson?: string; topics?: stri
 	const sessions = store.sessions.slice(-4);
 	if (sessions.length) {
 		out.push("## Recent sessions");
-		for (const s of sessions) out.push(`- ${fmtDate(s.at)} ${s.kind}${s.budgetMin ? ` ${s.budgetMin}min` : ""}${s.lesson ? ` (${s.lesson})` : ""}${s.note ? `: ${s.note}` : ""}`);
+		for (const s of sessions) out.push(`- ${fmtDate(s.at)} ${s.kind}${s.lesson ? ` (${s.lesson})` : ""}${s.note ? `: ${s.note}` : ""}`);
 	}
 	return out.join("\n");
 }

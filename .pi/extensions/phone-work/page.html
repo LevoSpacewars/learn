@@ -81,7 +81,6 @@ main { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr
 /* pad */
 .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
 .kind { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--accent); }
-.timer { float:right; font-variant-numeric:tabular-nums; color:var(--muted); font-size:14px; }
 .prompt { margin-top:8px; font-size:17px; } .prompt p { margin:0 0 8px; } .prompt p:last-child { margin:0; }
 .idle { color:var(--muted); text-align:center; padding:18px 0; }
 /* the tutor's 1-3 lines above a question (recall/quiz `say`) */
@@ -100,9 +99,6 @@ main { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr
 textarea { width:100%; min-height:100px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; padding:12px; resize:vertical; }
 .modes { display:flex; gap:6px; } .modes button { flex:1; min-height:40px; }
 .modes button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
-.conf { display:flex; align-items:center; gap:12px; } .conf label { color:var(--muted); font-size:14px; white-space:nowrap; }
-.conf input { flex:1; accent-color:var(--accent); } .conf output { min-width:3.2em; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
-.conf input.unset { accent-color:var(--muted); opacity:.55; } .conf input.unset + output { color:var(--muted); }
 .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 label.btn, button { display:flex; align-items:center; justify-content:center; min-height:46px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-weight:600; cursor:pointer; }
 button.primary { background:var(--accent); border-color:var(--accent); color:#fff; grid-column:1 / -1; font-size:17px; }
@@ -146,7 +142,6 @@ body.role-scratch #qcard { padding:6px 12px; cursor:pointer; } body.role-scratch
 body.role-scratch #qcard.collapsed .prompt { max-height:1.5em; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 body.role-scratch #qcard.collapsed .prompt p { display:inline; margin:0; }
 body.role-scratch .small { display:none; }
-body.role-scratch #confrow { margin:0; }
 body.role-scratch #answer { display:flex !important; flex:1; min-height:0; }
 body.role-scratch #draw { display:flex !important; flex:1; min-height:0; }
 body.role-scratch .scratch-host { flex:1; min-height:0; height:auto; }
@@ -205,7 +200,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   <section id="pad">
     <div id="qcard" class="card">
       <div id="say" class="say hidden"></div>
-      <span id="kind" class="kind"></span><span id="timer" class="timer"></span>
+      <span id="kind" class="kind"></span>
       <div id="prompt" class="prompt"></div>
       <div id="banner" class="banner hidden"></div>
       <div id="idle" class="idle">Waiting for the tutor. Menus, questions and answers all appear here.</div>
@@ -228,7 +223,6 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
         <button id="rec" class="rec">🎙 Record</button><div id="audioline" class="small"></div>
       </div>
     </div>
-    <div id="confrow" class="conf hidden"><label for="conf">Confidence</label><input id="conf" type="range" min="0" max="100" step="5" value="50" class="unset"><output id="confv">—</output></div>
     <div id="actions" class="btns hidden">
       <button id="hint">? Hint</button><button id="idk">I don't know</button><button id="skip" title="Skip this one check">Skip ⏭</button><button id="endrecall" class="endrecall" title="Stop all recall and start the lesson now">End recall → start lesson</button>
       <button id="send" class="primary" disabled>Send answer</button>
@@ -401,9 +395,8 @@ function hasAnswer() {
 function updateButtons() {
   const q = pending && pending.kind === "quiz";
   const scratchFree = role === "scratch" && !pending && pages.some((p) => p.strokes.length);
-  const waitConf = pending && hasAnswer() && needsConf();
-  $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer() || needsConf());
-  $("send").textContent = waitConf ? "Set confidence to send" : pending && pending.kind === "read" ? "Ask about it" : pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
+  $("send").disabled = busy || (!pending ? !scratchFree : !hasAnswer());
+  $("send").textContent = pending && pending.kind === "read" ? "Ask about it" : pending ? "Send answer" : role === "scratch" ? "Send to tutor" : "Send answer";
   for (const id of ["hint", "idk", "skip", "endrecall", "rec", "cam", "pick"]) $(id).disabled = !pending || busy;
   $("endrecall").classList.toggle("hidden", !pending || !isGraded(pending) || pending.kind === "quiz");
   $("skip").classList.toggle("hidden", !pending || !isGraded(pending) || pending.kind === "quiz");
@@ -420,7 +413,7 @@ function showPrompt(p) {
   $("idle").classList.add("hidden"); $("prompt").classList.remove("hidden"); $("kind").classList.remove("hidden");
   $("qcard").classList.remove("collapsed");
   $("result").classList.add("hidden");
-  $("confrow").classList.toggle("hidden", !isGraded(p)); $("actions").classList.remove("hidden"); $("freephoto").classList.add("hidden");
+  $("actions").classList.remove("hidden"); $("freephoto").classList.add("hidden");
   if (p.kind === "input") {
     $("quiz").classList.add("hidden"); $("answer").classList.remove("hidden"); setMode("type"); $("text").placeholder = p.context || "Type here…";
   } else if (isChoice(p)) {
@@ -448,9 +441,9 @@ function showPrompt(p) {
   if (p.kind !== "menu") { try { navigator.vibrate && navigator.vibrate(80); } catch {} }
 }
 function hidePrompt() {
-  pending = null; $("idle").classList.remove("hidden"); $("prompt").classList.add("hidden"); $("kind").classList.add("hidden"); $("timer").textContent = "";
+  pending = null; $("idle").classList.remove("hidden"); $("prompt").classList.add("hidden"); $("kind").classList.add("hidden");
   $("say").classList.add("hidden"); $("banner").classList.add("hidden"); $("qcard").classList.remove("reading");
-  $("quiz").classList.add("hidden"); $("answer").classList.add("hidden"); $("confrow").classList.add("hidden"); $("actions").classList.add("hidden"); $("freephoto").classList.remove("hidden");
+  $("quiz").classList.add("hidden"); $("answer").classList.add("hidden"); $("actions").classList.add("hidden"); $("freephoto").classList.remove("hidden");
   if (role === "scratch") { $("answer").classList.remove("hidden"); $("actions").classList.remove("hidden"); $("idle").textContent = "No open question — you can still draw and send it to the tutor."; }
   else $("idle").textContent = "Waiting for the tutor. Menus, questions and answers all appear here.";
   updateButtons();
@@ -461,8 +454,6 @@ function showResult(r) {
   const mark = v === "correct" ? "✓" : v === "partial" ? "◐" : v === "incorrect" ? "✗" : "";
   const label = v === "notAnswer" ? "not graded" : v;
   let html = '<div class="v">' + mark + " " + esc(label) + (r.score !== undefined ? " (" + Math.round(r.score * 100) + "%)" : "") + '</div>';
-  const meta = []; if (r.confidence !== undefined) meta.push("confidence " + r.confidence + "%"); if (r.latencyMs) meta.push(Math.round(r.latencyMs / 1000) + "s");
-  if (meta.length) html += '<div class="m">' + meta.join(" · ") + "</div>";
   if (r.chosen && r.chosen.length) html += "<p><b>You chose:</b> " + esc(r.chosen.join(" | ")) + "</p>";
   if (r.correct && r.correct.length && v !== "correct") html += "<p><b>Correct:</b> " + esc(r.correct.join(" | ")) + "</p>";
   const inl = (s) => renderMd(String(s)).replace(/^<p>|<\/p>\s*$/g, "");
@@ -486,7 +477,6 @@ async function poll() {
   } catch (e) { $("conn").textContent = "Can't reach your Mac — is Tailscale on?"; $("conn").className = "conn bad"; }
 }
 setInterval(poll, 1500); poll();
-setInterval(() => { if (pending) $("timer").textContent = fmt(Date.now() - skew - pending.startedAt); }, 500);
 
 // ---------- answer modes ----------
 function setMode(m) {
@@ -497,19 +487,13 @@ function setMode(m) {
   updateButtons();
 }
 $("mType").onclick = () => setMode("type"); $("mDraw").onclick = () => setMode("draw"); $("mPhoto").onclick = () => setMode("photo"); $("mVoice").onclick = () => setMode("voice");
-// Confidence must be set by hand each time: a default value is not a judgement, and
-// it silently poisons the calibration record (a session of 70% defaults looks like
-// overconfidence). The slider starts blank and the send button waits for it.
-let confSet = false;
-function resetAnswer() { files.length = 0; audio = null; $("text").value = ""; $("audioline").textContent = ""; renderGrid($("grid"), files); $("conf").value = 50; confSet = false; $("conf").classList.add("unset"); $("confv").textContent = "—"; clearPages(); updateButtons(); }
-function needsConf() { return !!(pending && isGraded(pending) && !confSet); }
-function onConf() { confSet = true; $("conf").classList.remove("unset"); $("confv").textContent = $("conf").value + "%"; updateButtons(); }
-$("text").oninput = updateButtons; $("conf").oninput = onConf; $("conf").onchange = onConf;
+function resetAnswer() { files.length = 0; audio = null; $("text").value = ""; $("audioline").textContent = ""; renderGrid($("grid"), files); clearPages(); updateButtons(); }
+$("text").oninput = updateButtons;
 
 // ---------- drawing: vector scratchpad (scratch.js) ----------
 let pointerPenCapable = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
 let pad = null;
-function ensurePage() { if (!pad && window.Scratch) { pad = Scratch.mount($("schost"), $("sctools"), { onSend: () => { if (busy) return; if (needsConf()) { setStatus("Set your confidence first, then swipe again.", "err"); return; } if (!$("send").disabled) { setStatus("Swipe: sending…"); $("send").click(); } } }); $("schost").addEventListener("pointerup", updateButtons); $("schost").addEventListener("pointercancel", updateButtons); $("sctools").addEventListener("click", () => setTimeout(updateButtons, 0)); } }
+function ensurePage() { if (!pad && window.Scratch) { pad = Scratch.mount($("schost"), $("sctools"), { onSend: () => { if (busy) return; if (!$("send").disabled) { setStatus("Swipe: sending…"); $("send").click(); } } }); $("schost").addEventListener("pointerup", updateButtons); $("schost").addEventListener("pointercancel", updateButtons); $("sctools").addEventListener("click", () => setTimeout(updateButtons, 0)); } }
 const pages = { some: (f) => !!(pad && pad.hasInk() && f({ strokes: [1] })) };
 function exportPages() { ensurePage(); return pad ? pad.exportImages() : []; }
 function clearPages() { if (pad) pad.clear(); }
@@ -563,14 +547,13 @@ $("send").onclick = async () => {
     try { await post("/upload", { note: "", images }); clearPages(); setStatus("Sent ✓ (as a message — no question was open)", "ok"); } catch (e) { setStatus("Failed: " + e.message, "err"); }
     busy = false; updateButtons(); return;
   }
-  const confidence = Number($("conf").value);
   if (pending.kind === "menu") return submit({ choices: [...selected] });
   if (pending.kind === "input") return submit({ text: $("text").value });
   if (pending.kind === "ask") return submit(selected.size ? { choices: [...selected] } : { text: $("text").value });
   if (pending.kind === "read") return submit(selected.size ? { choices: [...selected] } : { text: $("text").value }, selected.size ? "Marked read…" : "Sending your question…");
-  if (pending.kind === "quiz") return submit({ choices: [...selected], confidence });
+  if (pending.kind === "quiz") return submit({ choices: [...selected] });
   const images = mode === "draw" ? exportPages() : files.map((f) => ({ data: f.data, mimeType: f.mimeType }));
-  submit({ text: mode === "type" ? $("text").value : "", confidence, images, audio: mode === "voice" ? audio : null }, audio ? "Transcribing on the Mac…" : "Sending…");
+  submit({ text: mode === "type" ? $("text").value : "", images, audio: mode === "voice" ? audio : null }, audio ? "Transcribing on the Mac…" : "Sending…");
 };
 $("hint").onclick = () => submit({ hint: true });
 $("skip").onclick = () => submit({ skip: true }, "Skipping…");

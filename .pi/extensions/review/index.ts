@@ -20,7 +20,7 @@
  *
  * Commands:
  *   /review [topic]  — start a spaced review session
- *   /review-stats    — card counts per topic, due dates, calibration
+ *   /review-stats    — card counts per topic, due dates, retention
  *
  * Not loaded into subagents: they never see these tools.
  */
@@ -33,7 +33,6 @@ import * as path from "node:path";
 import { type Card as FsrsCard, type Grade, Rating, State, createEmptyCard, fsrs, generatorParameters } from "ts-fsrs";
 import {
 	type CheckKind,
-	calibrationLine,
 	closeSession,
 	currentSession,
 	learnerSlice,
@@ -56,65 +55,25 @@ type CardKind = "recall" | "problem";
 /** Node ids are for the map and the tools; the learner has never seen them, and the tools refuse text that uses them. */
 export const NODE_ID_NOTE = "Node ids (R1, D2, G) are internal: in anything he reads, name the idea by its label (\"the matrix exponential\", \"the superposition step\"), never the id.";
 
-/**
- * Minutes a card costs him when nothing is known yet: a paper problem a quarter
- * of an hour, a quick card several minutes (his "quick" answers take 5-7 min).
- * Once there are enough graded answers, measuredMinutes() replaces these.
- */
-export const CHECK_MINUTES: Record<CheckKind, number> = { problem: 12, flaw: 5, transfer: 6, recall: 6, explain: 7, predict: 3, boundary: 6 };
 const DEFAULT_LIMIT = 10;
-const MAX_PROBLEMS_NO_BUDGET = 3;
-const MEASURE_MIN_SAMPLES = 5;
-const GRADING_OVERHEAD_MIN = 1; // reading the verdict, the tutor's line, the next prompt
+const MAX_PROBLEMS = 3;
 
 /**
- * Minutes per check from his own answer times: the 75th percentile of the
- * latencies on file (plus grading overhead), per check kind, when at least
- * MEASURE_MIN_SAMPLES exist; the default otherwise. A 60-minute budget that
- * assumed 4-minute cards ran 80 minutes on 2026-10-17.
+ * Size the batch by count, never by time: sessions are not timed (he walks
+ * away mid-answer and picks the session up later). `limit` cards, at most a
+ * few of them paper problems. Always at least one card.
  */
-export function measuredMinutes(events: Array<{ check?: string; latencyMs?: number }>): Record<CheckKind, number> {
-	const out = { ...CHECK_MINUTES };
-	const by = new Map<string, number[]>();
-	for (const e of events) {
-		if (!e.check || !e.latencyMs || e.latencyMs <= 0 || e.latencyMs > 3600_000) continue; // >1 h: he walked away
-		const list = by.get(e.check) ?? [];
-		list.push(e.latencyMs / 60000);
-		by.set(e.check, list);
-	}
-	for (const k of Object.keys(out) as CheckKind[]) {
-		const v = (by.get(k) ?? []).sort((a, b) => a - b);
-		if (v.length < MEASURE_MIN_SAMPLES) continue;
-		const p75 = v[Math.min(v.length - 1, Math.floor(v.length * 0.75))];
-		out[k] = Math.min(20, Math.max(2, Math.round(p75 + GRADING_OVERHEAD_MIN)));
-	}
-	return out;
-}
-
-/**
- * Size the batch to the time budget: 30 minutes is two paper problems and a
- * couple of quick cards, not fifteen cards. Without a budget, `limit` cards
- * with at most a few problems. Always at least one card.
- */
-export function sizeBatch<T>(cards: T[], checkOf: (c: T) => CheckKind, budgetMin: number | undefined, limit?: number, reserveMin = 0, minutesOf: Record<CheckKind, number> = CHECK_MINUTES): T[] {
+export function sizeBatch<T>(cards: T[], checkOf: (c: T) => CheckKind, limit?: number): T[] {
 	const out: T[] = [];
-	let minutes = 0;
 	let problems = 0;
-	const maxProblems = budgetMin ? Math.max(1, Math.floor(budgetMin / 15)) : MAX_PROBLEMS_NO_BUDGET;
 	const max = Math.max(1, Math.floor(limit ?? DEFAULT_LIMIT));
-	const room = budgetMin ? Math.max(minutesOf.recall, budgetMin - reserveMin) : Infinity;
 	for (const c of cards) {
 		if (out.length >= max) break;
-		const check = checkOf(c);
-		const cost = minutesOf[check] ?? minutesOf.recall;
-		if (check === "problem" && problems >= maxProblems) continue;
-		if (out.length > 0 && minutes + cost > room) {
-			if (cost > minutesOf.recall) continue; // a cheaper card may still fit
-			break;
+		if (checkOf(c) === "problem") {
+			if (problems >= MAX_PROBLEMS) continue;
+			problems++;
 		}
 		out.push(c);
-		minutes += cost;
-		if (check === "problem") problems++;
 	}
 	return out;
 }
@@ -254,15 +213,15 @@ export function dueByTopic(cwd: string): Record<string, number> {
 }
 
 /** Start a review session; every Nth one is an unaided test. Exported for the start menu. */
-export function beginReviewSession(cwd: string, budgetMin?: number): { id: string; unaided: boolean } {
+export function beginReviewSession(cwd: string): { id: string; unaided: boolean } {
 	const count = reviewSessionCount(loadLearner(cwd)) + 1;
 	const unaided = count % UNAIDED_EVERY === 0;
-	const rec = startSession(cwd, { kind: "review", budgetMin, unaided });
+	const rec = startSession(cwd, { kind: "review", unaided });
 	return { id: rec.id, unaided };
 }
 
-export function beginLearnSession(cwd: string, lesson: string, budgetMin?: number): string {
-	return startSession(cwd, { kind: "learn", lesson, budgetMin }).id;
+export function beginLearnSession(cwd: string, lesson: string): string {
+	return startSession(cwd, { kind: "learn", lesson }).id;
 }
 
 function humanizeUntil(due: Date, now: Date): string {
@@ -373,8 +332,6 @@ const GradeParams = Type.Object({
 			description: "How the learner answered. 'implicit' = credit for using the idea correctly mid-lesson without being asked.",
 		}),
 	),
-	latencyMs: Type.Optional(Type.Number({ description: "Time to answer, if known (the recall tool reports it)." })),
-	confidence: Type.Optional(Type.Number({ description: "Learner's stated confidence 0-100, if known." })),
 });
 
 const SearchParams = Type.Object({
@@ -455,8 +412,6 @@ export interface GradeCardInput {
 	note?: string;
 	check?: CheckKind;
 	modality?: Modality;
-	latencyMs?: number;
-	confidence?: number;
 }
 
 /** Grade a card and reschedule it. Shared by review_grade and the recall tool. */
@@ -466,9 +421,7 @@ export function gradeCard(cwd: string, params: GradeCardInput): { text: string; 
 	if (!card) throw new Error(`No card with id "${params.id}"`);
 	const now = new Date();
 	const session = currentSession(cwd);
-	let rating = params.rating;
-	// Correct but slow is not yet fluent. Only downgrade 'easy'; a 'good' stands.
-	if (rating === "easy" && params.latencyMs && params.latencyMs > 20000) rating = "good";
+	const rating = params.rating;
 	card.fsrs = scheduler.next(card.fsrs, now, RATINGS[rating]).card;
 	card.history.push({
 		at: now.toISOString(),
@@ -477,8 +430,6 @@ export function gradeCard(cwd: string, params: GradeCardInput): { text: string; 
 		session: session?.id,
 		check: params.check,
 		modality: params.modality,
-		latencyMs: params.latencyMs,
-		confidence: params.confidence,
 	});
 	let graduatedNow = false;
 	if ((rating === "good" || rating === "easy") && session && card.lastCriterionSession !== session.id && params.modality !== "implicit") {
@@ -591,13 +542,10 @@ export default function review(pi: ExtensionAPI) {
 			const retry = relearnCards(store, session.id, sessionStart).filter((c) => !params.topic || c.topic === params.topic.toLowerCase());
 			const pool = interleave(due.filter((c) => !retry.includes(c)));
 			const checkOf = (c: ReviewCard) => assignCardCheck(c, session!.id);
-			const minutes = measuredMinutes(loadEvents(ctx.cwd));
-			const batch = sizeBatch(pool, checkOf, session.budgetMin, params.limit, retry.length * minutes.recall, minutes);
-			const onPaper = batch.filter((c) => checkOf(c) === "problem").length;
-			const quickMin = Math.round(batch.filter((c) => checkOf(c) !== "problem").reduce((s, c) => s + minutes[checkOf(c)], 0) / Math.max(1, batch.length - onPaper));
+			const batch = sizeBatch(pool, checkOf, params.limit);
 
 			const header = [
-				`Session ${session.id}${session.unaided ? " — UNAIDED TEST: no hints, no repair until the session summary; grade strictly." : ""}${session.budgetMin ? ` — budget ${session.budgetMin} min.` : ""}`,
+				`Session ${session.id}${session.unaided ? " — UNAIDED TEST: no hints, no repair until the session summary; grade strictly." : ""}`,
 				"Never tell the learner which topic a card is from; choosing the method is part of the task.",
 			];
 			if (batch.length === 0 && retry.length === 0) {
@@ -605,7 +553,7 @@ export default function review(pi: ExtensionAPI) {
 				return textResult(
 					store.cards.length === 0
 						? "No review cards exist yet."
-						: `Nothing due${params.topic ? ` for topic "${params.topic}"` : ""}. Next card due ${next ? humanizeUntil(next, now) : "never"}.\n${calibrationLine(learner.calibration)}`,
+						: `Nothing due${params.topic ? ` for topic "${params.topic}"` : ""}. Next card due ${next ? humanizeUntil(next, now) : "never"}.`,
 				);
 			}
 			const isRetention = (c: ReviewCard) =>
@@ -635,7 +583,7 @@ export default function review(pi: ExtensionAPI) {
 			const retryLines = retry.map((c) => fmt(c, c.kind === "problem" ? "problem" : "recall"));
 			const text = [
 				...header,
-				`${due.length} due, showing ${batch.length}${session.budgetMin ? ` (sized to ${session.budgetMin} min from his answer times: ${onPaper} on paper at ~${minutes.problem} min each, ${batch.length - onPaper} quick at ~${quickMin} min)` : ""}. A card not shown is simply due next time; do not call review_due again for more until the retry list is empty.`,
+				`${due.length} due, showing ${batch.length}. A card not shown is simply due next time; do not call review_due again for more until the retry list is empty. Nothing is timed: he may leave mid-answer and come back hours later; never mention time, speed or a budget.`,
 				"",
 				...lines,
 				...(retryLines.length
@@ -731,7 +679,7 @@ export default function review(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lesson_status",
 		label: "lesson status",
-		description: "Mark a lesson paused (with a two-line summary of where to pick up) or done. Call when the learner stops, the time budget runs out, or the goal node is confirmed.",
+		description: "Mark a lesson paused (with a two-line summary of where to pick up) or done. Call when the learner stops or the goal node is confirmed.",
 		renderCall: quietCall("lesson"),
 		renderResult: quietResult(firstLine),
 		parameters: LessonStatusParams,
@@ -762,7 +710,7 @@ export default function review(pi: ExtensionAPI) {
 		name: "learner_slice",
 		label: "learner slice",
 		description:
-			"The relevant slice of the learner file: the named lesson's nodes and status, other open lessons, open misconceptions touching the given topics, calibration, due cards. Call when a lesson crosses into a new concept (pass its topics), not every turn.",
+			"The relevant slice of the learner file: the named lesson's nodes and status, other open lessons, open misconceptions touching the given topics, due cards. Call when a lesson crosses into a new concept (pass its topics), not every turn.",
 		renderCall: quietCall("learner slice"),
 		renderResult: quietResult(() => "loaded"),
 		parameters: SliceParams,
@@ -828,7 +776,7 @@ export default function review(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("review-stats", {
-		description: "Show review card counts per topic, upcoming due dates, calibration",
+		description: "Show review card counts per topic, upcoming due dates, retention",
 		handler: async (_args, ctx: any) => {
 			const store = load(ctx.cwd);
 			const learner = loadLearner(ctx.cwd);
@@ -849,7 +797,6 @@ export default function review(pi: ExtensionAPI) {
 			if (open.length) lines.push(`open lessons: ${open.map((l) => `${l.title} (${l.nodes.filter((n) => n.status === "confirmed").length}/${l.nodes.length})`).join(", ")}`);
 			const openM = learner.misconceptions.filter((m) => m.status === "open").length;
 			if (openM) lines.push(`open misconceptions: ${openM}`);
-			lines.push(calibrationLine(learner.calibration));
 			const ret = retentionSummary(loadEvents(ctx.cwd));
 			if (ret.n) lines.push(`long-delay retention: ${ret.n} checks, ${Math.round(ret.accuracy * 100)}% correct`);
 			ctx.ui.notify(lines.join("\n"), "info");

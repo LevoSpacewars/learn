@@ -204,13 +204,6 @@ export default function mdLog(pi: ExtensionAPI) {
 			for (let i = 1; i < noteLines.length; i++) body.push(noteLines[i]);
 		}
 
-		if (details?.confidence !== undefined || details?.latencyMs !== undefined) {
-			const bits: string[] = [];
-			if (details.confidence !== undefined) bits.push(`Confidence: ${details.confidence}%`);
-			if (details.latencyMs !== undefined) bits.push(`${Math.round(details.latencyMs / 1000)}s`);
-			body.push(bits.join(" · "));
-		}
-
 		if (details?.explanation) {
 			body.push("");
 			for (const line of String(details.explanation).split("\n")) body.push(line);
@@ -250,10 +243,6 @@ export default function mdLog(pi: ExtensionAPI) {
 			if (!details?.answerText) body.push("Your answer (photo):");
 			for (const n of details.photos) body.push(`![[${n}|500]]`);
 		}
-		const bits: string[] = [];
-		if (details?.confidence !== undefined) bits.push(`Confidence: ${details.confidence}%`);
-		if (details?.latencyMs !== undefined) bits.push(`${Math.round(details.latencyMs / 1000)}s`);
-		if (bits.length) body.push(bits.join(" · "));
 		if (details?.reading) body.push(`Read as: ${details.reading}`);
 		if (details?.firstError) body.push(`First error: ${details.firstError}`);
 		if (details?.feedback) {

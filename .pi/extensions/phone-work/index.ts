@@ -3,8 +3,8 @@
  * phone, iPad and laptop (any device on the tailnet, plus this Mac).
  *
  * A tiny HTTP server serves a mobile page that mirrors whatever prompt the
- * tutor is waiting on (a `recall` question), with a running timer, an answer
- * box, a confidence slider, a camera button for paper work, and a microphone
+ * tutor is waiting on (a `recall` question), an answer box, a camera button
+ * for paper work, and a microphone
  * button whose audio is transcribed locally with whisper.cpp. Whichever
  * surface answers first (terminal or phone) wins; the other dismisses.
  *

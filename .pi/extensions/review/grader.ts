@@ -5,7 +5,7 @@
  * measured and worst on math). So grading runs in a separate `pi -p` process
  * that sees ONLY: the question, the reference answer written before the
  * learner answered, the rubric for the check kind, the learner's answer
- * (typed text and/or photos), and the stated confidence. No lesson context.
+ * (typed text and/or photos). No lesson context, no confidence rating.
  * It must write its reading of the work and its reasoning before the verdict.
  *
  * Model: PI_GRADER_MODEL (default claude-bridge/claude-opus-5-5).

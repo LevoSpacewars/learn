@@ -3,9 +3,10 @@
  *
  * The teacher poses a prompt that has a right answer but no options: the
  * learner TYPES the answer, or works it on paper and sends a PHOTO from the
- * phone page (whichever arrives first wins). Then they rate their confidence
- * (0-100), and a context-free grader (see review/grader.ts) compares the
- * answer with the reference the teacher wrote BEFORE the learner answered.
+ * phone page (whichever arrives first wins). A context-free grader (see
+ * review/grader.ts) compares the answer with the reference the teacher wrote
+ * BEFORE the learner answered. No clock and no confidence rating: he walks
+ * away mid-answer and comes back, and his confidence carried no signal.
  *
  * Kinds (the critical-thinking checks; which one a node gets is assigned by
  * lesson_plan / review_due, not chosen here):
@@ -14,7 +15,7 @@
  *   flaw     — is this (planted-error) argument right?   transfer — same structure, new clothes
  *   problem  — work it on paper
  *
- * Records latency and confidence (calibration) and, when a cardId is given,
+ * Records the graded answer and, when a cardId is given,
  * grades the FSRS card automatically (the teacher can override with
  * review_grade). Typing `?` alone asks for a hint (logged: no unaided attempt
  * yet); typing `idk` alone is an honest "I don't know".
@@ -55,7 +56,7 @@ import {
 	recordOutcome,
 	resetPedagogy,
 } from "./review/pedagogy.ts";
-import { type CheckKind, loadLearner, recordCalibration, recordEvent } from "./review/store.ts";
+import { type CheckKind, loadLearner, recordEvent } from "./review/store.ts";
 import { recordReading, writeBook } from "./review/book.ts";
 import { webRead } from "./review/ui.ts";
 
@@ -72,8 +73,6 @@ interface RecallDetails {
 	modality?: Modality;
 	answerText?: string;
 	photos?: string[]; // basenames inside work/, for ![[embed]]
-	confidence?: number;
-	latencyMs?: number;
 	verdict?: GradeResult["verdict"] | "notAnswer";
 	score?: number;
 	reading?: string;
@@ -119,7 +118,7 @@ const RecallParams = Type.Object({
 			{ description: "The check kind assigned by lesson_plan / review_due. Default recall." },
 		),
 	),
-	topic: Type.Optional(Type.String({ description: "Topic slug (for calibration tracking)." })),
+	topic: Type.Optional(Type.String({ description: "Topic slug (the answer is filed under it in the knowledge dossier)." })),
 	cardId: Type.Optional(Type.String({ description: "Review card id when this answers a due card; the card is graded automatically." })),
 	paper: Type.Optional(Type.Boolean({ description: "Suggest working on paper and sending a photo (default true for 'problem')." })),
 	rubric: Type.Optional(
@@ -166,11 +165,11 @@ function addWrapped(lines: string[], text: string, width: number, indent = ""): 
 	for (const line of wrapTextWithAnsi(text, contentWidth)) lines.push(truncateToWidth(`${indent}${line}`, width));
 }
 
-/** FSRS rating from the grader's score: the substance decides, not the verdict label. */
-export function ratingFor(r: Pick<GradeResult, "verdict" | "score">, latencyMs: number): "again" | "hard" | "good" | "easy" {
+/** FSRS rating from the grader's score: the substance decides, not the verdict label. Time is never a factor: he walks away mid-answer and comes back. */
+export function ratingFor(r: Pick<GradeResult, "verdict" | "score">): "again" | "hard" | "good" | "easy" {
 	if (r.verdict === "incorrect" || r.score < 0.4) return "again";
 	if (r.score < 0.75) return "hard";
-	if (r.verdict === "correct" && latencyMs < 15000 && r.score >= 0.95) return "easy";
+	if (r.verdict === "correct" && r.score >= 0.95) return "easy";
 	return "good";
 }
 
@@ -178,24 +177,18 @@ interface UiOutcome {
 	promptId?: string;
 	status: RecallStatus;
 	answer?: PromptAnswer;
-	confidence?: number;
-	latencyMs: number;
 	graded?: GradeResult;
 }
 
 async function askRecall(
 	ctx: any,
-	opts: { kind: CheckKind; prompt: string; paper: boolean; reference: string; say?: string; banner?: string; runGrade: (a: PromptAnswer, confidence: number) => Promise<GradeResult> },
+	opts: { kind: CheckKind; prompt: string; paper: boolean; reference: string; say?: string; banner?: string; runGrade: (a: PromptAnswer) => Promise<GradeResult> },
 ): Promise<UiOutcome> {
 	const startedAt = Date.now();
 	const promptId = `p${startedAt.toString(36)}`;
 	return ctx.ui.custom((tui: any, theme: any, _kb: any, done: (r: UiOutcome) => void) => {
-		let phase: "answer" | "confidence" | "grading" | "feedback" = "answer";
+		let phase: "answer" | "grading" | "feedback" = "answer";
 		let answer: PromptAnswer | undefined;
-		let latencyMs = 0;
-		let confidence = 50;
-		let confSet = false; // the learner must move the value; a default is not a judgement
-		let typedDigits = "";
 		let graded: GradeResult | undefined;
 		let gradeError: string | undefined;
 		let cachedLines: string[] | undefined;
@@ -216,30 +209,24 @@ async function askRecall(
 		function receive(a: PromptAnswer): boolean {
 			if (phase !== "answer") return false;
 			answer = a;
-			latencyMs = Date.now() - startedAt;
 			if (a.hint) {
-				finish({ status: "hint", answer: a, latencyMs });
+				finish({ status: "hint", answer: a });
 				return true;
 			}
 			if (a.skip) {
-				finish({ status: "skipped", answer: a, latencyMs });
+				finish({ status: "skipped", answer: a });
 				return true;
 			}
 			if (a.endRecall) {
-				finish({ status: "ended", answer: a, latencyMs });
+				finish({ status: "ended", answer: a });
 				return true;
 			}
 			if (a.dontKnow) {
-				finish({ status: "dontKnow", answer: a, latencyMs });
+				finish({ status: "dontKnow", answer: a });
 				return true;
 			}
-			if (typeof a.confidence === "number") {
-				confidence = a.confidence;
-				startGrading();
-			} else {
-				phase = "confidence";
-				editor.focused = false;
-			}
+			editor.focused = false;
+			startGrading();
 			refresh();
 			return true;
 		}
@@ -247,7 +234,7 @@ async function askRecall(
 			phase = "grading";
 			refresh();
 			opts
-				.runGrade(answer!, confidence)
+				.runGrade(answer!)
 				.then((g) => {
 					graded = g;
 				})
@@ -257,11 +244,11 @@ async function askRecall(
 				.finally(() => {
 					phase = "feedback";
 					// Publish for the web surface as soon as grading is done (not when Enter is pressed here).
-					if (graded && !graded.attempted) setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: "notAnswer", feedback: "Not graded: that wasn't an answer. The tutor will reply.", confidence, latencyMs });
-					else setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: graded?.verdict ?? "ungraded", score: graded?.score, feedback: graded?.feedback ?? gradeError, reading: graded?.reading, firstError: graded?.firstError, reference: opts.reference, confidence, latencyMs });
+					if (graded && !graded.attempted) setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: "notAnswer", feedback: "Not graded: that wasn't an answer. The tutor will reply." });
+					else setLastResult({ id: promptId, at: Date.now(), kind: opts.kind, prompt: opts.prompt, verdict: graded?.verdict ?? "ungraded", score: graded?.score, feedback: graded?.feedback ?? gradeError, reading: graded?.reading, firstError: graded?.firstError, reference: opts.reference });
 					refresh();
 					// Answered from the phone/iPad: the result is on that screen, so don't wait for a keypress here.
-					if (answer?.source !== "tui") setTimeout(() => { if (phase === "feedback") finish({ status: "answered", answer, confidence, latencyMs, graded }); }, 8000);
+					if (answer?.source !== "tui") setTimeout(() => { if (phase === "feedback") finish({ status: "answered", answer, graded }); }, 8000);
 				});
 		}
 
@@ -270,7 +257,7 @@ async function askRecall(
 		function handleInput(data: string) {
 			if (phase === "answer") {
 				if (matchesKey(data, Key.escape)) {
-					finish({ status: "cancelled", latencyMs: Date.now() - startedAt });
+					finish({ status: "cancelled" });
 					return;
 				}
 				if (matchesKey(data, Key.enter)) {
@@ -294,38 +281,9 @@ async function askRecall(
 				tui.requestRender();
 				return;
 			}
-			if (phase === "confidence") {
-				const valueKey = matchesKey(data, Key.left) || matchesKey(data, Key.right) || matchesKey(data, Key.down) || matchesKey(data, Key.up) || /^[0-9]$/.test(data) || matchesKey(data, Key.backspace);
-				if (valueKey) confSet = true;
-				if (matchesKey(data, Key.left)) confidence = Math.max(0, confidence - 10);
-				else if (matchesKey(data, Key.right)) confidence = Math.min(100, confidence + 10);
-				else if (matchesKey(data, Key.down)) confidence = Math.max(0, confidence - 5);
-				else if (matchesKey(data, Key.up)) confidence = Math.min(100, confidence + 5);
-				else if (/^[0-9]$/.test(data)) {
-					typedDigits = (typedDigits + data).slice(-3);
-					confidence = Math.min(100, Number(typedDigits));
-				} else if (matchesKey(data, Key.backspace)) {
-					typedDigits = typedDigits.slice(0, -1);
-					confidence = typedDigits ? Number(typedDigits) : 0;
-				} else if (matchesKey(data, Key.enter)) {
-					if (!confSet) {
-						refresh();
-						return;
-					}
-					startGrading();
-					return;
-				} else if (matchesKey(data, Key.escape)) {
-					// Skip confidence: record as unknown by using 50.
-					confidence = 50;
-					startGrading();
-					return;
-				}
-				refresh();
-				return;
-			}
 			if (phase === "feedback") {
 				if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) {
-					finish({ status: "answered", answer, confidence, latencyMs, graded });
+					finish({ status: "answered", answer, graded });
 				}
 			}
 		}
@@ -354,13 +312,6 @@ async function askRecall(
 				for (const l of editor.render(Math.max(1, width - 2))) lines.push(l);
 				lines.push("");
 				add(theme.fg("dim", " Enter submit · Ctrl+J newline · ? = hint · idk = I don't know · skip = move on · lesson = end recall, start the lesson · qr = phone link · Esc cancel"));
-			} else if (phase === "confidence") {
-				const filled = Math.round(confidence / 5);
-				const bar = "█".repeat(filled) + "░".repeat(20 - filled);
-				add(theme.fg("text", ` How confident are you that this is right?`));
-				add(` ${theme.fg(confSet ? "accent" : "dim", bar)} ${confSet ? theme.fg("accent", `${confidence}%`) : theme.fg("dim", "— (set it)")}`);
-				lines.push("");
-				add(theme.fg("dim", confSet ? " ←/→ ±10 · ↑/↓ ±5 · type digits · Enter confirm" : " Move it first: ←/→ ±10 · ↑/↓ ±5 · or type digits · then Enter"));
 			} else if (phase === "grading") {
 				add(theme.fg("muted", ` Grading independently… (${answer?.photos?.length ? "reading your photo" : "reading your answer"})`));
 			} else {
@@ -371,7 +322,7 @@ async function askRecall(
 				} else {
 					const color = graded.verdict === "correct" ? "success" : graded.verdict === "partial" ? "warning" : "error";
 					const mark = graded.verdict === "correct" ? "✓" : graded.verdict === "partial" ? "◐" : "✗";
-					add(theme.fg(color, ` ${mark} ${graded.verdict.toUpperCase()}  (${Math.round(graded.score * 100)}%)`) + theme.fg("dim", `  confidence ${confidence}% · ${Math.round(latencyMs / 1000)}s`));
+					add(theme.fg(color, ` ${mark} ${graded.verdict.toUpperCase()}  (${Math.round(graded.score * 100)}%)`));
 					if (graded.reading) addWrapped(lines, theme.fg("dim", `Read as: ${graded.reading}`), width, " ");
 					if (graded.firstError) addWrapped(lines, theme.fg("warning", `First error: ${graded.firstError}`), width, " ");
 					lines.push("");
@@ -652,7 +603,7 @@ export default function recall(pi: ExtensionAPI) {
 		name: "recall",
 		label: "recall",
 		description:
-			"Pose a question with a right answer but NO options: the learner types the answer or sends a photo of paper work; then rates confidence; then an independent grader scores it against your hidden reference. Use for every check that isn't genuinely multiple-choice (explain-back, predict, boundary, find-the-flaw, transfer, problems). Returns verdict, score, what the grader read, the first error, latency and confidence — and grades the review card if cardId is given.",
+			"Pose a question with a right answer but NO options: the learner types the answer or sends a photo of paper work; then an independent grader scores it against your hidden reference. Use for every check that isn't genuinely multiple-choice (explain-back, predict, boundary, find-the-flaw, transfer, problems). Returns verdict, score, what the grader read, the first error, latency and confidence — and grades the review card if cardId is given.",
 		promptSnippet: "Use recall for free-recall checks (typed or photo) with an independent grader; quiz only when distractors are genuinely diagnostic.",
 		promptGuidelines: [
 			"Write the reference before posing: the answer AND the reason, or the exact planted error for 'flaw'.",
@@ -683,7 +634,7 @@ export default function recall(pi: ExtensionAPI) {
 				reference: params.reference,
 				say,
 				banner,
-				runGrade: (a, confidence) =>
+				runGrade: (a) =>
 					grade({
 						cwd: ctx.cwd,
 						kind,
@@ -692,20 +643,19 @@ export default function recall(pi: ExtensionAPI) {
 						rubric: params.rubric,
 						answerText: a.text ?? a.audio?.transcript,
 						photoFiles: a.photos?.map((p) => p.file),
-						confidence,
 					}),
 			}));
 
 			const modality: Modality | undefined = outcome.answer?.photos?.length ? "photo" : outcome.answer?.audio ? "audio" : outcome.answer ? "typed" : undefined;
 			const photos = outcome.answer?.photos?.map((p) => path.basename(p.file));
 			const answerText = outcome.answer?.text ?? outcome.answer?.audio?.transcript;
-			const details: RecallDetails = { ...base, status: outcome.status, phase: "done", modality, answerText, photos, latencyMs: outcome.latencyMs };
+			const details: RecallDetails = { ...base, status: outcome.status, phase: "done", modality, answerText, photos };
 
-			if (outcome.status !== "answered") setLastResult({ id: outcome.promptId ?? `p${promptStarted.toString(36)}`, at: Date.now(), kind, prompt: params.prompt, verdict: outcome.status, latencyMs: outcome.latencyMs });
+			if (outcome.status !== "answered") setLastResult({ id: outcome.promptId ?? `p${promptStarted.toString(36)}`, at: Date.now(), kind, prompt: params.prompt, verdict: outcome.status });
 			if (outcome.status === "cancelled") return result("Learner cancelled the prompt (Esc). Ask what they'd like to do.", details);
 			const logEvent = (verdict: "correct" | "partial" | "incorrect" | "dontKnow" | "hint", extra: Partial<Parameters<typeof recordEvent>[1]> = {}) => {
 				try {
-					recordEvent(ctx.cwd, { source: "recall", topic: params.topic?.trim().toLowerCase(), check: kind, prompt: params.prompt, answer: answerText ?? (photos?.length ? `photo: ${photos.join(", ")}` : undefined), verdict, latencyMs: outcome.latencyMs, cardId: params.cardId, retention: params.retention || undefined, ...extra });
+					recordEvent(ctx.cwd, { source: "recall", topic: params.topic?.trim().toLowerCase(), check: kind, prompt: params.prompt, answer: answerText ?? (photos?.length ? `photo: ${photos.join(", ")}` : undefined), verdict, cardId: params.cardId, retention: params.retention || undefined, ...extra });
 				} catch {
 					// never block on bookkeeping
 				}
@@ -737,7 +687,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (outcome.status === "hint") {
 				logEvent("hint");
 				return result(
-					`Learner asked for a HINT before attempting (after ${Math.round(outcome.latencyMs / 1000)}s). No unaided attempt yet. Give one small hint and pose again.`,
+					"Learner asked for a HINT before attempting. No unaided attempt yet. Give one small hint and pose again.",
 					details,
 				);
 			}
@@ -745,7 +695,7 @@ export default function recall(pi: ExtensionAPI) {
 				logEvent("dontKnow");
 				recordOutcome(ped, { correct: false, prompt: params.prompt, verdict: "dontKnow" });
 				if (params.cardId) {
-					const g = gradeCard(ctx.cwd, { id: params.cardId, rating: "again", note: "I don't know", check: kind, modality: "typed", latencyMs: outcome.latencyMs });
+					const g = gradeCard(ctx.cwd, { id: params.cardId, rating: "again", note: "I don't know", check: kind, modality: "typed" });
 					details.cardRating = g.rating;
 					refreshReviewStatus(ctx);
 				}
@@ -753,8 +703,6 @@ export default function recall(pi: ExtensionAPI) {
 			}
 
 			const g = outcome.graded;
-			const confidence = outcome.confidence ?? 50;
-			details.confidence = confidence;
 
 			if (g && !g.attempted) {
 				// A reaction, not an answer: nobody grades it, nothing escalates.
@@ -763,7 +711,7 @@ export default function recall(pi: ExtensionAPI) {
 				return result(
 					[
 						`NOT AN ANSWER: he wrote "${(answerText ?? g.reading ?? "").trim().slice(0, 300)}".`,
-						"Not graded: no card rating, no miss, no calibration. Do not re-pose, drill, or lecture.",
+						"Not graded: no card rating, no miss. Do not re-pose, drill, or lecture.",
 						"Reply to him as a person in 1-3 lines of chat text. If he says his earlier work already showed it, look at that work (the grader's earlier reading) and say plainly whether he is right; if he is, grade that card with review_grade (good) and say so.",
 						"Then call ask_user_question with options \"Next card\" and \"Let me redo this one\" (he can also type). Never end the turn on a plain-text question.",
 					].join("\n"),
@@ -773,16 +721,11 @@ export default function recall(pi: ExtensionAPI) {
 			if (g) {
 				const miss = isMiss(g.verdict, g.score);
 				Object.assign(details, { verdict: g.verdict, score: g.score, reading: g.reading, firstError: g.firstError, feedback: g.feedback });
-				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading, confidence });
+				logEvent(g.verdict, { score: g.score, firstError: g.firstError, reading: g.reading });
 				recordOutcome(ped, { correct: !miss, prompt: params.prompt, verdict: g.verdict, firstError: g.firstError });
-				try {
-					recordCalibration(ctx.cwd, { topic: params.topic, confidence, correct: g.verdict === "correct", source: "recall", check: kind, cardId: params.cardId, latencyMs: outcome.latencyMs });
-				} catch {
-					// never block on bookkeeping
-				}
 				if (params.cardId) {
 					try {
-						const r = gradeCard(ctx.cwd, { id: params.cardId, rating: ratingFor(g, outcome.latencyMs), check: kind, modality, latencyMs: outcome.latencyMs, confidence, note: g.firstError || undefined });
+						const r = gradeCard(ctx.cwd, { id: params.cardId, rating: ratingFor(g), check: kind, modality, note: g.firstError || undefined });
 						details.cardRating = r.rating;
 						refreshReviewStatus(ctx);
 					} catch (e: any) {
@@ -792,7 +735,7 @@ export default function recall(pi: ExtensionAPI) {
 			}
 
 			const lines = [
-				`Learner answered by ${modality}${photos?.length ? ` (${photos.join(", ")})` : ""} in ${Math.round(outcome.latencyMs / 1000)}s, confidence ${confidence}%.`,
+				`Learner answered by ${modality}${photos?.length ? ` (${photos.join(", ")})` : ""}.`,
 				answerText ? `Answer: ${answerText}` : "",
 				g
 					? [
@@ -803,7 +746,6 @@ export default function recall(pi: ExtensionAPI) {
 							g.verdict === "partial" && !isMiss(g.verdict, g.score)
 								? "MINOR GAP, not a miss: the substance was right. At most one line about it in your next `say` (or nothing), then the next card. Do not drill, re-test, or lecture on it."
 								: "",
-							isMiss(g.verdict, g.score) && confidence >= 70 ? "HIGH-CONFIDENCE MISS: give richer feedback on the mechanism and re-test this soon." : "",
 							isMiss(g.verdict, g.score) && ped.reviewMode
 								? "NEXT STEP: put 1-3 lines he can read (what went wrong and why, and the right move) in the next recall's `say` or in chat text; the next recall is refused without it. Then either ONE narrower follow-up on that step or the next card: a missed card comes back in the retry list anyway. If the grader misread him or the card is badly cut (see LAST/REPEATED in review_due), say so and override with review_grade instead of drilling."
 								: isMiss(g.verdict, g.score) && ped.missStreak >= 2
@@ -837,7 +779,7 @@ export default function recall(pi: ExtensionAPI) {
 			if (d.status === "cancelled") return new Text(theme.fg("dim", "cancelled"), 0, 0);
 			if (d.verdict === "notAnswer") return new Text(theme.fg("warning", "not an answer (not graded)"), 0, 0);
 			const color = d.verdict === "correct" ? "success" : d.verdict === "partial" ? "warning" : "error";
-			const head = theme.fg(color, `${d.verdict ?? "ungraded"} ${d.score !== undefined ? Math.round(d.score * 100) + "%" : ""}`) + theme.fg("dim", ` · conf ${d.confidence}% · ${Math.round((d.latencyMs ?? 0) / 1000)}s · ${d.modality}`);
+			const head = theme.fg(color, `${d.verdict ?? "ungraded"} ${d.score !== undefined ? Math.round(d.score * 100) + "%" : ""}`) + theme.fg("dim", ` · ${d.modality}`);
 			return new Text(expanded && d.feedback ? `${head}\n${d.feedback}` : head, 0, 0);
 		},
 	});
