@@ -10,8 +10,11 @@
  *     so a lesson can be resumed in a later session
  *   - misconceptions: wrong models the learner has shown, with for/against
  *     evidence; resolved after two consistent demonstrations
- *   - calibration: (confidence, correct) pairs from every graded answer
- *   - sessions: one record per learn/review session (time budget, counts)
+ *   - sessions: one record per learn/review session with its closing note
+ *   - goals / fundamentals / interests: the curriculum graph (see below)
+ *   - calibration: LEGACY. Confidence ratings and the time budget were dropped
+ *     on 2026-10-19 (they carried no signal); the fields stay so old
+ *     learner.json / events.jsonl files still parse. Nothing writes them now.
  *
  * Not a pi extension itself (no default export): imported by review/index.ts,
  * quiz.ts, recall.ts and start-menu.ts.
@@ -61,6 +64,7 @@ export interface Misconception {
 	updated: string;
 }
 
+/** Legacy (pre 2026-10-19): kept only so old files parse. Not written any more. */
 export interface CalibrationEvent {
 	at: string;
 	topic?: string;
@@ -76,7 +80,7 @@ export interface SessionRecord {
 	id: string;
 	kind: "learn" | "review";
 	at: string;
-	budgetMin?: number;
+	budgetMin?: number; // legacy: sessions have had no time budget since 2026-10-19
 	lesson?: string;
 	unaided?: boolean;
 	ended?: string;
@@ -100,8 +104,8 @@ export interface LearnEvent {
 	score?: number;
 	firstError?: string;
 	reading?: string;
-	confidence?: number;
-	latencyMs?: number;
+	confidence?: number; // legacy, not written since 2026-10-19
+	latencyMs?: number; // legacy, not written since 2026-10-19
 	cardId?: string;
 	retention?: boolean; // unannounced long-delay retention check (the outcome metric)
 }

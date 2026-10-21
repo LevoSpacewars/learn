@@ -111,7 +111,7 @@ The tool already tells you to keep options even. That rule isn't enough on its o
 3. Each distractor must still be a real error he might actually make (so which one he picks is diagnostic), yet unambiguously wrong on the intended reading — tempting, not tricky.
 4. **No asymmetric bolding.** Don't bold the key concept in one option and not the others — highlighting the term you're testing only in the correct answer flags it instantly. Either bold nothing, or bold the parallel term in every option.
 
-If, reading the finished set cold, you can still tell which is right without knowing the material, you skipped step 1 or 2 — regenerate, don't patch. Always pass `topic` (the lesson slug) so calibration is tracked.
+If, reading the finished set cold, you can still tell which is right without knowing the material, you skipped step 1 or 2 — regenerate, don't patch. Always pass `topic` (the lesson slug) so the result is logged against the lesson.
 
 ### Phase 1 — Probe (never skip this)
 

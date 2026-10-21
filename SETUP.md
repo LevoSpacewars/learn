@@ -18,7 +18,7 @@ The state (learner file, events, cards) lives where pi runs, so run pi in **one*
 
 1. On the server: clone, `bin/setup`, install and sign in to Tailscale, sign in to the Claude bridge.
 2. Start the session: `bin/learn` (a tmux session named `learn` running pi). Detach with `Ctrl-b d`; it keeps running.
-3. From the laptop: `ssh server` then `bin/learn` to re-attach to the same terminal (the start menu and the few free-text questions still live there).
+3. From the laptop: `ssh server` then `bin/learn` to re-attach to the same terminal. The terminal is optional: the start menu, every question and the tutor's replies are mirrored to the web page, so a phone or iPad alone can drive a whole session.
 4. From any device on the tailnet, open the pad link (the server's Tailscale IP, port 8787, with the token from `.learn/phone-token` on the server). Use `&mode=viewer` on the laptop and `&mode=scratch` on the iPad.
 
 Environment knobs: `PI_PHONE_PORT` (default 8787), `PI_PHONE_BIND` (override the bind address), `PI_WHISPER_MODEL`, `PI_GRADER_MODEL`.
@@ -31,7 +31,10 @@ Environment knobs: `PI_PHONE_PORT` (default 8787), `PI_PHONE_BIND` (override the
 
 ## Layout
 
-- `.pi/extensions/` — start-menu, review (cards, learner store, grader, prompts), recall, quiz, curriculum, md-log, phone-work (web surface: `page.html`, `scratch.js`)
-- `.pi/skills/` — teach, review, curriculum
+- `.pi/extensions/` — start-menu, review (cards, learner store, grader, pedagogy gates, book, side chat), recall, quiz, curriculum, md-log, plot, phone-work (web surface: `page.html`, `graph.html`, `scratch.js`)
+- `.pi/skills/` — teach, review, curriculum, visualize
+- `.pi/tests/` — unit tests and browser checks for the extensions, run outside pi (see its README)
 - `.pi/themes/bright.json` — terminal theme
 - `bin/setup`, `bin/learn` — setup and launcher
+- `.claude/CLAUDE.md` — orientation for coding agents working on the harness (pi reads a root `CLAUDE.md`/`AGENTS.md` into the tutor's prompt, which is why it lives under `.claude/`)
+- `book/` — one readable "book" per lesson, rebuilt from the readings the tutor has shown; `lessons/` are the raw session notes

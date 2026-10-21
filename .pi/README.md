@@ -1,39 +1,9 @@
-# learn
+# .pi — the tutor's pi configuration
 
-[![video](assets/thumbnail.png)](https://www.youtube.com/watch?v=kzcI5F4tGiU)
+This directory turns [pi](https://github.com/earendil-works/pi) into a personal tutor for the Obsidian vault one level up. It started from Amos Blomqvist's [learn](https://github.com/amosblomqvist/learn) setup (the teach skill, `ask-user-question`, `quiz`, `md-log`, `visual-tools` and the subagent definitions) and has since grown its own review/curriculum layer, a web surface for phone and iPad, and tests. Setup and hosting are in `../SETUP.md`; the layout and the rules for changing anything are in `../.claude/CLAUDE.md`.
 
-My AI learning system from this video: [How I Use AI to Learn Things](https://www.youtube.com/watch?v=kzcI5F4tGiU).
-
-This is a personal system I built for myself, shared as-is. Built as a pi configuration: the teaching philosophy encoded in a skill, a few small extensions, and agent definitions.
-
-## What's in it
-
-- `skills/teach/` — the philosophy and the process
-- `skills/visualize/` — adds a correct, minimal diagram to a lesson when an idea is clearer as a picture
-- `extensions/ask-user-question/` — the agent asks you questions through a UI popup
-- `extensions/quiz/` — graded questions with instant feedback (✓/✗, correct answer, explanation)
-- `extensions/md-log/` — link a markdown file to the session
-- `extensions/visual-tools/` — tools for visualization subagents
-- `agents/` — `researcher`, `svg-maker`, `mermaid-maker`: the subagents the system delegates to
-
-## Install
-
-This repo **is** a `.pi` directory. From your learning project's root:
-
-```bash
-git clone https://github.com/amosblomqvist/learn .pi
-```
-
-Then open pi in that directory. (Or copy the pieces you want into your existing project config.)
-
-## Requirements
-
-- [pi](https://github.com/earendil-works/pi)
-- A subagent implementation, so the system can spawn the researcher and the visual makers. Recommended: [pi-interactive-subagents](https://github.com/amosblomqvist/pi-interactive-subagents) (tmux only). With it, everything works out of the box. Any other implementation works too, but expect to adapt the agent definitions, e.g. `agents/researcher.md` lists `safe_bash` in its tools, which is specific to that extension.
-- `ask-user-question` — use the copy bundled here. If your setup already has an `ask-user-question` extension, use **this** one in its place. Popups from different extensions serialize through a shared UI lock, which only works when it's the same implementation.
-
-## Notes
-
-You can run the system without subagents. The main session does the teaching. You just lose the researcher (truth verification) and the generated visuals.
-
-The teaching skill is written for one learner (me). Edit the skill to fit how you learn best.
+- `skills/` — teach, review, curriculum, visualize: the pedagogy as prompts
+- `extensions/` — the tools and gates (start-menu, recall, quiz, review/, phone-work/, md-log, curriculum, plot, ask-user-question, visual-tools)
+- `agents/` — researcher, svg-maker, mermaid-maker subagents
+- `tests/` — unit tests and browser checks, run outside pi
+- `themes/bright.json`, `settings.json` — terminal theme and the driver model

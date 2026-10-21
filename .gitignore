@@ -10,5 +10,10 @@ inbox/
 work/audio-*
 # dependencies (reinstalled by bin/setup)
 node_modules/
+# Claude Code worktrees (agents develop here; see .claude/CLAUDE.md)
+.claude/worktrees/
+# test scratch: logs, screenshots, generated tsconfig
+.pi/tests/tmp/*
+!.pi/tests/tmp/.gitkeep
 # OS
 .DS_Store

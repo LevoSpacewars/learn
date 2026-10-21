@@ -1,0 +1,13 @@
+{
+  "name": "learn-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run.mjs",
+    "typecheck": "node typecheck.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^5.9.3"
+  }
+}

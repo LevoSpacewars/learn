@@ -16,7 +16,7 @@ need pdftotext "brew install poppler / apt install poppler-utils (papers in inbo
 need claude  "Claude Code CLI (the researcher subagent uses it): npm i -g @anthropic-ai/claude-code" || true
 
 echo "Extension dependencies:"
-for d in .pi/extensions/*/; do
+for d in .pi/extensions/*/ .pi/tests/; do
   if [ -f "$d/package.json" ]; then (cd "$d" && npm install --silent --no-audit --no-fund && echo "  ok: $d"); fi
 done
 

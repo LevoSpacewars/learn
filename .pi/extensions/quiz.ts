@@ -453,7 +453,7 @@ async function askSingleChoice(
 	}));
 	const dontKnowNav = allOptions.length; // nav index of the "I don't know" row
 
-	return ctx.ui.custom<QuizResponse | null>(
+	return ctx.ui.custom(
 		(tui: any, theme: any, _kb: any, done: (result: QuizResponse | null) => void) => {
 			let optionIndex = 0;
 			let phase: "select" | "feedback" = "select";
@@ -675,7 +675,7 @@ async function askMultiChoice(
 	const submitItem: DisplayOption = { id: "submit", label: "Submit", value: "__submit__", index: -1, isSubmit: true };
 	const allItems: DisplayOption[] = [...choiceItems, dontKnowItem, submitItem];
 
-	return ctx.ui.custom<QuizResponse | null>(
+	return ctx.ui.custom(
 		(tui: any, theme: any, _kb: any, done: (result: QuizResponse | null) => void) => {
 			let optionIndex = 0;
 			let phase: "select" | "feedback" = "select";
