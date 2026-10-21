@@ -38,4 +38,4 @@ Environment knobs: `PI_PHONE_PORT` (default 8787), `PI_PHONE_BIND` (override the
 - `bin/setup`, `bin/learn` — setup and launcher
 - `.claude/CLAUDE.md` — orientation for coding agents working on the harness (pi reads a root `CLAUDE.md`/`AGENTS.md` into the tutor's prompt, which is why it lives under `.claude/`)
 - `book/` — one readable "book" per lesson, rebuilt from the readings the tutor has shown; `lessons/` are the raw session notes
-- `notebook/` — your own notes (Notebook button on the page, `/note` in the terminal), one file per note with frontmatter tags plus `Notebook.md`, the index by tag and lesson. Titles, tags, summaries and links are written for you in the background (`PI_NOTEBOOK_MODEL` overrides the model)
+- `notebook/` — your own handwritten notes (Notebook button on the page: a pen pad; `/note` in the terminal for typed ones). Pages are PNGs in `notebook/pages/`; one markdown file per note embeds them with frontmatter tags and a transcript, plus `Notebook.md`, the index by tag and lesson. Transcripts, titles, tags, summaries and links are written for you in the background (`PI_NOTEBOOK_MODEL` overrides the model)

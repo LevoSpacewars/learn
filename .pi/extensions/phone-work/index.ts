@@ -54,7 +54,7 @@ import { askSide, chatLessons, currentThread, loadChat, newThreadId } from "../r
 import { plainMath } from "../review/plainmath.ts";
 import { buildGraph, loadLearner } from "../review/store.ts";
 import { bookList } from "../review/book.ts";
-import { addNote, deleteNote, notebookView, noteTitle, tagNote, updateNote } from "../review/notebook.ts";
+import { addNote, deleteNote, loadNotes, newNoteId, notebookView, noteTitle, saveNoteImages, tagNote, updateNote } from "../review/notebook.ts";
 
 const PORT = Number(process.env.PI_PHONE_PORT) || 8787;
 const MAX_BODY = 60 * 1024 * 1024;
@@ -82,7 +82,7 @@ function pageHtml(): string {
 }
 
 /** Files the viewer may fetch: images and audio under these vault folders only. */
-const SERVABLE_DIRS = ["work", "viz", "inbox", "knowledge", "lessons"];
+const SERVABLE_DIRS = ["work", "viz", "inbox", "knowledge", "lessons", "notebook"];
 const SERVE_MIME: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml", ".pdf": "application/pdf", ".md": "text/markdown; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".m4a": "audio/mp4", ".webm": "audio/webm", ".mp3": "audio/mpeg" };
 
 function serveVaultFile(cwd: string, rel: string, res: http.ServerResponse) {
@@ -518,19 +518,25 @@ export default function phoneWork(pi: ExtensionAPI) {
 			void tagNote(cwd, id)
 				.then((n) => n && latestCtx?.ui?.notify?.(`📓 Note tagged: "${noteTitle(n)}" · ${n.tags.map((t) => `#${t}`).join(" ")}`, "info"))
 				.catch((e: any) => latestCtx?.ui?.notify?.(`📓 Note saved but not tagged: ${String(e?.message ?? e).split("\n")[0]}`, "warning"));
+		const images = (body.images ?? []).filter((i) => MIME_EXT[i?.mimeType] && typeof i.data === "string").slice(0, MAX_IMAGES);
 		if (action === "add") {
-			const images = (body.images ?? []).filter((i) => MIME_EXT[i?.mimeType] && typeof i.data === "string").slice(0, MAX_IMAGES);
-			const saved = images.length ? saveImages(cwd, images) : [];
 			const text = body.text?.trim() ?? "";
-			if (!text && !saved.length) return json(res, 400, { error: "Nothing to save" });
-			const note = addNote(cwd, { text, title: body.title, lesson: body.lesson, tags: body.tags, images: saved.map((s) => path.relative(cwd, s.file)), source: "web" });
-			latestCtx?.ui?.notify?.(`📓 Note saved from your device${note.title ? `: "${note.title}"` : ""}`, "info");
+			if (!text && !images.length) return json(res, 400, { error: "Nothing to save" });
+			const id = newNoteId();
+			const pages = images.length ? saveNoteImages(cwd, id, images) : [];
+			const note = addNote(cwd, { id, text, title: body.title, lesson: body.lesson, tags: body.tags, images: pages, source: "web" });
+			latestCtx?.ui?.notify?.(`📓 Note saved from your device${pages.length ? ` (${pages.length} handwritten page${pages.length === 1 ? "" : "s"})` : ""}${note.title ? `: "${note.title}"` : ""}`, "info");
 			tagLater(note.id);
 			return json(res, 200, { ok: true, note });
 		}
 		if (!body.id) return json(res, 400, { error: "Missing id" });
 		if (action === "update") {
-			const note = updateNote(cwd, body.id, { text: body.text, title: body.title, tags: body.tags, lesson: body.lesson, summary: body.summary });
+			const before = loadNotes(cwd).find((n) => n.id === body.id);
+			if (!before) return json(res, 404, { error: "No such note" });
+			// new pages are appended; the note is read again by the tagger
+			const added = images.length ? saveNoteImages(cwd, body.id, images, before.images?.length ?? 0) : [];
+			const note = updateNote(cwd, body.id, { text: body.text, title: body.title, tags: body.tags, lesson: body.lesson, summary: body.summary, ...(added.length ? { images: [...(before.images ?? []), ...added] } : {}) });
+			if (added.length) tagLater(body.id);
 			return note ? json(res, 200, { ok: true, note }) : json(res, 404, { error: "No such note" });
 		}
 		if (action === "retag") {

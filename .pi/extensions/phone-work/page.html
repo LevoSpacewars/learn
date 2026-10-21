@@ -217,6 +217,14 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
 #nbBody .editor .row { display:flex; gap:8px; } #nbBody .editor .row > * { flex:1; min-width:0; }
 #nbBody .editor .hint { font-size:12.5px; color:var(--muted); }
 #nbBody .empty { color:var(--muted); text-align:center; margin-top:40px; }
+#nb .nbdraw { display:flex; flex-direction:row; gap:6px; align-items:stretch; }
+#nb .nbdraw .scratch-host { height:calc(100vh - 330px); min-height:300px; }
+#nb .editor .modes { display:flex; gap:6px; } #nb .editor .modes button { flex:1; min-height:34px; font-size:14px; }
+#nb .pages { display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:8px; }
+#nb .pages img { width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; display:block; }
+#nbBody .view img.page { max-width:100%; border-radius:10px; border:1px solid var(--line); background:#fff; display:block; margin:0 0 10px; }
+#nbBody .view .transcript { font-family:-apple-system, system-ui, sans-serif; font-size:15px; color:var(--fg); opacity:.85; border-left:3px solid var(--line); padding-left:12px; margin:14px 0; }
+#nbBody .view .transcript .lab { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:4px; }
 #noteSel { position:absolute; z-index:25; min-height:34px; padding:0 12px; font-size:13px; border-radius:10px; background:var(--card); border:1px solid var(--accent); color:var(--accent); box-shadow:0 4px 14px rgba(0,0,0,.2); font-weight:600; }
 </style>
 </head><body class="view-pad">
@@ -702,7 +710,8 @@ $("noteSel").onclick = () => { const t = selectionText(); $("askSel").classList.
 let nbData = null, nbMtime = -1, nbTag = null, nbPoll = null, nbShowing = { kind: "list" };
 const nbLesson = () => (nbData && nbData.viewing && nbData.lessons.some((l) => l.slug === nbData.viewing)) ? nbData.viewing : "";
 function nbChip(label, on, cls) { const c = document.createElement("span"); c.className = "chip" + (on ? " on" : "") + (cls ? " " + cls : ""); c.textContent = label; return c; }
-function nbMeta(n) { return [new Date(n.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }), n.lessonTitle, n.tagging ? "tagging…" : (!n.tagged ? "not tagged yet" : null)].filter(Boolean).join(" · "); }
+function nbMeta(n) { const p = (n.images || []).length; return [new Date(n.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }), n.lessonTitle, p ? "✎ " + p + (p === 1 ? " page" : " pages") : null, n.tagging ? (p ? "reading it…" : "tagging…") : (!n.tagged ? "not tagged yet" : null)].filter(Boolean).join(" · "); }
+function nbSnippet(n) { return n.summary || (n.text || n.transcript || "").slice(0, 160).replace(/\s+/g, " ") || ((n.images || []).length ? "Handwritten; being read…" : ""); }
 async function loadNotebook(force) {
   try {
     const r = await fetch(api("/notebook"), { cache: "no-store" }); if (!r.ok) return;
@@ -733,9 +742,9 @@ function nbRenderList() {
   if (!notes.length) { el.innerHTML = '<div class="empty">' + (nbData.notes.length ? "No notes match." : "No notes yet. Write one with <b>+ New</b>, or select text in a lesson and tap <b>Note this</b>. Each note is titled and tagged for you.") + "</div>"; return; }
   for (const n of notes) {
     const d = document.createElement("div"); d.className = "card note";
-    const h = document.createElement("h3"); h.textContent = n.title || n.text.split("\n").find((l) => l.trim()) || "Note"; d.appendChild(h);
+    const h = document.createElement("h3"); h.textContent = n.title || (n.text || n.transcript || "").split("\n").find((l) => l.trim()) || ((n.images || []).length ? "Handwritten note" : "Note"); d.appendChild(h);
     const m = document.createElement("div"); m.className = "meta"; m.textContent = nbMeta(n); d.appendChild(m);
-    const s = document.createElement("div"); s.className = "sum"; s.textContent = n.summary || n.text.slice(0, 160).replace(/\s+/g, " "); d.appendChild(s);
+    const s = document.createElement("div"); s.className = "sum"; s.textContent = nbSnippet(n); d.appendChild(s);
     if (n.tags.length) { const c = document.createElement("div"); c.className = "chips"; for (const t of n.tags) c.appendChild(nbChip("#" + t)); d.appendChild(c); }
     d.onclick = () => nbRenderView(n);
     el.appendChild(d);
@@ -745,47 +754,68 @@ function nbRenderView(n) {
   nbShowing = { kind: "view", id: n.id };
   const el = $("nbBody"); el.innerHTML = "";
   const v = document.createElement("div"); v.className = "card view";
-  const h = document.createElement("h1"); h.textContent = n.title || "Note"; v.appendChild(h);
+  const h = document.createElement("h1"); h.textContent = n.title || ((n.images || []).length ? "Handwritten note" : "Note"); v.appendChild(h);
   const m = document.createElement("div"); m.className = "meta"; m.textContent = nbMeta(n) + (n.concepts && n.concepts.length ? " · about: " + n.concepts.join(", ") : ""); v.appendChild(m);
   if (n.tags.length) { const c = document.createElement("div"); c.className = "chips"; for (const t of n.tags) { const ch = nbChip("#" + t); ch.onclick = () => { nbTag = t; nbRenderList(); }; c.appendChild(ch); } v.appendChild(c); }
   if (n.summary) { const s = document.createElement("div"); s.className = "sum"; s.textContent = n.summary; v.appendChild(s); }
-  const body = document.createElement("div"); body.innerHTML = renderMd(n.text, { breaks: true }); v.appendChild(body);
-  for (const img of n.images || []) { const i = document.createElement("img"); i.src = api("/file?p=" + encodeURIComponent(img)); v.appendChild(i); }
+  // his pages are the note; the transcript (what was read off them) and any typed text follow
+  for (const img of n.images || []) { const i = document.createElement("img"); i.className = "page"; i.src = api("/file?p=" + encodeURIComponent(img)); v.appendChild(i); }
+  if (n.text) { const body = document.createElement("div"); body.innerHTML = renderMd(n.text, { breaks: true }); v.appendChild(body); }
+  if (n.transcript) { const t = document.createElement("div"); t.className = "transcript"; t.innerHTML = '<div class="lab">Transcript (read from your handwriting; searchable)</div>' + renderMd(n.transcript, { breaks: true }); v.appendChild(t); }
+  else if ((n.images || []).length && n.tagging) { const t = document.createElement("div"); t.className = "transcript"; t.innerHTML = '<div class="lab">Reading your pages…</div>'; v.appendChild(t); }
   const rel = (n.related || []).map((id) => nbData.notes.find((x) => x.id === id)).filter(Boolean);
   if (rel.length) { const r = document.createElement("div"); r.className = "meta"; r.textContent = "Related: "; for (const x of rel) { const a = document.createElement("a"); a.href = "#"; a.textContent = x.title || "note"; a.style.marginRight = "10px"; a.onclick = (e) => { e.preventDefault(); nbRenderView(x); }; r.appendChild(a); } v.appendChild(r); }
   const b = document.createElement("div"); b.className = "vbtns";
   const mk = (label, fn, cls) => { const x = document.createElement("button"); x.textContent = label; if (cls) x.className = cls; x.onclick = fn; b.appendChild(x); return x; };
   mk("← All notes", () => nbRenderList());
-  mk("Edit", () => nbEditor(n));
+  mk("✎ Add page", () => nbEditor(n, "draw"));
+  mk("Edit", () => nbEditor(n, "type"));
   mk(n.tagging ? "Tagging…" : "Retag", async (e) => { e.target.disabled = true; try { await post("/note/retag", { id: n.id }); } catch {} setTimeout(() => loadNotebook(true), 1500); });
   mk("Delete", async () => { if (!confirm("Delete this note?")) return; try { await post("/note/delete", { id: n.id }); nbRenderList(); loadNotebook(true); } catch (e) { alert(e.message); } });
   v.appendChild(b); el.appendChild(v); el.scrollTop = 0;
 }
-function nbEditor(n) {
+// The editor is a pen pad first (the same scratch engine as the answer pad); typing is the second mode.
+// A new note: draw pages, save. An existing note: "Add page" appends pages; "Edit" changes title, text, lesson, tags.
+let nbPad = null;
+function nbEditor(n, startMode) {
   const isNew = !n || !n.id; nbShowing = { kind: "edit", id: n && n.id };
-  const el = $("nbBody"); el.innerHTML = "";
+  const el = $("nbBody"); el.innerHTML = ""; nbPad = null;
   const f = document.createElement("div"); f.className = "card editor";
+  const quoted = isNew && n && n.text; // "Note this" arrives with quoted text
+  let emode = startMode || (quoted ? "type" : "draw");
+  const modes = document.createElement("div"); modes.className = "modes";
+  const mDraw = document.createElement("button"); mDraw.textContent = "✎ Write by hand"; const mType = document.createElement("button"); mType.textContent = "Type";
+  modes.appendChild(mDraw); modes.appendChild(mType); f.appendChild(modes);
   const title = document.createElement("input"); title.placeholder = "Title (optional — one is written for you)"; title.value = (n && n.title) || ""; f.appendChild(title);
-  const text = document.createElement("textarea"); text.placeholder = "Your note. Markdown and $LaTeX$ are rendered."; text.value = (n && n.text) || ""; f.appendChild(text);
+  // existing pages, small
+  if (n && n.images && n.images.length) { const pg = document.createElement("div"); pg.className = "pages"; for (const img of n.images) { const i = document.createElement("img"); i.src = api("/file?p=" + encodeURIComponent(img)); pg.appendChild(i); } f.appendChild(pg); }
+  const draw = document.createElement("div"); draw.className = "draw nbdraw";
+  const tools = document.createElement("div"); tools.className = "tools"; const host = document.createElement("div"); host.className = "scratch-host";
+  draw.appendChild(tools); draw.appendChild(host); f.appendChild(draw);
+  const text = document.createElement("textarea"); text.placeholder = isNew ? "Type instead (or as well). Markdown and $LaTeX$ are rendered." : "Typed text (the handwriting stays as pages)"; text.value = (n && n.text) || ""; f.appendChild(text);
   const row = document.createElement("div"); row.className = "row";
   const les = document.createElement("select"); const none = document.createElement("option"); none.value = ""; none.textContent = "No lesson"; les.appendChild(none);
   for (const l of (nbData ? nbData.lessons : [])) { const o = document.createElement("option"); o.value = l.slug; o.textContent = l.title; les.appendChild(o); }
   les.value = (n && n.lesson) || (isNew ? nbLesson() : ""); row.appendChild(les);
   const tags = document.createElement("input"); tags.placeholder = "tags, comma separated (optional)"; tags.value = (n && n.tags || []).join(", "); row.appendChild(tags);
   f.appendChild(row);
-  const hint = document.createElement("div"); hint.className = "hint"; hint.textContent = isNew ? "Saved notes are titled, tagged, summarized and linked to related notes for you in the background. Your own title and tags are kept." : "Your edits are kept; tags you remove stay removed."; f.appendChild(hint);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.textContent = isNew ? "Pen draws, fingers pan, two-finger tap undoes; swipe up with three fingers to save. The pages are read for you: transcribed, titled, tagged, linked. Your own title and tags are kept." : "New pages are added after the existing ones and read again. Tags you remove stay removed."; f.appendChild(hint);
   const b = document.createElement("div"); b.className = "btns";
   const cancel = document.createElement("button"); cancel.textContent = "Cancel"; cancel.onclick = () => (isNew ? nbRenderList() : nbRenderView(n)); b.appendChild(cancel);
-  const save = document.createElement("button"); save.textContent = isNew ? "Save note" : "Save changes"; save.className = "primary"; save.style.gridColumn = "auto";
+  const save = document.createElement("button"); save.textContent = isNew ? "Save note" : "Save"; save.className = "primary"; save.style.gridColumn = "auto";
+  const setEmode = (m) => { emode = m; mDraw.classList.toggle("on", m === "draw"); mType.classList.toggle("on", m === "type"); draw.classList.toggle("on", m === "draw"); text.style.display = m === "draw" ? "none" : ""; if (m === "draw" && !nbPad && window.Scratch) nbPad = Scratch.mount(host, tools, { onSend: () => save.click() }); if (m === "type") setTimeout(() => text.focus(), 50); };
+  mDraw.onclick = () => setEmode("draw"); mType.onclick = () => setEmode("type");
   save.onclick = async () => {
+    const images = nbPad && nbPad.hasInk() ? nbPad.exportImages() : [];
     const body = { text: text.value.trim(), title: title.value.trim(), lesson: les.value, tags: tags.value.split(",").map((s) => s.trim()).filter(Boolean) };
-    if (!body.text) { text.focus(); return; }
+    if (images.length) body.images = images;
+    if (isNew && !body.text && !images.length) { setEmode("draw"); return; }
     save.disabled = true; save.textContent = "Saving…";
     try { const j = isNew ? await post("/note", body) : await post("/note/update", { id: n.id, ...body }); await loadNotebook(true); nbRenderView(nbData.notes.find((x) => x.id === j.note.id) || j.note); }
     catch (e) { alert("Couldn't save: " + e.message); save.disabled = false; save.textContent = "Save"; }
   };
   b.appendChild(save); f.appendChild(b); el.appendChild(f);
-  setTimeout(() => text.focus(), 100);
+  setEmode(emode);
 }
 function openNotebook() { $("nb").classList.add("open"); loadNotebook(true); if (!nbPoll) nbPoll = setInterval(() => loadNotebook(false), 3000); }
 function closeNotebook() { $("nb").classList.remove("open"); if (nbPoll) { clearInterval(nbPoll); nbPoll = null; } }

@@ -1,17 +1,21 @@
 /**
  * notebook — the learner's own notes, tagged and organized for him.
  *
- * He writes a note on the web page ("Notebook" button, or "Note this" on
- * selected lesson text), or `/note <text>` in the terminal. Nothing about the
+ * He HANDWRITES a note on the web page ("Notebook" button: the same pen
+ * scratchpad as the answer pad; typed text is optional), or quotes lesson text
+ * with "Note this", or types `/note <text>` in the terminal. Nothing about the
  * lesson changes: no gate, no prompt, no tutor turn. A separate `pi -p`
- * process (like the side chat) then titles, tags and summarizes the note,
- * ties it to a lesson and its concepts, and links related notes. He can edit
- * any of that on the page; the tutor can too, through the `notebook` tool,
- * when he asks it to find or organize his notes.
+ * process (like the grader, which also reads his photos) then reads the
+ * pages: it transcribes the handwriting to markdown + LaTeX (so the note is
+ * searchable and the tutor can read it), titles, tags and summarizes it, ties
+ * it to a lesson and its concepts, and links related notes. He can edit any
+ * of that on the page; the tutor can too, through the `notebook` tool, when
+ * he asks it to find or organize his notes.
  *
- * Storage: .learn/notes.jsonl, append-only ({op: add | update | delete}).
- * Readable copy, rebuilt after every change: notebook/<date>-<title>.md per
- * note (frontmatter tags, so Obsidian's tag pane works) and
+ * Storage: .learn/notes.jsonl, append-only ({op: add | update | delete});
+ * pages as PNGs in notebook/pages/<id>-<n>.png. Readable copy, rebuilt after
+ * every change: notebook/<date>-<title>.md per note (frontmatter tags, so
+ * Obsidian's tag pane works; the pages embedded, the transcript below) and
  * notebook/Notebook.md, the index by tag, by lesson and by date.
  *
  * Model for tagging: PI_NOTEBOOK_MODEL, else the vault default.
@@ -28,14 +32,15 @@ export interface Note {
 	id: string;
 	at: string; // created
 	updated: string;
-	text: string;
+	text: string; // typed text (may be empty for a handwritten note)
+	transcript?: string; // the handwriting, read by the tagger (markdown + LaTeX)
 	title?: string;
 	tags: string[];
 	lesson?: string; // lesson slug
 	concepts?: string[]; // node labels / fundamentals the note is about
 	summary?: string; // one line, written by the tagger
 	related?: string[]; // ids of related notes
-	images?: string[]; // vault-relative paths (work/…)
+	images?: string[]; // vault-relative paths (notebook/pages/…): his handwritten pages, in order
 	tagged: boolean; // the tagger has run (or he tagged it by hand)
 	source: "web" | "terminal" | "tutor";
 	file?: string; // vault-relative markdown copy
@@ -51,6 +56,25 @@ export function notesPath(cwd: string): string {
 }
 export function notebookDir(cwd: string): string {
 	return path.join(cwd, "notebook");
+}
+
+const IMAGE_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+
+/** Saves handwritten pages (base64) as notebook/pages/<id>-<n>.<ext>, numbered after any the note already has. Returns vault-relative paths. */
+export function saveNoteImages(cwd: string, id: string, images: Array<{ data: string; mimeType: string }>, existing = 0): string[] {
+	const dir = path.join(notebookDir(cwd), "pages");
+	fs.mkdirSync(dir, { recursive: true });
+	const out: string[] = [];
+	let n = existing;
+	for (const img of images) {
+		const ext = IMAGE_EXT[img.mimeType];
+		if (!ext || typeof img.data !== "string") continue;
+		n++;
+		const rel = `notebook/pages/${id}-${n}.${ext}`;
+		fs.writeFileSync(path.join(cwd, rel), Buffer.from(img.data, "base64"));
+		out.push(rel);
+	}
+	return out;
 }
 
 export function newNoteId(): string {
@@ -112,13 +136,13 @@ function appendOp(cwd: string, op: Op): void {
 	fs.appendFileSync(notesPath(cwd), JSON.stringify(op) + "\n", "utf8");
 }
 
-export function addNote(cwd: string, input: { text: string; title?: string; lesson?: string; tags?: string[]; images?: string[]; source?: Note["source"] }): Note {
+export function addNote(cwd: string, input: { id?: string; text: string; title?: string; lesson?: string; tags?: string[]; images?: string[]; source?: Note["source"] }): Note {
 	const text = input.text.trim();
 	if (!text && !(input.images?.length)) throw new Error("Empty note");
 	const now = new Date().toISOString();
 	const tags = normalizeTags(input.tags);
 	const note: Note = {
-		id: newNoteId(),
+		id: input.id ?? newNoteId(),
 		at: now,
 		updated: now,
 		text,
@@ -139,6 +163,7 @@ export function updateNote(cwd: string, id: string, patch: Partial<Omit<Note, "i
 	if (!n) return undefined;
 	const clean: Partial<Note> = {};
 	if (patch.text !== undefined) clean.text = String(patch.text).trim();
+	if (patch.transcript !== undefined) clean.transcript = patch.transcript ? String(patch.transcript).trim() : undefined;
 	if (patch.title !== undefined) clean.title = String(patch.title).trim() || undefined;
 	if (patch.tags !== undefined) clean.tags = normalizeTags(patch.tags);
 	if (patch.lesson !== undefined) clean.lesson = patch.lesson ? String(patch.lesson).trim() : undefined;
@@ -157,9 +182,10 @@ export function deleteNote(cwd: string, id: string): boolean {
 	const n = loadNotes(cwd).find((x) => x.id === id);
 	if (!n) return false;
 	appendOp(cwd, { op: "delete", id, at: new Date().toISOString() });
-	if (n.file) {
+	for (const f of [n.file, ...(n.images ?? [])]) {
+		if (!f) continue;
 		try {
-			fs.unlinkSync(path.join(cwd, n.file));
+			fs.unlinkSync(path.join(cwd, f));
 		} catch {
 			// already gone
 		}
@@ -173,7 +199,7 @@ export function searchNotes(notes: Note[], query: string): Note[] {
 	const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
 	if (!terms.length) return notes;
 	return notes.filter((n) => {
-		const hay = [n.title, n.text, n.summary, ...(n.tags ?? []), ...(n.concepts ?? [])].filter(Boolean).join("\n").toLowerCase();
+		const hay = [n.title, n.text, n.transcript, n.summary, ...(n.tags ?? []), ...(n.concepts ?? [])].filter(Boolean).join("\n").toLowerCase();
 		return terms.every((t) => hay.includes(t));
 	});
 }
@@ -186,9 +212,14 @@ export function tagCounts(notes: Note[]): Array<{ tag: string; count: number }> 
 
 // ── Markdown copy ──────────────────────────────────────────────────────────
 
+/** The words of a note for titles, snippets and search: typed text first, else what the tagger read off the pages. */
+export function noteWords(n: Note): string {
+	return n.text?.trim() || n.transcript?.trim() || "";
+}
+
 export function noteTitle(n: Note): string {
 	if (n.title) return n.title;
-	const first = n.text.split("\n").map((l) => l.trim()).find(Boolean) ?? "Note";
+	const first = noteWords(n).split("\n").map((l) => l.trim()).find(Boolean) ?? (n.images?.length ? "Handwritten note" : "Note");
 	const t = first
 		.replace(/^#+\s*/, "")
 		.replace(/\$[^$]*\$/g, (m) => m.slice(1, -1))
@@ -231,8 +262,9 @@ export function noteMarkdown(n: Note, all: Note[], lessonTitle?: string): string
 	out.push(`*${meta.join(" · ")}*`, "");
 	if (n.summary) out.push(`> [!abstract] In short`, `> ${n.summary}`, "");
 	if (n.concepts?.length) out.push(`**About:** ${n.concepts.join(", ")}`, "");
-	out.push(n.text.trim(), "");
+	if (n.text.trim()) out.push(n.text.trim(), "");
 	for (const img of n.images ?? []) out.push(`![[${img}]]`, "");
+	if (n.transcript) out.push("## Transcript", "", n.transcript.trim(), "");
 	const related = (n.related ?? []).map((id) => all.find((x) => x.id === id)).filter((x): x is Note => !!x && !!x.file);
 	if (related.length) out.push("**Related:** " + related.map((r) => `[[${path.basename(r.file!, ".md")}]]`).join(", "), "");
 	return out.join("\n");
@@ -330,6 +362,7 @@ export function writeNotebook(cwd: string): string[] {
 // ── Tagging (separate process) ─────────────────────────────────────────────
 
 export interface Tagging {
+	transcript?: string;
 	title: string;
 	tags: string[];
 	lesson?: string;
@@ -340,17 +373,23 @@ export interface Tagging {
 
 export function buildTagPrompt(cwd: string, note: Note, all: Note[]): string {
 	const store = loadLearner(cwd);
+	const pages = note.images?.length ?? 0;
 	const lines: string[] = [
-		"You organize a learner's personal notebook. Below is one note he just wrote while studying, plus his existing tags, lessons and other notes. Title it, tag it, tie it to the lesson and concepts it is about, summarize it in one line, and point at related notes.",
+		`You organize a learner's personal notebook. Below is one note he just wrote while studying${pages ? `, as ${pages} handwritten page(s) attached as images` : ""}, plus his existing tags, lessons and other notes. ${pages ? "Transcribe it, then title" : "Title"} it, tag it, tie it to the lesson and concepts it is about, summarize it in one line, and point at related notes.`,
 		"",
 		"Rules:",
+		...(pages
+			? [
+					"- transcript: everything written on the pages, in reading order, as markdown. Math in LaTeX between dollar signs exactly as he wrote it ($k\\,dt$, $$\\frac{dS}{dt} = -kS$$), his line breaks and bullets kept, crossed-out parts left out. A sketch or diagram becomes one bracketed line describing it, e.g. [sketch: decaying curve labelled S(t)]. A word you cannot read becomes [?]. Transcribe; never correct, complete or improve what he wrote.",
+				]
+			: []),
 		"- title: at most 60 characters, his idea in his words, no quotes around it. If the note already starts with a heading, keep that.",
 		"- tags: 2 to 5, lowercase, words joined by dashes. REUSE his existing tags whenever one fits; invent a new one only for a genuinely new topic. One tag names the subject area (e.g. hdx, markov, linear-algebra), the others the kind of note (question, insight, mistake, todo, definition, derivation, example, connection) or the specific concept.",
 		"- lesson: the slug of the lesson it belongs to, or null.",
 		"- concepts: the lesson concepts it is about, by their labels exactly as listed (never ids), or an empty list.",
 		"- summary: one plain sentence, at most 140 characters, what the note says (not what it is about).",
 		"- related: ids of up to 3 existing notes on the same idea, else an empty list.",
-		"Reply with ONLY a JSON object: {\"title\": string, \"tags\": string[], \"lesson\": string | null, \"concepts\": string[], \"summary\": string, \"related\": string[]}. No prose, no code fence.",
+		`Reply with ONLY a JSON object: {${pages ? '"transcript": string, ' : ""}"title": string, "tags": string[], "lesson": string | null, "concepts": string[], "summary": string, "related": string[]}. No prose, no code fence.`,
 		"",
 	];
 	const counts = tagCounts(all.filter((n) => n.id !== note.id));
@@ -371,9 +410,10 @@ export function buildTagPrompt(cwd: string, note: Note, all: Note[]): string {
 	}
 	lines.push(`## The note (written ${note.at.slice(0, 16).replace("T", " ")}${note.lesson ? `, while in lesson "${store.lessons.find((l) => l.slug === note.lesson)?.title ?? note.lesson}"` : ""})`);
 	if (note.title) lines.push(`Title he gave: ${note.title}`);
-	lines.push(note.text.slice(0, 12_000));
-	if (note.images?.length) lines.push("", `(${note.images.length} photo(s) attached; not shown)`);
-	return lines.join("\n");
+	if (note.text.trim()) lines.push(pages ? "Typed alongside the pages:" : "", note.text.slice(0, 12_000));
+	if (pages) lines.push("", `The ${pages} handwritten page(s) are the attached image(s), in order.`);
+	else if (!note.text.trim()) lines.push("(empty)");
+	return lines.filter((l) => l !== undefined).join("\n");
 }
 
 export function parseTagging(raw: string, all: Note[], lessons: string[]): Tagging {
@@ -385,6 +425,7 @@ export function parseTagging(raw: string, all: Note[], lessons: string[]): Taggi
 	const title = String(j.title ?? "").trim().replace(/^["“]|["”]$/g, "").slice(0, 80);
 	const lesson = typeof j.lesson === "string" && lessons.includes(j.lesson) ? j.lesson : undefined;
 	return {
+		transcript: typeof j.transcript === "string" && j.transcript.trim() ? j.transcript.trim().slice(0, 20_000) : undefined,
 		title,
 		tags: normalizeTags(j.tags),
 		lesson,
@@ -394,9 +435,10 @@ export function parseTagging(raw: string, all: Note[], lessons: string[]): Taggi
 	};
 }
 
-export type Runner = (prompt: string, cwd: string) => Promise<string>;
+/** Runs the tagger model on a prompt plus the note's page images (absolute paths). */
+export type Runner = (prompt: string, cwd: string, imageFiles: string[]) => Promise<string>;
 
-export const runPi: Runner = (prompt, cwd) => {
+export const runPi: Runner = (prompt, cwd, imageFiles) => {
 	const tmpDir = path.join(cwd, ".learn", "tmp");
 	fs.mkdirSync(tmpDir, { recursive: true });
 	const promptFile = path.join(tmpDir, `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.md`);
@@ -405,7 +447,8 @@ export const runPi: Runner = (prompt, cwd) => {
 	const args = ["-p", "--no-extensions", "--no-skills", "--no-tools", "--no-session", "--no-context-files", "--no-prompt-templates", "--no-themes", "--thinking", "low", "--model", model];
 	const bridge = model.startsWith("claude-bridge/") ? bridgeExtensionPath() : undefined;
 	if (bridge) args.push("-e", bridge);
-	args.push(`@${promptFile}`, "Organize the note as instructed. JSON only.");
+	for (const f of imageFiles) args.push(`@${f}`); // pages first, like the grader's photos
+	args.push(`@${promptFile}`, imageFiles.length ? "Transcribe the attached handwritten page(s) and organize the note as instructed. JSON only." : "Organize the note as instructed. JSON only.");
 	return new Promise<string>((resolve, reject) => {
 		const child = execFile("pi", args, { cwd: tmpDir, timeout: TIMEOUT_MS, maxBuffer: 2 * 1024 * 1024, env: { ...process.env, PI_SUBAGENT_AGENT: "notebook" } }, (err, stdout, stderr) => {
 			if (err) reject(new Error(`tagger failed: ${err.message.split("\n")[0]}${stderr ? `\n${stderr.slice(0, 300)}` : ""}`));
@@ -437,10 +480,12 @@ export async function tagNote(cwd: string, id: string, run: Runner = runPi): Pro
 		const all = loadNotes(cwd);
 		const note = all.find((n) => n.id === id);
 		if (!note) return undefined;
-		const raw = await run(buildTagPrompt(cwd, note, all), cwd);
+		const files = (note.images ?? []).map((rel) => path.join(cwd, rel)).filter((f) => fs.existsSync(f));
+		const raw = await run(buildTagPrompt(cwd, note, all), cwd, files);
 		const t = parseTagging(raw, all, loadLearner(cwd).lessons.map((l) => l.slug));
 		const tags = normalizeTags([...note.tags, ...t.tags]);
 		return updateNote(cwd, id, {
+			transcript: files.length && t.transcript ? t.transcript : note.transcript,
 			title: note.title || t.title || undefined,
 			tags,
 			lesson: note.lesson ?? t.lesson,
@@ -498,9 +543,11 @@ export function notebookView(cwd: string): NotebookView {
 /** Compact lines for the tutor (tool results and the learner slice). */
 export function noteLines(notes: Note[], opts: { withText?: boolean } = {}): string[] {
 	return notes.map((n) => {
-		const head = `- ${n.id} · ${n.at.slice(0, 10)} · "${noteTitle(n)}"${n.tags.length ? ` · ${n.tags.map((t) => `#${t}`).join(" ")}` : " · (untagged)"}${n.lesson ? ` · lesson ${n.lesson}` : ""}`;
+		const pages = n.images?.length ? ` · ${n.images.length} handwritten page${n.images.length === 1 ? "" : "s"}` : "";
+		const head = `- ${n.id} · ${n.at.slice(0, 10)} · "${noteTitle(n)}"${n.tags.length ? ` · ${n.tags.map((t) => `#${t}`).join(" ")}` : " · (untagged)"}${n.lesson ? ` · lesson ${n.lesson}` : ""}${pages}`;
 		if (!opts.withText) return n.summary ? `${head}\n  ${n.summary}` : head;
-		return `${head}\n${n.text
+		const body = [n.text.trim(), n.transcript ? `(transcript of his handwriting)\n${n.transcript.trim()}` : ""].filter(Boolean).join("\n") || (n.images?.length ? "(pages not transcribed yet)" : "");
+		return `${head}\n${body
 			.split("\n")
 			.map((l) => `  ${l}`)
 			.join("\n")}`;

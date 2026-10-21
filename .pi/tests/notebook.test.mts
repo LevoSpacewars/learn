@@ -87,6 +87,36 @@ assert.equal(fs.readdirSync(path.join(cwd, "notebook")).filter((f) => f.endsWith
 // 7. bad tagger output
 await assert.rejects(nb.tagNote(cwd, b.id, async () => "I cannot do that."), /no JSON/);
 
+// 7b. a handwritten note: pages saved under notebook/pages, handed to the tagger, transcript stored and searchable
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+const hid = nb.newNoteId();
+const pages = nb.saveNoteImages(cwd, hid, [{ data: PNG, mimeType: "image/png" }, { data: PNG, mimeType: "image/png" }]);
+assert.deepEqual(pages, [`notebook/pages/${hid}-1.png`, `notebook/pages/${hid}-2.png`]);
+assert.ok(fs.existsSync(path.join(cwd, pages[1])));
+const h = nb.addNote(cwd, { id: hid, text: "", images: pages, lesson: "hdx" });
+assert.equal(nb.noteTitle(h), "Handwritten note");
+let filesSeen: string[] = [];
+let promptH = "";
+const fakeH = async (prompt: string, _cwd: string, files: string[]) => {
+	promptH = prompt; filesSeen = files;
+	return '{"transcript": "half life = $\\\\ln 2 / k$\\n\\nnot $1/k$ !!\\n\\n[sketch: decaying curve]", "title": "Half-life, by hand", "tags": ["hdx"], "lesson": "hdx", "concepts": [], "summary": "Half-life is ln2 over k.", "related": []}';
+};
+const ht = await nb.tagNote(cwd, hid, fakeH);
+assert.deepEqual(filesSeen, pages.map((p) => path.join(cwd, p)), "page files handed to the tagger in order");
+assert.match(promptH, /2 handwritten page\(s\) attached/);
+assert.match(promptH, /- transcript: everything written on the pages/);
+assert.match(promptH, /"transcript": string, "title"/);
+assert.equal(ht.transcript, "half life = $\\ln 2 / k$\n\nnot $1/k$ !!\n\n[sketch: decaying curve]");
+assert.equal(ht.title, "Half-life, by hand");
+const hmd = fs.readFileSync(path.join(cwd, ht.file!), "utf8");
+assert.match(hmd, new RegExp(`!\\[\\[notebook/pages/${hid}-1\\.png\\]\\]\\n\\n!\\[\\[notebook/pages/${hid}-2\\.png\\]\\]\\n\\n## Transcript\\n\\nhalf life`));
+assert.equal(nb.searchNotes(nb.loadNotes(cwd), "decaying").length, 1, "search finds the transcript");
+assert.match(nb.noteLines([ht], { withText: true }).join("\n"), /2 handwritten pages[\s\S]*\(transcript of his handwriting\)\n  half life/);
+// a typed-only note gets no transcript prompt
+assert.doesNotMatch(promptSeen, /transcript/);
+assert.ok(nb.deleteNote(cwd, hid));
+assert.equal(fs.existsSync(path.join(cwd, pages[0])), false, "pages removed with the note");
+
 // 8. web endpoints with a fake pi
 const phoneMod = await import(EXT + "/phone-work/index.ts");
 const handlers: Record<string, Function[]> = {};
@@ -121,6 +151,17 @@ assert.equal((await post("/note", { text: "   " })).status, 400);
 const del = await post("/note/delete", { id: added.json.note.id });
 assert.equal(del.status, 200);
 assert.equal((await get("/notebook")).notes.length, 1);
+// handwritten from the page: pages land in notebook/pages and are served back; "Add page" appends
+const hw = await post("/note", { images: [{ data: PNG, mimeType: "image/png" }], lesson: "hdx" });
+assert.equal(hw.status, 200);
+assert.deepEqual(hw.json.note.images, [`notebook/pages/${hw.json.note.id}-1.png`]);
+assert.ok(notices.some((m) => m.includes("1 handwritten page")));
+const img = await fetch(`${base}/file?p=${encodeURIComponent(hw.json.note.images[0])}&t=${token}`);
+assert.equal(img.status, 200);
+assert.equal(img.headers.get("content-type"), "image/png");
+const more = await post("/note/update", { id: hw.json.note.id, images: [{ data: PNG, mimeType: "image/png" }] });
+assert.deepEqual(more.json.note.images, [`notebook/pages/${hw.json.note.id}-1.png`, `notebook/pages/${hw.json.note.id}-2.png`], "add page appends");
+assert.equal((await post("/note/delete", { id: hw.json.note.id })).status, 200);
 
 for (const f of handlers.session_shutdown ?? []) await f({}, ctx);
 console.log("notebook tests ok");
