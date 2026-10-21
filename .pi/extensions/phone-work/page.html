@@ -183,6 +183,41 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
 #bookBody pre { background:var(--soft); padding:10px 12px; border-radius:10px; overflow:auto; font-size:14px; } #bookBody pre.mermaid { background:transparent; text-align:center; }
 #bookBody .katex-display { overflow-x:auto; overflow-y:hidden; }
 #bookBody .empty { color:var(--muted); text-align:center; margin-top:40px; font-family:-apple-system, system-ui, sans-serif; }
+/* the notebook: his own notes, tagged and organized for him */
+#noteBtn { min-height:30px; padding:0 12px; font-size:13px; border-radius:8px; }
+#nb { position:fixed; inset:0; z-index:40; background:var(--bg); display:none; flex-direction:column; }
+#nb.open { display:flex; }
+#nb .bhead { display:flex; align-items:center; gap:8px; padding:max(10px, env(safe-area-inset-top)) 14px 10px; border-bottom:1px solid var(--line); background:var(--card); }
+#nb .bhead b { font-size:15px; }
+#nb .bhead input { flex:1; min-width:0; min-height:34px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-size:14px; padding:0 10px; }
+#nb .bhead button { min-height:32px; padding:0 10px; font-size:13px; border-radius:8px; }
+#nbTags { display:flex; flex-wrap:wrap; gap:6px; padding:8px 14px; border-bottom:1px solid var(--line); background:var(--card); max-height:92px; overflow:auto; }
+.chip { display:inline-flex; align-items:center; gap:4px; min-height:26px; padding:0 10px; border-radius:13px; border:1px solid var(--line); background:var(--soft); color:var(--fg); font-size:12.5px; font-weight:600; white-space:nowrap; cursor:pointer; }
+.chip.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+.chip.muted { opacity:.6; font-weight:500; }
+#nbBody { flex:1; overflow:auto; padding:14px 14px max(60px, env(safe-area-inset-bottom)); max-width:860px; width:100%; margin:0 auto; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; }
+#nbBody .note { cursor:pointer; padding:12px 14px; }
+#nbBody .note:active { background:var(--soft); }
+#nbBody .note h3 { margin:0 0 4px; font-size:16px; line-height:1.3; }
+#nbBody .note .meta { font-size:12.5px; color:var(--muted); margin-bottom:6px; }
+#nbBody .note .sum { font-size:14.5px; color:var(--fg); opacity:.85; }
+#nbBody .note .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+#nbBody .note .chips .chip { min-height:22px; font-size:11.5px; padding:0 8px; cursor:default; }
+#nbBody .view { padding:18px 20px; font-family: Charter, "Iowan Old Style", Georgia, serif; font-size:17px; line-height:1.6; }
+#nbBody .view h1 { font-size:24px; margin:0 0 6px; font-family:-apple-system, system-ui, sans-serif; line-height:1.25; }
+#nbBody .view .meta { font-family:-apple-system, system-ui, sans-serif; font-size:13px; color:var(--muted); margin-bottom:12px; }
+#nbBody .view .sum { font-family:-apple-system, system-ui, sans-serif; font-size:14.5px; background:var(--soft); border-radius:10px; padding:8px 12px; margin:0 0 14px; }
+#nbBody .view p { margin:0 0 12px; } #nbBody .view img { max-width:100%; border-radius:10px; border:1px solid var(--line); display:block; margin:10px 0; }
+#nbBody .view pre { background:var(--soft); padding:10px 12px; border-radius:10px; overflow:auto; font-size:14px; } #nbBody .view .katex-display { overflow-x:auto; overflow-y:hidden; }
+#nbBody .view .chips { display:flex; flex-wrap:wrap; gap:5px; margin:0 0 14px; font-family:-apple-system, system-ui, sans-serif; }
+#nbBody .vbtns { display:flex; flex-wrap:wrap; gap:8px; font-family:-apple-system, system-ui, sans-serif; } #nbBody .vbtns button { flex:1; min-width:90px; font-size:14px; }
+#nbBody .editor { display:flex; flex-direction:column; gap:10px; }
+#nbBody .editor input, #nbBody .editor select { width:100%; min-height:38px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-size:15px; padding:0 12px; }
+#nbBody .editor textarea { min-height:180px; font-size:16px; }
+#nbBody .editor .row { display:flex; gap:8px; } #nbBody .editor .row > * { flex:1; min-width:0; }
+#nbBody .editor .hint { font-size:12.5px; color:var(--muted); }
+#nbBody .empty { color:var(--muted); text-align:center; margin-top:40px; }
+#noteSel { position:absolute; z-index:25; min-height:34px; padding:0 12px; font-size:13px; border-radius:10px; background:var(--card); border:1px solid var(--accent); color:var(--accent); box-shadow:0 4px 14px rgba(0,0,0,.2); font-weight:600; }
 </style>
 </head><body class="view-pad">
 <header>
@@ -191,6 +226,7 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   <div class="modeSel"><button id="roleFull" title="Lesson and answers on this device">Both</button><button id="roleViewer" title="Lesson + questions; answers typed or on another device">Viewer</button><button id="roleScratch" title="Full-screen drawing pad; the question shows at the top">Scratchpad</button></div>
   <button id="askBtn" title="Ask about the material on the side (not graded, does not interrupt the lesson)">Ask</button>
   <button id="bookBtn" title="The book of a lesson: its readings only, no questions or cards">Book</button>
+  <button id="noteBtn" title="Your notebook: write notes; they are titled, tagged and organized for you">Notebook</button>
   <button id="phoneBtn" title="Show the QR code to connect a phone or iPad">Phone</button>
   <a id="mapLink" href="#" style="color:var(--accent); text-decoration:none; font-weight:600; font-size:14px;">Map</a>
   <div id="conn" class="conn">Connecting…</div>
@@ -247,6 +283,12 @@ body.role-scratch #actions { grid-template-columns: 1fr; }
   </div>
 </aside>
 <button id="askSel" class="hidden">Ask about this</button>
+<button id="noteSel" class="hidden">Note this</button>
+<div id="nb" aria-label="Notebook">
+  <div class="bhead"><b>Notebook</b><input id="nbSearch" type="search" placeholder="Search notes…"><button id="nbNew" class="primary" style="grid-column:auto; font-size:13px; min-height:32px">+ New</button><button id="nbClose">Close</button></div>
+  <div id="nbTags"></div>
+  <div id="nbBody"><div class="empty">Loading…</div></div>
+</div>
 <div id="book" aria-label="Book">
   <div class="bhead"><select id="bookSel" title="Which lesson's book"></select><button id="bookClose">Close</button></div>
   <div id="bookBody"><div class="empty">No book yet.</div></div>
@@ -632,13 +674,125 @@ $("chatSend").onclick = async () => {
 };
 // select text in the lesson -> "Ask about this"
 document.addEventListener("selectionchange", () => {
-  const s = getSelection(); const b = $("askSel");
-  if (!s || s.isCollapsed || !s.toString().trim() || !$("lesson").contains(s.anchorNode)) { setTimeout(() => b.classList.add("hidden"), 250); return; }
+  const s = getSelection(); const b = $("askSel"), n = $("noteSel");
+  if (!s || s.isCollapsed || !s.toString().trim() || !$("lesson").contains(s.anchorNode)) { setTimeout(() => { b.classList.add("hidden"); n.classList.add("hidden"); }, 250); return; }
   selText = s.toString();
   const r = s.getRangeAt(0).getBoundingClientRect();
-  b.style.top = (window.scrollY + r.bottom + 8) + "px"; b.style.left = Math.max(8, Math.min(window.innerWidth - 140, r.left)) + "px"; b.classList.remove("hidden");
+  const left = Math.max(8, Math.min(window.innerWidth - 250, r.left));
+  b.style.top = (window.scrollY + r.bottom + 8) + "px"; b.style.left = left + "px"; b.classList.remove("hidden");
+  n.style.top = b.style.top; n.style.left = (left + 128) + "px"; n.classList.remove("hidden");
 });
+// The selected text with rendered math turned back into $LaTeX$ (KaTeX keeps the source in an annotation; plain toString() yields junk).
+function selectionText() {
+  const s = getSelection();
+  if (!s || s.isCollapsed) return selText;
+  try {
+    const frag = s.getRangeAt(0).cloneContents();
+    for (const k of frag.querySelectorAll(".katex")) { const a = k.querySelector("annotation"); const d = k.closest(".katex-display"); k.replaceWith(document.createTextNode(a ? (d ? "$$" + a.textContent + "$$" : "$" + a.textContent + "$") : k.textContent)); }
+    for (const m of frag.querySelectorAll(".katex-mathml, .katex-html")) m.remove();
+    return (frag.textContent || "").replace(/\n{3,}/g, "\n\n").trim() || s.toString();
+  } catch { return s.toString(); }
+}
 $("askSel").onmousedown = (e) => e.preventDefault();
-$("askSel").onclick = () => { const t = getSelection().toString() || selText; $("askSel").classList.add("hidden"); openChat(t.slice(0, 1500)); };
+$("askSel").onclick = () => { const t = selectionText(); $("askSel").classList.add("hidden"); $("noteSel").classList.add("hidden"); openChat(t.slice(0, 1500)); };
+$("noteSel").onmousedown = (e) => e.preventDefault();
+$("noteSel").onclick = () => { const t = selectionText(); $("askSel").classList.add("hidden"); $("noteSel").classList.add("hidden"); openNotebook(); nbEditor({ text: t.trim().split("\n").map((l) => "> " + l).join("\n") + "\n\n" }); };
+
+// ---------- notebook: his notes, tagged and organized ----------
+let nbData = null, nbMtime = -1, nbTag = null, nbPoll = null, nbShowing = { kind: "list" };
+const nbLesson = () => (nbData && nbData.viewing && nbData.lessons.some((l) => l.slug === nbData.viewing)) ? nbData.viewing : "";
+function nbChip(label, on, cls) { const c = document.createElement("span"); c.className = "chip" + (on ? " on" : "") + (cls ? " " + cls : ""); c.textContent = label; return c; }
+function nbMeta(n) { return [new Date(n.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }), n.lessonTitle, n.tagging ? "tagging…" : (!n.tagged ? "not tagged yet" : null)].filter(Boolean).join(" · "); }
+async function loadNotebook(force) {
+  try {
+    const r = await fetch(api("/notebook"), { cache: "no-store" }); if (!r.ok) return;
+    const j = await r.json();
+    const busy = j.notes.some((n) => n.tagging);
+    if (!force && j.mtime === nbMtime && !busy && nbData && !nbData.notes.some((n) => n.tagging)) return;
+    nbData = j; nbMtime = j.mtime;
+    if (nbShowing.kind === "list") nbRenderList();
+    else if (nbShowing.kind === "view") { const n = j.notes.find((x) => x.id === nbShowing.id); if (n) nbRenderView(n); else nbRenderList(); }
+  } catch {}
+}
+function nbRenderTags() {
+  const el = $("nbTags"); el.innerHTML = "";
+  if (!nbData) return;
+  const all = nbChip("All · " + nbData.notes.length, !nbTag); all.onclick = () => { nbTag = null; nbRenderList(); }; el.appendChild(all);
+  for (const t of nbData.tags) { const c = nbChip("#" + t.tag + " · " + t.count, nbTag === t.tag); c.onclick = () => { nbTag = nbTag === t.tag ? null : t.tag; nbRenderList(); }; el.appendChild(c); }
+  const un = nbData.notes.filter((n) => !n.tags.length).length;
+  if (un) { const c = nbChip("untagged · " + un, nbTag === "__untagged", "muted"); c.onclick = () => { nbTag = nbTag === "__untagged" ? null : "__untagged"; nbRenderList(); }; el.appendChild(c); }
+}
+function nbRenderList() {
+  nbShowing = { kind: "list" }; nbRenderTags();
+  const el = $("nbBody"); el.innerHTML = "";
+  if (!nbData) return;
+  const q = $("nbSearch").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let notes = nbData.notes;
+  if (nbTag === "__untagged") notes = notes.filter((n) => !n.tags.length); else if (nbTag) notes = notes.filter((n) => n.tags.includes(nbTag));
+  if (q.length) notes = notes.filter((n) => { const h = [n.title, n.text, n.summary, ...(n.tags || []), ...(n.concepts || [])].filter(Boolean).join("\n").toLowerCase(); return q.every((t) => h.includes(t)); });
+  if (!notes.length) { el.innerHTML = '<div class="empty">' + (nbData.notes.length ? "No notes match." : "No notes yet. Write one with <b>+ New</b>, or select text in a lesson and tap <b>Note this</b>. Each note is titled and tagged for you.") + "</div>"; return; }
+  for (const n of notes) {
+    const d = document.createElement("div"); d.className = "card note";
+    const h = document.createElement("h3"); h.textContent = n.title || n.text.split("\n").find((l) => l.trim()) || "Note"; d.appendChild(h);
+    const m = document.createElement("div"); m.className = "meta"; m.textContent = nbMeta(n); d.appendChild(m);
+    const s = document.createElement("div"); s.className = "sum"; s.textContent = n.summary || n.text.slice(0, 160).replace(/\s+/g, " "); d.appendChild(s);
+    if (n.tags.length) { const c = document.createElement("div"); c.className = "chips"; for (const t of n.tags) c.appendChild(nbChip("#" + t)); d.appendChild(c); }
+    d.onclick = () => nbRenderView(n);
+    el.appendChild(d);
+  }
+}
+function nbRenderView(n) {
+  nbShowing = { kind: "view", id: n.id };
+  const el = $("nbBody"); el.innerHTML = "";
+  const v = document.createElement("div"); v.className = "card view";
+  const h = document.createElement("h1"); h.textContent = n.title || "Note"; v.appendChild(h);
+  const m = document.createElement("div"); m.className = "meta"; m.textContent = nbMeta(n) + (n.concepts && n.concepts.length ? " · about: " + n.concepts.join(", ") : ""); v.appendChild(m);
+  if (n.tags.length) { const c = document.createElement("div"); c.className = "chips"; for (const t of n.tags) { const ch = nbChip("#" + t); ch.onclick = () => { nbTag = t; nbRenderList(); }; c.appendChild(ch); } v.appendChild(c); }
+  if (n.summary) { const s = document.createElement("div"); s.className = "sum"; s.textContent = n.summary; v.appendChild(s); }
+  const body = document.createElement("div"); body.innerHTML = renderMd(n.text, { breaks: true }); v.appendChild(body);
+  for (const img of n.images || []) { const i = document.createElement("img"); i.src = api("/file?p=" + encodeURIComponent(img)); v.appendChild(i); }
+  const rel = (n.related || []).map((id) => nbData.notes.find((x) => x.id === id)).filter(Boolean);
+  if (rel.length) { const r = document.createElement("div"); r.className = "meta"; r.textContent = "Related: "; for (const x of rel) { const a = document.createElement("a"); a.href = "#"; a.textContent = x.title || "note"; a.style.marginRight = "10px"; a.onclick = (e) => { e.preventDefault(); nbRenderView(x); }; r.appendChild(a); } v.appendChild(r); }
+  const b = document.createElement("div"); b.className = "vbtns";
+  const mk = (label, fn, cls) => { const x = document.createElement("button"); x.textContent = label; if (cls) x.className = cls; x.onclick = fn; b.appendChild(x); return x; };
+  mk("← All notes", () => nbRenderList());
+  mk("Edit", () => nbEditor(n));
+  mk(n.tagging ? "Tagging…" : "Retag", async (e) => { e.target.disabled = true; try { await post("/note/retag", { id: n.id }); } catch {} setTimeout(() => loadNotebook(true), 1500); });
+  mk("Delete", async () => { if (!confirm("Delete this note?")) return; try { await post("/note/delete", { id: n.id }); nbRenderList(); loadNotebook(true); } catch (e) { alert(e.message); } });
+  v.appendChild(b); el.appendChild(v); el.scrollTop = 0;
+}
+function nbEditor(n) {
+  const isNew = !n || !n.id; nbShowing = { kind: "edit", id: n && n.id };
+  const el = $("nbBody"); el.innerHTML = "";
+  const f = document.createElement("div"); f.className = "card editor";
+  const title = document.createElement("input"); title.placeholder = "Title (optional — one is written for you)"; title.value = (n && n.title) || ""; f.appendChild(title);
+  const text = document.createElement("textarea"); text.placeholder = "Your note. Markdown and $LaTeX$ are rendered."; text.value = (n && n.text) || ""; f.appendChild(text);
+  const row = document.createElement("div"); row.className = "row";
+  const les = document.createElement("select"); const none = document.createElement("option"); none.value = ""; none.textContent = "No lesson"; les.appendChild(none);
+  for (const l of (nbData ? nbData.lessons : [])) { const o = document.createElement("option"); o.value = l.slug; o.textContent = l.title; les.appendChild(o); }
+  les.value = (n && n.lesson) || (isNew ? nbLesson() : ""); row.appendChild(les);
+  const tags = document.createElement("input"); tags.placeholder = "tags, comma separated (optional)"; tags.value = (n && n.tags || []).join(", "); row.appendChild(tags);
+  f.appendChild(row);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.textContent = isNew ? "Saved notes are titled, tagged, summarized and linked to related notes for you in the background. Your own title and tags are kept." : "Your edits are kept; tags you remove stay removed."; f.appendChild(hint);
+  const b = document.createElement("div"); b.className = "btns";
+  const cancel = document.createElement("button"); cancel.textContent = "Cancel"; cancel.onclick = () => (isNew ? nbRenderList() : nbRenderView(n)); b.appendChild(cancel);
+  const save = document.createElement("button"); save.textContent = isNew ? "Save note" : "Save changes"; save.className = "primary"; save.style.gridColumn = "auto";
+  save.onclick = async () => {
+    const body = { text: text.value.trim(), title: title.value.trim(), lesson: les.value, tags: tags.value.split(",").map((s) => s.trim()).filter(Boolean) };
+    if (!body.text) { text.focus(); return; }
+    save.disabled = true; save.textContent = "Saving…";
+    try { const j = isNew ? await post("/note", body) : await post("/note/update", { id: n.id, ...body }); await loadNotebook(true); nbRenderView(nbData.notes.find((x) => x.id === j.note.id) || j.note); }
+    catch (e) { alert("Couldn't save: " + e.message); save.disabled = false; save.textContent = "Save"; }
+  };
+  b.appendChild(save); f.appendChild(b); el.appendChild(f);
+  setTimeout(() => text.focus(), 100);
+}
+function openNotebook() { $("nb").classList.add("open"); loadNotebook(true); if (!nbPoll) nbPoll = setInterval(() => loadNotebook(false), 3000); }
+function closeNotebook() { $("nb").classList.remove("open"); if (nbPoll) { clearInterval(nbPoll); nbPoll = null; } }
+$("noteBtn").onclick = () => { openNotebook(); if (nbShowing.kind !== "list") nbRenderList(); };
+$("nbClose").onclick = closeNotebook;
+$("nbNew").onclick = () => nbEditor(null);
+$("nbSearch").oninput = () => { if (nbShowing.kind !== "list") nbShowing = { kind: "list" }; nbRenderList(); };
+if (new URLSearchParams(location.search).get("view") === "notebook") openNotebook();
 </script>
 </body></html>

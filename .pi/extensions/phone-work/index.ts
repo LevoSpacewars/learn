@@ -28,6 +28,11 @@
  * lesson list; POST /chat {text, lesson?, thread?} asks and waits for the
  * reply; POST /chat {new: true} starts a fresh thread.
  *
+ * Notebook (review/notebook.ts): GET /notebook lists his notes, tags and
+ * lessons; POST /note {text, title?, lesson?, tags?, images?} saves one and
+ * tags it in the background; POST /note/update {id, …}, /note/retag {id},
+ * /note/delete {id}.
+ *
  * Env: PI_PHONE_PORT (default 8787), PI_PHONE_BIND (override bind address),
  *      PI_WHISPER_MODEL (default ~/.cache/whisper/ggml-medium.en.bin),
  *      PI_WHISPER_BIN (default whisper-cli).
@@ -49,6 +54,7 @@ import { askSide, chatLessons, currentThread, loadChat, newThreadId } from "../r
 import { plainMath } from "../review/plainmath.ts";
 import { buildGraph, loadLearner } from "../review/store.ts";
 import { bookList } from "../review/book.ts";
+import { addNote, deleteNote, notebookView, noteTitle, tagNote, updateNote } from "../review/notebook.ts";
 
 const PORT = Number(process.env.PI_PHONE_PORT) || 8787;
 const MAX_BODY = 60 * 1024 * 1024;
@@ -499,6 +505,42 @@ export default function phoneWork(pi: ExtensionAPI) {
 		}
 	}
 
+	/** Notebook: his notes. Saving returns at once; the tagger runs in the background and the page polls. */
+	async function handleNote(req: http.IncomingMessage, res: http.ServerResponse, action: string) {
+		const cwd = latestCtx?.cwd ?? process.cwd();
+		let body: { id?: string; text?: string; title?: string; lesson?: string; tags?: string[]; summary?: string; images?: Array<{ data: string; mimeType: string }> };
+		try {
+			body = JSON.parse((await readBody(req)).toString("utf8"));
+		} catch {
+			return json(res, 400, { error: "Bad request" });
+		}
+		const tagLater = (id: string) =>
+			void tagNote(cwd, id)
+				.then((n) => n && latestCtx?.ui?.notify?.(`📓 Note tagged: "${noteTitle(n)}" · ${n.tags.map((t) => `#${t}`).join(" ")}`, "info"))
+				.catch((e: any) => latestCtx?.ui?.notify?.(`📓 Note saved but not tagged: ${String(e?.message ?? e).split("\n")[0]}`, "warning"));
+		if (action === "add") {
+			const images = (body.images ?? []).filter((i) => MIME_EXT[i?.mimeType] && typeof i.data === "string").slice(0, MAX_IMAGES);
+			const saved = images.length ? saveImages(cwd, images) : [];
+			const text = body.text?.trim() ?? "";
+			if (!text && !saved.length) return json(res, 400, { error: "Nothing to save" });
+			const note = addNote(cwd, { text, title: body.title, lesson: body.lesson, tags: body.tags, images: saved.map((s) => path.relative(cwd, s.file)), source: "web" });
+			latestCtx?.ui?.notify?.(`📓 Note saved from your device${note.title ? `: "${note.title}"` : ""}`, "info");
+			tagLater(note.id);
+			return json(res, 200, { ok: true, note });
+		}
+		if (!body.id) return json(res, 400, { error: "Missing id" });
+		if (action === "update") {
+			const note = updateNote(cwd, body.id, { text: body.text, title: body.title, tags: body.tags, lesson: body.lesson, summary: body.summary });
+			return note ? json(res, 200, { ok: true, note }) : json(res, 404, { error: "No such note" });
+		}
+		if (action === "retag") {
+			tagLater(body.id);
+			return json(res, 200, { ok: true });
+		}
+		if (action === "delete") return deleteNote(cwd, body.id) ? json(res, 200, { ok: true }) : json(res, 404, { error: "No such note" });
+		json(res, 404, { error: "Unknown action" });
+	}
+
 	function start(ctx: any): void {
 		if (server) return;
 		const host = process.env.PI_PHONE_BIND || tailscaleIPv4();
@@ -587,6 +629,20 @@ export default function phoneWork(pi: ExtensionAPI) {
 			if (req.method === "GET" && u.pathname === "/file") {
 				const p = u.searchParams.get("p") ?? "";
 				return serveVaultFile(latestCtx?.cwd ?? process.cwd(), p, res);
+			}
+			if (req.method === "GET" && u.pathname === "/notebook") {
+				try {
+					const cwd = latestCtx?.cwd ?? process.cwd();
+					const logFile = (globalThis as any).__learnLogFile as string | null | undefined;
+					const viewing = logFile ? loadLearner(cwd).lessons.find((l) => l.file && path.resolve(cwd, l.file) === path.resolve(logFile))?.slug ?? null : null;
+					return json(res, 200, { ...notebookView(cwd), viewing });
+				} catch (e: any) {
+					return json(res, 500, { error: String(e?.message ?? e) });
+				}
+			}
+			if (req.method === "POST" && /^\/note(\/(update|retag|delete))?$/.test(u.pathname)) {
+				handleNote(req, res, u.pathname.split("/")[2] ?? "add").catch((e) => json(res, 500, { error: String(e?.message ?? e) }));
+				return;
 			}
 			if (req.method === "GET" && u.pathname === "/chat") {
 				const cwd = latestCtx?.cwd ?? process.cwd();

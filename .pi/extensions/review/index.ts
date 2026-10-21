@@ -49,6 +49,7 @@ import {
 } from "./store.ts";
 import { clearMiss, pedagogy } from "./pedagogy.ts";
 import { bookPath, importSessionReadings, writeAllBooks, writeBook } from "./book.ts";
+import { addNote, deleteNote, loadNotes, noteLines, searchNotes, tagCounts, tagNote, tagPending, updateNote } from "./notebook.ts";
 
 type CardKind = "recall" | "problem";
 
@@ -734,7 +735,91 @@ export default function review(pi: ExtensionAPI) {
 		},
 	});
 
+	pi.registerTool({
+		name: "notebook",
+		label: "notebook",
+		description:
+			"His personal notebook: notes he wrote on the page or with /note, auto-titled and tagged. Use it only when he asks: to find notes (list/search), to add a note in his words when he says \"note this\" (add), to retag, retitle, summarize or link notes (update), to re-run the auto-tagger (retag), or to remove one (delete). Tags are lowercase-with-dashes; reuse his existing ones. Never quote note ids to him: name notes by title.",
+		renderCall: quietCall("notebook"),
+		renderResult: quietResult(firstLine),
+		parameters: Type.Object({
+			action: Type.Union([Type.Literal("list"), Type.Literal("search"), Type.Literal("add"), Type.Literal("update"), Type.Literal("retag"), Type.Literal("delete")]),
+			query: Type.Optional(Type.String({ description: "search: words to look for in title, text, tags, summary" })),
+			tag: Type.Optional(Type.String({ description: "list/search: only notes with this tag" })),
+			full: Type.Optional(Type.Boolean({ description: "list/search: include each note's full text (default: title + summary)" })),
+			id: Type.Optional(Type.String({ description: "update/retag/delete: the note id" })),
+			text: Type.Optional(Type.String({ description: "add: the note, in his words (markdown + LaTeX); update: replacement text" })),
+			title: Type.Optional(Type.String()),
+			tags: Type.Optional(Type.Array(Type.String())),
+			lesson: Type.Optional(Type.String({ description: "lesson slug the note belongs to" })),
+			concepts: Type.Optional(Type.Array(Type.String({ description: "concept labels (never node ids)" }))),
+			summary: Type.Optional(Type.String({ description: "one line" })),
+			related: Type.Optional(Type.Array(Type.String({ description: "ids of related notes" }))),
+		}),
+		async execute(_id, params, _s, _u, ctx) {
+			const cwd = ctx.cwd;
+			switch (params.action) {
+				case "list":
+				case "search": {
+					let notes = loadNotes(cwd);
+					if (params.tag) notes = notes.filter((n) => n.tags.includes(params.tag!));
+					if (params.action === "search" && params.query) notes = searchNotes(notes, params.query);
+					notes = notes.reverse().slice(0, params.full ? 10 : 40);
+					const tags = tagCounts(loadNotes(cwd));
+					return textResult(
+						notes.length
+							? [`${notes.length} note(s)${params.tag ? ` tagged #${params.tag}` : ""}${params.query ? ` matching "${params.query}"` : ""}:`, ...noteLines(notes, { withText: params.full }), "", `Tags: ${tags.map((t) => `#${t.tag} (${t.count})`).join(", ") || "none"}`].join("\n")
+							: `No notes${params.tag ? ` tagged #${params.tag}` : ""}${params.query ? ` matching "${params.query}"` : ""}.`,
+						{ count: notes.length },
+					);
+				}
+				case "add": {
+					if (!params.text?.trim()) return textResult("add needs text.");
+					const n = addNote(cwd, { text: params.text, title: params.title, lesson: params.lesson, tags: params.tags, source: "tutor" });
+					if (!n.tags.length) void tagNote(cwd, n.id).catch(() => {});
+					return textResult(`Saved note "${params.title ?? n.id}"${n.tags.length ? ` tagged ${n.tags.map((t) => `#${t}`).join(" ")}` : " (auto-tagging in the background)"}.`, { id: n.id });
+				}
+				case "update": {
+					if (!params.id) return textResult("update needs id.");
+					const n = updateNote(cwd, params.id, { text: params.text, title: params.title, tags: params.tags, lesson: params.lesson, concepts: params.concepts, summary: params.summary, related: params.related });
+					return textResult(n ? `Updated:\n${noteLines([n]).join("\n")}` : `No note ${params.id}.`, { id: params.id, ok: !!n });
+				}
+				case "retag": {
+					if (params.id) {
+						const n = await tagNote(cwd, params.id);
+						return textResult(n ? `Retagged:\n${noteLines([n]).join("\n")}` : `No note ${params.id}.`);
+					}
+					const k = await tagPending(cwd);
+					return textResult(`Tagged ${k} untagged note(s).`);
+				}
+				case "delete": {
+					if (!params.id) return textResult("delete needs id.");
+					return textResult(deleteNote(cwd, params.id) ? `Deleted ${params.id}.` : `No note ${params.id}.`);
+				}
+			}
+		},
+	});
+
 	// ── Commands ─────────────────────────────────────────────────────────
+
+	pi.registerCommand("note", {
+		description: "Save a note to your notebook (auto-titled and tagged in the background; the app's Notebook button shows them all)",
+		handler: async (args, ctx: any) => {
+			const text = args.trim();
+			if (!text) {
+				const notes = loadNotes(ctx.cwd);
+				ctx.ui.notify(notes.length ? `${notes.length} note(s). Last: "${noteLines(notes.slice(-1))[0]?.split('"')[1] ?? ""}". Usage: /note <text>` : "Usage: /note <text>. Notes appear under the Notebook button in the app.", "info");
+				return;
+			}
+			const lesson = ((globalThis as any).__learnLogFile as string | undefined)?.split("/").pop()?.replace(/\.md$/, "");
+			const known = loadLearner(ctx.cwd).lessons.some((l) => l.slug === lesson);
+			const n = addNote(ctx.cwd, { text, lesson: known ? lesson : undefined, source: "terminal" });
+			ctx.ui.notify("📓 Note saved; tagging it in the background.", "info");
+			void tagNote(ctx.cwd, n.id)
+				.then((t) => t && ctx.ui.notify(`📓 "${t.title ?? n.id}" · ${t.tags.map((x) => `#${x}`).join(" ")}`, "info"))
+				.catch((e: any) => ctx.ui.notify(`Note saved but not tagged: ${String(e?.message ?? e).split("\n")[0]}`, "warning"));
+		},
+	});
 
 	pi.registerCommand("book", {
 		description: "Rebuild the lesson books (book/<slug>.md: readings only, no cards). `/book import` also recovers readings from past session transcripts.",

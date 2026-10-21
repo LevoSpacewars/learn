@@ -579,6 +579,35 @@ export function recentSideQuestions(cwd: string, lesson?: string, limit = 5): st
 		.map((t) => `- ${t.at.slice(0, 10)}${t.lesson ? ` [${t.lesson}]` : ""}: ${clip(t.text, 220)}`);
 }
 
+/** His newest notebook notes (notebook.ts writes .learn/notes.jsonl), newest first. A small fold here avoids a circular import. */
+export function recentNotes(cwd: string, limit = 5): string[] {
+	const notes = new Map<string, { id: string; at: string; text: string; title?: string; tags: string[]; lesson?: string; summary?: string }>();
+	let lines: string[];
+	try {
+		lines = fs.readFileSync(path.join(cwd, ".learn", "notes.jsonl"), "utf8").split("\n");
+	} catch {
+		return [];
+	}
+	for (const l of lines) {
+		if (!l.trim()) continue;
+		try {
+			const op = JSON.parse(l);
+			if (op.op === "add") notes.set(op.note.id, { tags: [], ...op.note });
+			else if (op.op === "update" && notes.has(op.id)) notes.set(op.id, { ...notes.get(op.id)!, ...op.patch });
+			else if (op.op === "delete") notes.delete(op.id);
+		} catch {
+			// skip a bad line
+		}
+	}
+	return [...notes.values()]
+		.slice(-limit)
+		.reverse()
+		.map((n) => {
+			const title = n.title ?? n.text.split("\n").find((x) => x.trim())?.trim().slice(0, 60) ?? "Note";
+			return `- ${n.at.slice(0, 10)} "${title}"${n.tags.length ? ` ${n.tags.map((t) => `#${t}`).join(" ")}` : ""}${n.lesson ? ` [${n.lesson}]` : ""}${n.summary ? `: ${clip(n.summary, 140)}` : ""}`;
+		});
+}
+
 // ── Curriculum logic (the scheduler lives here, in code) ───────────────────
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -1056,6 +1085,9 @@ export function learnerSlice(cwd: string, opts: { lesson?: string; topics?: stri
 
 	const side = recentSideQuestions(cwd, opts.lesson);
 	if (side.length) out.push("## Asked in the side chat (material that didn't land; already answered there, don't re-answer unprompted)", ...side);
+
+	const notes = recentNotes(cwd);
+	if (notes.length) out.push("## His notebook (his own notes, newest first; auto-tagged. Use the `notebook` tool when he asks you to find, tag or organize notes; otherwise leave them be)", ...notes);
 
 	const ret = retentionSummary(loadEvents(cwd));
 	if (ret.n) out.push(`## Long-delay retention checks: ${ret.n}, accuracy ${Math.round(ret.accuracy * 100)}% (the real outcome metric)`);

@@ -23,14 +23,15 @@ The extension directories need their own `node_modules` (`bin/setup` installs th
 | `mdlog.test.mts` | md-log.ts: callouts written to the lesson note |
 | `book.test.mts` | review/book.ts: readings log → `book/<slug>.md`, id stripping, session import |
 | `phone.test.mts`, `qr.test.mts` | phone-work: QR show/hide on globalThis, `/qr.svg`, the Phone button; binds `127.0.0.1` on ports 8795/8796 |
+| `notebook.test.mts` | review/notebook.ts: notes.jsonl fold, tagger with a fake runner (his title/tags win), `notebook/*.md` + index, slice lines, the `/notebook` and `/note*` endpoints with a fake pi on port 8793 |
 
 ## Browser checks (manual, need Chrome)
 
-`fakeserver.mjs` serves `page.html` with a fake lesson and a fake pending prompt (`PENDING=read|say|predict`, `NOPENDING=1`, `PORT`, `ANSWERS` log) so the cards can be screenshotted and clicked without pi. `fakebook.mjs` does the same for the Book view (`VAULT=<vault>`). `page.test.mjs`, `idle.test.mjs`, `skip.test.mjs` and `pad.check.mjs` drive those with puppeteer-core from `visual-tools/node_modules` and headless Google Chrome; `shot.mjs <url> <out.png> [w h]` takes a screenshot; `mermaid.debug.mjs <url>` prints the page console. Headless Chrome's minimum window width is about 500px: narrower screenshots are cropped, not reflowed.
+`fakeserver.mjs` serves `page.html` with a fake lesson and a fake pending prompt (`PENDING=read|say|predict`, `NOPENDING=1`, `PORT`, `ANSWERS` log) so the cards can be screenshotted and clicked without pi. `fakebook.mjs` does the same for the Book view (`VAULT=<vault>`). `page.test.mjs`, `idle.test.mjs`, `skip.test.mjs`, `pad.check.mjs` and `nb.check.mjs` (the Notebook panel against its own fake server on 8792: write, auto-tag, edit, filter, search, phone width, "Note this") drive those with puppeteer-core from `visual-tools/node_modules` and headless Google Chrome; `shot.mjs <url> <out.png> [w h]` takes a screenshot; `mermaid.debug.mjs <url>` prints the page console. Headless Chrome's minimum window width is about 500px: narrower screenshots are cropped, not reflowed.
 
 ## Live grader (manual, calls the model)
 
-`grader.live.mts`, `grader.live-reactions.mts`, `grader.live-concurrent.mts` run `review/grader.ts` for real (a separate `pi -p` per call, ~6 s each) on answers from past sessions: a substantively right answer must grade correct, a complaint must come back `attempted=false`, concurrent calls must not collide. Run with `node --import ./register.mjs grader.live.mts`.
+`grader.live.mts`, `grader.live-reactions.mts`, `grader.live-concurrent.mts` run `review/grader.ts` for real (a separate `pi -p` per call, ~6 s each) on answers from past sessions: a substantively right answer must grade correct, a complaint must come back `attempted=false`, concurrent calls must not collide. Run with `node --import ./register.mjs grader.live.mts`. `notebook.live.mts` runs the real notebook tagger on one note (about 3 s).
 
 ## Tools
 

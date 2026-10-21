@@ -158,8 +158,9 @@ function readingsOnly(material: string): string {
 	return parts.join("\n\n").trim();
 }
 
-function defaultModel(cwd: string): string {
-	if (process.env.PI_SIDECHAT_MODEL) return process.env.PI_SIDECHAT_MODEL;
+/** The vault's default model (.pi/settings.json), for the side processes (side chat, notebook tagger). */
+export function defaultModel(cwd: string, envVar = "PI_SIDECHAT_MODEL"): string {
+	if (process.env[envVar]) return process.env[envVar]!;
 	try {
 		const s = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "settings.json"), "utf8"));
 		if (s.defaultProvider && s.defaultModel) return `${s.defaultProvider}/${s.defaultModel}`;
@@ -169,7 +170,7 @@ function defaultModel(cwd: string): string {
 	return "claude-bridge/claude-opus-5-5";
 }
 
-function bridgeExtensionPath(): string | undefined {
+export function bridgeExtensionPath(): string | undefined {
 	const p = path.join(os.homedir(), ".pi", "agent", "npm", "node_modules", "pi-claude-bridge", "src", "index.ts");
 	return fs.existsSync(p) ? p : undefined;
 }

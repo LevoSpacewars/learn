@@ -13,7 +13,7 @@ const here = path.dirname(new URL(import.meta.url).pathname);
 const ext = path.resolve(here, "..", "extensions");
 const defaults = [
 	"recall.ts", "quiz.ts", "md-log.ts", "start-menu.ts", "curriculum.ts", "plot.ts", "ask-user-question.ts",
-	"review/index.ts", "review/pedagogy.ts", "review/book.ts", "review/sidechat.ts", "review/grader.ts", "review/store.ts",
+	"review/index.ts", "review/pedagogy.ts", "review/book.ts", "review/sidechat.ts", "review/notebook.ts", "review/grader.ts", "review/store.ts",
 	"phone-work/index.ts", "phone-work/qrcode-terminal.d.ts",
 ].map((f) => path.join(ext, f));
 const files = process.argv.length > 2 ? process.argv.slice(2).map((f) => path.resolve(f)) : defaults;
