@@ -78,6 +78,25 @@ assert.equal(widget, undefined, "/phone hide");
 const opts = menuMod.orderOptions(["Review (3 due)", "Learn something new", "Connect my phone (show the QR code)"], undefined, "Review (3 due)");
 assert.equal(opts.at(-1), "Connect my phone (show the QR code)");
 
+// /lesson: full note on first fetch; ?since=<its mtime> answers "same" without the markdown
+const note = path.join(cwd, "lessons", "demo.md");
+fs.mkdirSync(path.dirname(note), { recursive: true });
+fs.writeFileSync(note, "# Demo\n\nSome text with $x^2$.\n");
+(globalThis as any).__learnLogFile = note;
+const lessonUrl = (q = "") => String(sh.url).replace("/?t=", "/lesson?" + q + "t=");
+const full = await (await fetch(lessonUrl())).json();
+assert.equal(full.file, "lessons/demo.md");
+assert.match(full.markdown, /Some text/, "first fetch carries the note");
+const same = await (await fetch(lessonUrl("since=" + encodeURIComponent(String(full.mtime)) + "&"))).json();
+assert.equal(same.same, true, "unchanged note answers same");
+assert.equal(same.markdown, undefined, "unchanged note sends no markdown");
+assert.equal(same.mtime, full.mtime);
+fs.appendFileSync(note, "\nMore.\n");
+const t = new Date(Date.now() + 2000); fs.utimesSync(note, t, t);
+const changed = await (await fetch(lessonUrl("since=" + encodeURIComponent(String(full.mtime)) + "&"))).json();
+assert.equal(changed.same, undefined, "changed note is sent again");
+assert.match(changed.markdown, /More\./);
+
 await fire("session_shutdown", {}, ctx);
 console.log("phone tests ok");
 process.exit(0);

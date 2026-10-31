@@ -325,7 +325,19 @@ const MAX = 2000;
 
 // ---------- markdown + math + callouts ----------
 function esc(t) { return t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]); }
+// The lesson re-renders on every tutor write; unchanged blocks reuse their HTML instead of
+// running marked + KaTeX again.
+const mdCache = new Map();
 function renderMd(src, opts) {
+  const key = (opts && opts.breaks ? "b:" : "p:") + src;
+  const hit = mdCache.get(key);
+  if (hit !== undefined) return hit;
+  const html = renderMdRaw(src, opts);
+  if (mdCache.size > 4000) mdCache.clear();
+  mdCache.set(key, html);
+  return html;
+}
+function renderMdRaw(src, opts) {
   const spans = [];
   let s = src
     .replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => { spans.push({ m, d: true }); return "@@M" + (spans.length - 1) + "@@"; })
@@ -337,6 +349,8 @@ function renderMd(src, opts) {
   try { html = window.marked ? marked.parse(s, { breaks: !!(opts && opts.breaks) }) : esc(s).replace(/\n/g, "<br>"); } catch { html = esc(s).replace(/\n/g, "<br>"); }
   html = html.replace(/@@M(\d+)@@/g, (_, i) => { const x = spans[+i]; try { return window.katex ? katex.renderToString(x.m, { displayMode: x.d, throwOnError: false }) : esc(x.m); } catch { return esc(x.m); } });
   html = html.replace(/(?:<p>)?@@MER(\d+)@@(?:<\/p>)?/g, (_, i) => '<pre class="mermaid">' + esc(mer[+i]) + "</pre>");
+  // Answer photos are full-size camera images: decode them off the main thread.
+  html = html.replace(/<img /g, '<img decoding="async" ');
   return html;
 }
 // Obsidian callouts: "> [!type] Title" + following "> " lines
@@ -357,12 +371,16 @@ function splitCallouts(md) {
 // quiet margin note, and keep only real events (questions, answers, verdicts)
 // as cards. Skill/learner-slice notes are bookkeeping and are not shown.
 const SESSION_START = /^(Continue the lesson|Teach me|Review:|Next on the path)/i;
+// Returns one HTML string per block, so the page can keep the blocks that did not change.
 function renderLesson(md) {
-  const parts = splitCallouts(md); let html = '<div class="doc">'; let buf = []; let speaker = "pi"; let first = true;
+  const parts = splitCallouts(md); const blocks = []; let buf = []; let speaker = "pi"; let first = true;
+  let html = "";
+  const cut = () => { if (html) blocks.push(html); html = ""; };
   const flush = () => {
     if (!buf.length) return;
     const text = buf.join("\n").trim(); buf = [];
     if (!text) return;
+    cut();
     if (speaker === "you") {
       if (SESSION_START.test(text) && !first) html += '<div class="session">Next sitting</div>';
       html += '<div class="you"><div class="who">You</div>' + renderMd(text) + "</div>";
@@ -379,24 +397,45 @@ function renderLesson(md) {
     // Verdict cards: the bookkeeping lines (confidence, what the grader read, first error) are
     // one per line in the log; keep them on their own lines and mute them.
     const body = p.body.split("\n").map((l) => /^(Confidence|Read as|First error|Card):/.test(l) ? '<span class="verdict-meta">' + l + "</span>" : l).join("\n");
+    cut();
     html += '<div class="callout c-' + p.type + '"><div class="ct">' + esc(p.title) + '</div><div class="cb">' + renderMd(body, { breaks: true }) + "</div></div>";
   }
   flush();
-  return html + "</div>";
+  cut();
+  return blocks;
+}
+// Patch the lesson DOM: keep the leading blocks that are unchanged (the log is append-mostly),
+// replace the rest. Returns the newly inserted block elements.
+let lessonBlocks = [];
+function patchLesson(el, blocks) {
+  let doc = el.querySelector(":scope > .doc");
+  if (!doc) { el.innerHTML = '<div class="doc"></div>'; doc = el.firstChild; lessonBlocks = []; }
+  let same = 0;
+  while (same < blocks.length && same < lessonBlocks.length && blocks[same] === lessonBlocks[same]) same++;
+  while (doc.children.length > same) doc.lastElementChild.remove();
+  const added = [];
+  for (let i = same; i < blocks.length; i++) {
+    const s = document.createElement("section"); s.className = "blk"; s.innerHTML = blocks[i];
+    doc.appendChild(s); added.push(s);
+  }
+  lessonBlocks = blocks;
+  return added;
 }
 let lessonMtime = 0, lessonFile = null;
 async function pollLesson() {
   try {
-    const r = await fetch(api("/lesson"), { cache: "no-store" }); if (!r.ok) return;
+    const since = lessonFile ? "?since=" + encodeURIComponent(String(lessonMtime)) : "";
+    const r = await fetch(api("/lesson" + since), { cache: "no-store" }); if (!r.ok) return;
     const j = await r.json();
     if (!j.file) return;
-    if (j.file !== lessonFile) { lessonFile = j.file; $("title").textContent = j.title.replace(/-/g, " "); }
-    if (j.mtime === lessonMtime) return;
+    if (j.file !== lessonFile) { lessonFile = j.file; lessonMtime = 0; $("title").textContent = j.title.replace(/-/g, " "); if (j.same) return; }
+    if (j.same || j.mtime === lessonMtime) return;
     lessonMtime = j.mtime;
     const el = $("lesson");
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-    el.innerHTML = renderLesson(j.markdown.replace(/#w=\d+\)/g, ")"));
-    try { if (window.mermaid) { mermaid.initialize({ startOnLoad: false, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" }); await mermaid.run({ nodes: el.querySelectorAll("pre.mermaid") }); } } catch {}
+    const added = patchLesson(el, renderLesson(j.markdown.replace(/#w=\d+\)/g, ")")));
+    const fresh = added.flatMap((s) => [...s.querySelectorAll("pre.mermaid")]);
+    try { if (window.mermaid && fresh.length) { mermaid.initialize({ startOnLoad: false, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" }); await mermaid.run({ nodes: fresh }); } } catch {}
     if (nearBottom) el.scrollTop = el.scrollHeight;
   } catch {}
 }

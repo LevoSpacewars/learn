@@ -604,12 +604,16 @@ export default function phoneWork(pi: ExtensionAPI) {
 				const file = (globalThis as any).__learnLogFile as string | null | undefined;
 				const cwd = latestCtx?.cwd ?? process.cwd();
 				if (!file || !fs.existsSync(file)) return json(res, 200, { file: null, markdown: "", mtime: 0 });
+				// ?since=<mtime> from the page's last fetch: unchanged notes cost a stat, not 60 KB every 2 s.
+				const mtime = fs.statSync(file).mtimeMs;
+				const rel = path.relative(cwd, file), title = path.basename(file, ".md");
+				if (u.searchParams.get("since") === String(mtime)) return json(res, 200, { file: rel, title, mtime, same: true });
 				const raw = fs.readFileSync(file, "utf8");
 				const markdown = raw.replace(/!\[\[([^\]|]+)(?:\|(\d+))?\]\]/g, (m, name: string, w?: string) => {
 					const rel = findEmbed(cwd, name.trim());
 					return rel ? `![${name}](/file?p=${encodeURIComponent(rel)}&t=${encodeURIComponent(token)}${w ? `#w=${w}` : ""})` : m;
 				});
-				return json(res, 200, { file: path.relative(cwd, file), title: path.basename(file, ".md"), markdown, mtime: fs.statSync(file).mtimeMs });
+				return json(res, 200, { file: rel, title, markdown, mtime });
 			}
 			if (req.method === "GET" && u.pathname === "/book") {
 				// A lesson's book (readings only, no cards): the picker list plus one book's markdown.
