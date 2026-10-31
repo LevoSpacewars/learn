@@ -1,0 +1,1128 @@
+{
+	"version": 2,
+	"cards": [
+		{
+			"criterionSessions": 2,
+			"graduated": false,
+			"id": "cmv2ru074a346",
+			"front": "1000 amide sites. In each time slice, 30% of the sites that are STILL unexchanged exchange. After 2 slices: how many are unexchanged, what fraction is exchanged, and what does the factor 0.7 stand for?",
+			"back": "Method: each slice multiplies the unexchanged count by the survival factor (1 − p) = 0.7, i.e. the fraction of still-unexchanged sites that stay unexchanged through one slice. After 2 slices: 1000 × 0.7^2 = 490 unexchanged. Exchanged = 1 − 0.49 = 0.51 (510 sites). A product of (1 − p) factors is always the SURVIVING fraction; exchanged is 1 minus it.",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-10T19:12:24.448Z",
+			"fsrs": {
+				"due": "2026-11-07T19:51:52.629Z",
+				"stability": 19.89210157,
+				"difficulty": 2.11121424,
+				"elapsed_days": 6,
+				"scheduled_days": 21,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-17T19:51:52.629Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T17:47:54.877Z",
+					"rating": "good",
+					"session": "smv4448zp86x7",
+					"check": "problem",
+					"modality": "typed",
+					"latencyMs": 196986,
+					"confidence": 75
+				},
+				{
+					"at": "2026-10-17T19:51:52.629Z",
+					"rating": "good",
+					"session": "smvcsvpb2ptnp",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 280988,
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smvcsvpb2ptnp"
+		},
+		{
+			"criterionSessions": 2,
+			"graduated": false,
+			"id": "cmv2ywpisxi19",
+			"front": "A site exchanges with rate $k$. In a tiny slice of width $dt$, what is $k\\,dt$ the probability of, and for which sites does it apply?",
+			"back": "$k\\,dt$ is the probability that a site which is still unexchanged at the start of the slice exchanges during that slice. It applies only to the current survivors, not the original population. Reason: $k$ = (number leaving)/(number present × time), so $k\\,dt$ = fraction of the present pool that leaves.",
+			"kind": "recall",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-10T22:30:27.892Z",
+			"fsrs": {
+				"due": "2026-11-04T20:17:23.860Z",
+				"stability": 19.89210157,
+				"difficulty": 2.11121424,
+				"elapsed_days": 6,
+				"scheduled_days": 18,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-17T20:17:23.860Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T17:51:11.404Z",
+					"rating": "good",
+					"session": "smv4448zp86x7",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 81206,
+					"confidence": 80
+				},
+				{
+					"at": "2026-10-17T20:17:23.860Z",
+					"rating": "good",
+					"session": "smvcsvpb2ptnp",
+					"check": "recall",
+					"modality": "photo",
+					"latencyMs": 698779,
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smvcsvpb2ptnp"
+		},
+		{
+			"criterionSessions": 2,
+			"graduated": false,
+			"id": "cmv2ywpis2e5p",
+			"front": "Tube of $N_0$ unexchanged sites, rate $k$, slice width $dt$. Compute the number exchanging in slice 1, slice 2 and slice 3, and the survivors after each. (Example: $N_0 = 500$, $k = 4$ per s, $dt = 0.05$ s.)",
+			"back": "Method: $k\\,dt$ = per-slice fraction of the CURRENT pool that exchanges. Each slice: exchanged $= k\\,dt \\times U_{\\text{start}}$, survivors $= U_{\\text{start}} - \\text{exchanged} = U_{\\text{start}}(1-k\\,dt)$. Example: $k\\,dt = 0.2$; slice 1: $100$ exchange, $400$ left; slice 2: $80$, $320$ left; slice 3: $64$, $256$ left. Survivors after $n$ slices $= N_0 (1-k\\,dt)^n$.",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-10T22:30:27.892Z",
+			"fsrs": {
+				"due": "2026-10-22T04:12:11.967Z",
+				"stability": 2.29762405,
+				"difficulty": 8.88154146,
+				"elapsed_days": 8,
+				"scheduled_days": 3,
+				"reps": 5,
+				"lapses": 1,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-19T04:12:11.967Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T18:45:08.796Z",
+					"rating": "hard",
+					"note": "The exchange counts per slice are never given; only survivors are shown. Slice 3 is also truncated to $409$ rather than $409.6$.",
+					"session": "smv4448zp86x7",
+					"check": "problem",
+					"modality": "typed",
+					"latencyMs": 151438,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-11T19:33:32.710Z",
+					"rating": "again",
+					"note": "No attempt: neither the exchanged-in-slice column nor the survivors-after-slice column was filled for any slice.",
+					"session": "smv4448zp86x7",
+					"check": "problem",
+					"modality": "typed",
+					"latencyMs": 32015,
+					"confidence": 0
+				},
+				{
+					"at": "2026-10-11T19:33:52.365Z",
+					"rating": "hard",
+					"note": "Override again→hard: learner declined the retry to end the session; not a knowledge miss. Earlier this session the method was correct, only the exchanged column was omitted.",
+					"session": "smv4448zp86x7",
+					"modality": "typed"
+				},
+				{
+					"at": "2026-10-11T19:40:26.059Z",
+					"rating": "good",
+					"session": "smv4448zp86x7",
+					"check": "problem",
+					"modality": "typed",
+					"latencyMs": 121970,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-19T04:12:11.967Z",
+					"rating": "good",
+					"session": "smveq1sdd5avz",
+					"check": "flaw",
+					"modality": "photo",
+					"latencyMs": 281180,
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smveq1sdd5avz"
+		},
+		{
+			"criterionSessions": 2,
+			"graduated": false,
+			"id": "cmv2ywpisp0q3",
+			"front": "Why is the fraction still unexchanged after two slices $(1-k\\,dt)^2$ and not $1 - 2k\\,dt$ or $(k\\,dt)^2$?",
+			"back": "Each slice, a fraction $1-k\\,dt$ of the sites present at its start survive. Surviving both slices means surviving slice 1 and then slice 2, applied to the pool slice 1 left behind: $(1-k\\,dt)(1-k\\,dt)$. $(k\\,dt)^2$ would be 'exchanged twice', impossible; $1-2k\\,dt$ ignores that the second slice acts on a smaller pool.",
+			"kind": "recall",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-10T22:30:27.892Z",
+			"fsrs": {
+				"due": "2026-10-24T20:54:43.478Z",
+				"stability": 7.09419811,
+				"difficulty": 6.72239265,
+				"elapsed_days": 0,
+				"scheduled_days": 7,
+				"reps": 4,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-17T20:54:43.478Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T19:24:35.190Z",
+					"rating": "hard",
+					"note": "No reason is given for why $(1-k\\,dt)^2$ is exact.",
+					"session": "smv4448zp86x7",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 110092,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-11T19:26:16.002Z",
+					"rating": "good",
+					"note": "Override: grader penalised missing justification for A, which the prompt did not ask for. A, B, C all correctly identified; learner then supplied the sequential-survival reason for A in chat.",
+					"session": "smv4448zp86x7",
+					"modality": "typed",
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-17T20:54:35.837Z",
+					"rating": "hard",
+					"note": "No reason is given for why $(1-k\\,dt)^2$ is correct (survival of slice 1, then of slice 2 applied to what slice 1 left).",
+					"session": "smvcsvpb2ptnp",
+					"check": "recall",
+					"modality": "photo",
+					"latencyMs": 328294,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-17T20:54:43.478Z",
+					"rating": "good",
+					"note": "Override: the prompt did not ask to justify A; A, B (\"incorrect expansion of a\" = first-order truncation), C all correctly identified. Same pattern as last session; card front should not demand justification of A separately.",
+					"session": "smvcsvpb2ptnp",
+					"modality": "photo",
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smvcsvpb2ptnp"
+		},
+		{
+			"criterionSessions": 1,
+			"graduated": false,
+			"id": "cmv30ls598ae3",
+			"front": "From the one-slice rule $U_{\\text{new}} = U - k\\,dt\\,U$, derive $\\frac{dU}{dt} = -kU$ and say why the ratio $(U_{\\text{new}}-U)/dt$ does not vanish as $dt \\to 0$.",
+			"back": "Subtract $U$: $U_{\\text{new}} - U = -k\\,dt\\,U$ (keep the minus: survivors fall). Divide by $dt$: $(U_{\\text{new}}-U)/dt = -kU$, exactly, for every $dt$, because the numerator contains $dt$ as a factor and it cancels. As $dt \\to 0$ the left side is by definition $dU/dt$. Meaning: survivors vanish at a speed proportional to their number. Example: $U=1000$, $k=2$: ratio is $-2000$/s whether $dt = 0.05$ or $0.000001$.",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-10T23:17:57.309Z",
+			"fsrs": {
+				"due": "2026-10-14T19:32:39.154Z",
+				"stability": 1.2931,
+				"difficulty": 5.10228691,
+				"elapsed_days": 0,
+				"scheduled_days": 3,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-11T19:32:39.154Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T19:31:00.736Z",
+					"rating": "hard",
+					"note": "The jump from $U_n - U = -k\\,dt\\,U$ straight to $\\frac{dU}{dt} = -kU$ omits dividing by $dt$ (giving $\\frac{U_n - U}{dt} = -kU$) and taking $dt \\to 0$.",
+					"session": "smv4448zp86x7",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 254411,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-11T19:32:39.154Z",
+					"rating": "good",
+					"note": "Override hard→good: paper skipped the explicit divide-by-dt line and wrote \"change the same amount\"; in chat he gave the correct reason (RHS −kU independent of dt). Watch the \"same amount\" phrasing.",
+					"session": "smv4448zp86x7",
+					"modality": "photo",
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smv4448zp86x7"
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv30ls59idxh",
+			"front": "Why is the survivor fraction after time $t$ equal to $e^{-kt}$ rather than $1 - kt$? Where does the $e$ come from?",
+			"back": "Exact slice answer: $(1-k\\,dt)^n$ with $n = t/dt$ slices, i.e. $(1 - kt/n)^n$, which tends to $e^{-kt}$ as $n \\to \\infty$ (e.g. $0.999^{1000} \\approx 0.368 = e^{-1}$). $1 - kt$ is the single-fat-slice answer: it bills $k\\,dt$ against the starting pool for the whole stretch while the pool actually drains inside the slice, so it over-removes and goes negative past $t = 1/k$. Only infinitely thin slices, rebilling against the current pool, get it right; that limit is $e^{-kt}$. Check: $\\frac{d}{dt}e^{-kt} = -k e^{-kt}$ satisfies $dU/dt = -kU$.",
+			"kind": "recall",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-10T23:17:57.309Z",
+			"fsrs": {
+				"due": "2026-10-15T03:55:29.145Z",
+				"stability": 1.54767843,
+				"difficulty": 7.60420977,
+				"elapsed_days": 2,
+				"scheduled_days": 2,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-13T03:55:29.145Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T18:35:17.743Z",
+					"rating": "again",
+					"note": "The answer never explains why $1-kt$ fails or where $e$ comes from. It solves $\\frac{dU}{dt}=-kU$ to get $e^{-kt}$ without connecting this to compounding $(1-kt/n)^n$ or its $n\\to\\infty$ limit.",
+					"session": "smv4448zp86x7",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 1243020,
+					"confidence": 65
+				},
+				{
+					"at": "2026-10-13T03:55:29.145Z",
+					"rating": "hard",
+					"note": "In (a), 'many small slices' is given without saying each slice removes $k\\,dt$ of the current survivors rather than of the original pool.",
+					"session": "smv60dwvarelq",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 313200,
+					"confidence": 100
+				}
+			]
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv326d2ch3qr",
+			"front": "For first-order exchange with rate $k$, what are the three quantities $1 - e^{-kt}$, $k e^{-kt}$ and $1/k$, and which of them can exceed 1?",
+			"back": "$1 - e^{-kt}$: fraction exchanged by time $t$ (cumulative probability, dimensionless, $\\le 1$). $k e^{-kt}$: density, probability PER SECOND of exchanging around time $t$; units 1/s, so it can exceed 1 (e.g. $k = 5$/s gives $f(0) = 5$/s). $1/k$: mean lifetime, $\\int_0^\\infty t\\,k e^{-kt}dt$. Only the density can exceed 1, because it is a rate, not a probability; $f(t)\\,dt$ is the probability of exchanging in the thin slice at $t$.",
+			"kind": "recall",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-11T00:01:57.156Z",
+			"fsrs": {
+				"due": "2026-10-17T02:32:21.394Z",
+				"stability": 0.45012466,
+				"difficulty": 8.90888882,
+				"elapsed_days": 0,
+				"scheduled_days": 2,
+				"reps": 3,
+				"lapses": 1,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-15T02:32:21.394Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T18:55:46.590Z",
+					"rating": "hard",
+					"note": "Calling $1/k$ the half-life. The question of which expressions can exceed 1 was also never answered.",
+					"session": "smv4448zp86x7",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 284882,
+					"confidence": 75
+				},
+				{
+					"at": "2026-10-15T02:32:15.114Z",
+					"rating": "again",
+					"note": "No units are given for any of the three expressions. The first substantive error is claiming $1/k$ can exceed 1, when the rubric expects only $ke^{-kt}$. Here $1/k = 0.25\\,\\mathrm{s}$.",
+					"session": "smv8w5bqe0f9p",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 197934,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-15T02:32:21.394Z",
+					"rating": "hard",
+					"note": "Override again→hard: all three named correctly, mean lifetime (not half-life) fixed since last time; 1/k > 1 is actually fine (it is a time). Gap: density > 1 justified by 'integrates to 1' instead of units 1/s and f(t)dt being the probability.",
+					"session": "smv8w5bqe0f9p",
+					"modality": "typed",
+					"confidence": 100
+				}
+			]
+		},
+		{
+			"criterionSessions": 2,
+			"graduated": false,
+			"id": "cmv326d2coczv",
+			"front": "A site has $k = 0.1$ per second. Someone says 'so it has a 10% chance of exchanging in the first second.' Compute the actual probability and explain the gap. (Use $e^{-0.1} \\approx 0.905$.)",
+			"back": "Actual: $1 - e^{-kt} = 1 - 0.905 = 0.095$, slightly less than $kt = 0.1$. $kt$ is the one-fat-slice answer: it charges $k\\,dt$ against the starting pool for the whole second, but the pool drains during the second, so it over-removes. Exact answer comes from infinitely thin slices rebilled against the current pool, which is $e^{-kt}$. The gap grows with $kt$: at $kt = 1$, $0.63$ vs $1$.",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-11T00:01:57.156Z",
+			"fsrs": {
+				"due": "2026-11-09T20:41:50.528Z",
+				"stability": 19.89210157,
+				"difficulty": 2.11121424,
+				"elapsed_days": 6,
+				"scheduled_days": 23,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-17T20:41:50.528Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T19:22:11.705Z",
+					"rating": "good",
+					"session": "smv4448zp86x7",
+					"check": "problem",
+					"modality": "typed",
+					"latencyMs": 243501,
+					"confidence": 80
+				},
+				{
+					"at": "2026-10-17T20:41:50.528Z",
+					"rating": "good",
+					"note": "$1-0.607$ was evaluated as $0.303$ instead of $0.393$.",
+					"session": "smvcsvpb2ptnp",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 578399,
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smvcsvpb2ptnp"
+		},
+		{
+			"criterionSessions": 1,
+			"graduated": false,
+			"id": "cmv32zj111u46",
+			"front": "Transition matrix $P$ with rows = from-state, columns = to-state. Given a count vector $v$ over the states, compute the counts after one step and say what each term in the sum counts. (Example: states $C, O$; $P = \\begin{pmatrix}0.8 & 0.2\\\\ 0.5 & 0.5\\end{pmatrix}$, $v = (800, 200)$.)",
+			"back": "$v_{\\text{new}} = v P$, row vector on the left: $(vP)_j = \\sum_i v_i P_{ij}$. Each term $v_i P_{ij}$ = sites that were in $i$ times the fraction that moved to $j$; column $j$ collects all inflows into $j$. Example: $C$: $800\\cdot0.8 + 200\\cdot0.5 = 640 + 100 = 740$ (closed that stayed + open that closed); $O$: $800\\cdot0.2 + 200\\cdot0.5 = 260$. Rows sum to 1, so the total (1000) is conserved. Writing the vector as a column and multiplying $P v$ gives the wrong answer (680, 500).",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-11T00:24:37.909Z",
+			"fsrs": {
+				"due": "2026-10-20T02:08:55.447Z",
+				"stability": 6.0425113,
+				"difficulty": 6.72894743,
+				"elapsed_days": 0,
+				"scheduled_days": 5,
+				"reps": 3,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-15T02:08:55.447Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-11T18:11:10.550Z",
+					"rating": "hard",
+					"note": "Part 3: the answer describes the totals $330$ and $70$ rather than the two terms $270$ and $60$ that make up the new $F$ count.",
+					"session": "smv4448zp86x7",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 1171352,
+					"confidence": 55
+				},
+				{
+					"at": "2026-10-15T02:07:23.237Z",
+					"rating": "hard",
+					"note": "In (b), the two terms are left as symbols $\\phi_{A\\to A}$ and $\\phi_{B\\to A}$ without being identified as $540$ and $160$. Separately, the boxed B count in (a) is illegible and could read $700$ instead of $300$.",
+					"session": "smv8w5bqe0f9p",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 413067,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-15T02:08:55.447Z",
+					"rating": "good",
+					"note": "Override hard→good: page 1 showed 0.9·600 + 0.4·400 explicitly, so the terms were numerically present; grader penalised the split between (a) and (b) and an unclear digit. Learner frustrated by the follow-up.",
+					"session": "smv8w5bqe0f9p",
+					"modality": "photo",
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smv8w5bqe0f9p"
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv48ugyeqqgy",
+			"front": "Three-state chain $C$ (closed), $O$ (open), $X$ (exchanged, absorbing), rows = FROM. Given $P$ and a count vector $v$, compute $vP$ and explain why the total is conserved but can still hide an error. (Example: $P = \\begin{pmatrix}0.9&0.1&0\\\\0.6&0.3&0.1\\\\0&0&1\\end{pmatrix}$, $v=(500,300,200)$.)",
+			"back": "Row vector on the left: entry $j$ of $vP$ sums $v_i P_{ij}$ over all FROM-states $i$, i.e. every inflow into $j$. Example: $C' = 450+180 = 630$, $O' = 50+90 = 140$, $X' = 0 + 30 + 200 = 230$ (the 30 = open sites that exchanged; $X$ row $(0,0,1)$ means nothing leaves $X$). Total 1000 is conserved because each row of $P$ sums to 1, so the total check only catches errors that don't offset: re-read each column entry against the matrix.",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-11T19:56:25.814Z",
+			"fsrs": {
+				"due": "2026-10-15T03:15:02.519Z",
+				"stability": 1.2931,
+				"difficulty": 5.11217071,
+				"elapsed_days": 0,
+				"scheduled_days": 2,
+				"reps": 1,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-13T03:15:02.519Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-13T03:15:02.519Z",
+					"rating": "hard",
+					"note": "Part (b): the justification appeals to the transpose having 'the same conservation property' rather than to row sums of $P$ equalling 1 and to offsetting errors in entries.",
+					"session": "smv60dwvarelq",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 5961187,
+					"confidence": 70
+				}
+			]
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv4a4cdgkwzl",
+			"front": "Two-state chain $C \\rightleftharpoons O$ with per-step probabilities $p$ ($C \\to O$) and $q$ ($O \\to C$). Find the stationary split $\\pi$ and say what 'stationary' means for individual sites. (Example: $p = 0.2$, $q = 0.5$.)",
+			"back": "Stationary = the step rule maps the distribution to itself, $\\pi P = \\pi$, i.e. flows balance: sites leaving $C$ equal sites returning, $p\\,\\pi_C = q\\,\\pi_O$, so $\\pi_C/\\pi_O = q/p$. Example: $\\pi_C/\\pi_O = 2.5$, $\\pi = (5/7, 2/7) \\approx (0.714, 0.286)$. Individual sites keep flipping; only the counts are fixed. $\\pi_O/\\pi_C = K_{op}$ in HDX.",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-11T20:32:06.052Z",
+			"fsrs": {
+				"due": "2026-10-17T02:44:28.518Z",
+				"stability": 1.88678762,
+				"difficulty": 6.40211507,
+				"elapsed_days": 1,
+				"scheduled_days": 3,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-14T02:44:28.518Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-13T03:41:11.675Z",
+					"rating": "again",
+					"note": "Second row of $P$ is written as $(0.7, 0.3)$, but an open site closes with probability $0.3$, so the row should be $(0.3, 0.7)$. Then $\\pi$ is computed by averaging columns, $\\pi_C = \\frac{0.9+0.7}{2}$, which is not a stationarity condition.",
+					"session": "smv60dwvarelq",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 325747,
+					"confidence": 50
+				},
+				{
+					"at": "2026-10-14T02:44:28.518Z",
+					"rating": "good",
+					"note": "Used flow balance k_op C = k_cl O unprompted in the EX2 derivation (rate form), correct.",
+					"session": "smv7g5ctcl1ic",
+					"check": "problem",
+					"modality": "implicit"
+				}
+			]
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv4a4cdglubp",
+			"front": "How does the rate matrix $Q$ arise from the step matrix $P$, and why do the rows of $Q$ sum to zero?",
+			"back": "Over a tiny slice, each jump $i \\to j$ has probability $k_{ij}\\,dt$ (the rate definition), so $P(dt) = I + Q\\,dt$ with off-diagonal $Q_{ij} = k_{ij}$ and diagonal $Q_{ii} = -\\sum_{j \\ne i} k_{ij}$ (minus total exit rate). Rows of $P$ sum to 1, so rows of $Q\\,dt = P - I$ sum to 0. $Q$ is independent of $dt$; it is the chain itself. Master equation: $dv/dt = vQ$, the matrix version of $dU/dt = -kU$.",
+			"kind": "recall",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-11T20:32:06.052Z",
+			"fsrs": {
+				"due": "2026-10-27T04:06:59.884Z",
+				"stability": 7.08447622,
+				"difficulty": 6.74045952,
+				"elapsed_days": 6,
+				"scheduled_days": 8,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-19T04:06:59.884Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-13T03:22:44.960Z",
+					"rating": "hard",
+					"note": "$Q_{ii}$ is described as the rate of jumping back into state $i$ ($i \\to i$).",
+					"session": "smv60dwvarelq",
+					"check": "recall",
+					"modality": "photo",
+					"latencyMs": 317015,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-19T04:06:59.884Z",
+					"rating": "hard",
+					"note": "The boxed formula $P(dt) = Q\\,dt$ omits the identity: it should be $P(dt) = I + Q\\,dt$.",
+					"session": "smveq1sdd5avz",
+					"check": "recall",
+					"modality": "photo",
+					"latencyMs": 640290,
+					"confidence": 65
+				}
+			]
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv4a4cdgnm3v",
+			"front": "Write the rate matrix $Q$ for the HDX chain $C \\rightleftharpoons O \\to X$ (rates $k_{op}$, $k_{cl}$, $k_{ch}$; $X$ absorbing) and read off $dX/dt$ from $dv/dt = vQ$.",
+			"back": "Rows = FROM, order $C,O,X$: $Q = \\begin{pmatrix} -k_{op} & k_{op} & 0 \\\\ k_{cl} & -(k_{cl}+k_{ch}) & k_{ch} \\\\ 0 & 0 & 0\\end{pmatrix}$. The $O$ diagonal is minus the total exit rate (two exits). The $X$ row is zero because nothing leaves $X$. The $X$ column of $vQ$ gives $dX/dt = k_{ch}\\,O(t)$: exchange only happens from the open state. $vQ$ is a row vector of three derivatives, not a sum.",
+			"kind": "problem",
+			"topic": "let-s-continue-from-the-last-lesson",
+			"lesson": "lessons/let-s-continue-from-the-last-lesson.md",
+			"created": "2026-10-11T20:32:06.052Z",
+			"fsrs": {
+				"due": "2026-10-15T03:33:12.693Z",
+				"stability": 1.2931,
+				"difficulty": 5.11217071,
+				"elapsed_days": 0,
+				"scheduled_days": 2,
+				"reps": 1,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-13T03:33:12.693Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-13T03:33:12.693Z",
+					"rating": "hard",
+					"note": "Part (a), third row: $Q_{XX} = 1$; the absorbing state's row must be $(0, 0, 0)$.",
+					"session": "smv60dwvarelq",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 256231,
+					"confidence": 100
+				}
+			]
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv7i77frz3qs",
+			"front": "Chain $C \\rightleftharpoons O \\to X$ with $k_{op} = 1$, $k_{cl} = 100$, $k_{ch} = 10$ per second (closing much faster than exchange). Derive $k_{obs}$ from $dX/dt = k_{ch} O$, stating what fixes $O$ and why.",
+			"back": "Method: an open site exchanges with share $k_{ch}/(k_{cl}+k_{ch}) = 10/110 \\approx 0.09$ per opening, so it hops $C \\rightleftharpoons O$ about eleven times per leak; the pair settles to flow balance $k_{op}C = k_{cl}O$, i.e. $O = K_{op} C \\approx K_{op} U$ with $K_{op} = k_{op}/k_{cl} = 0.01$. Then $dX/dt = k_{ch} K_{op} U$, so $k_{obs} = K_{op} k_{ch} = 0.1$ per s. This is EX2.",
+			"kind": "problem",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-14T02:41:35.079Z",
+			"fsrs": {
+				"due": "2026-10-17T02:24:55.423Z",
+				"stability": 1.2931,
+				"difficulty": 5.11217071,
+				"elapsed_days": 0,
+				"scheduled_days": 2,
+				"reps": 1,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-15T02:24:55.423Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-15T02:24:55.423Z",
+					"rating": "hard",
+					"note": "In (b), the boxed line $\\frac{dX}{dt} = \\frac{U}{25} = k_{obs}$ equates $k_{obs}$ with $U/25$ instead of identifying $k_{obs} = 1/25 = 0.04\\ \\text{s}^{-1}$. Earlier, in (a), the balance is used as $O/C = k_{op}/k_{cl}$ but never named as the flow balance $k_{op}C = k_{cl}O$.",
+					"session": "smv8w5bqe0f9p",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 829134,
+					"confidence": 100
+				}
+			]
+		},
+		{
+			"criterionSessions": 1,
+			"graduated": false,
+			"id": "cmv7i77frzooo",
+			"front": "In $C \\rightleftharpoons O \\to X$, two inequalities often hold: $k_{op} \\ll k_{cl}$ and $k_{ch} \\ll k_{cl}$. Which one is the EX2 condition, and what does the other one do?",
+			"back": "$k_{ch} \\ll k_{cl}$ is the EX2 condition: the exchange share per opening $k_{ch}/(k_{cl}+k_{ch})$ is small, so the $C \\rightleftharpoons O$ hop repeats many times before a leak and the pair settles to its balance. $k_{op} \\ll k_{cl}$ only makes $O$ small ($C \\approx U$); it says nothing about settling. Same $k_{op}, k_{cl}$ with $k_{ch}$ raised from 10 to $10^4$ flips EX2 to EX1 while $k_{op} \\ll k_{cl}$ stays true.",
+			"kind": "recall",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-14T02:41:35.079Z",
+			"fsrs": {
+				"due": "2026-10-20T19:46:48.573Z",
+				"stability": 2.3065,
+				"difficulty": 2.11810397,
+				"elapsed_days": 0,
+				"scheduled_days": 3,
+				"reps": 1,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-17T19:46:48.573Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-17T19:46:48.573Z",
+					"rating": "good",
+					"session": "smvcsvpb2ptnp",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 410944,
+					"confidence": 65
+				}
+			],
+			"lastCriterionSession": "smvcsvpb2ptnp"
+		},
+		{
+			"criterionSessions": 1,
+			"graduated": false,
+			"id": "cmv7jh9ewkt6d",
+			"front": "EX1 limit of $C \\rightleftharpoons O \\to X$: what is $k_{obs}$, which inequality does it need, and what happens to $k_{obs}$ if instead $k_{cl} = k_{ch}$?",
+			"back": "$k_{obs} = k_{op}$, needing $k_{ch} \\gg k_{cl}$: an open site exchanges before it can close, so every opening is a one-way trip $C \\to O \\to X$ and $X$ grows at the opening rate. In general $k_{obs} \\approx k_{op} \\cdot k_{ch}/(k_{cl}+k_{ch})$, the opening rate times the exchange share per opening; with $k_{cl} = k_{ch}$ that share is $1/2$, so $k_{obs} \\approx k_{op}/2$.",
+			"kind": "recall",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-14T03:17:23.816Z",
+			"fsrs": {
+				"due": "2026-10-20T20:05:22.144Z",
+				"stability": 2.3065,
+				"difficulty": 2.11810397,
+				"elapsed_days": 0,
+				"scheduled_days": 3,
+				"reps": 1,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-17T20:05:22.144Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-17T20:05:22.144Z",
+					"rating": "good",
+					"session": "smvcsvpb2ptnp",
+					"check": "recall",
+					"modality": "photo",
+					"latencyMs": 783185,
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smvcsvpb2ptnp"
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv90ciq4v250",
+			"front": "Chain $C \\rightleftharpoons O \\to X$ with $k_{op} = 2$, $k_{cl} = 30$, $k_{ch} = 70$ per second. (1) Write $dO/dt$ as inflow minus outflow with numbers. (2) Give the steady-state $O$ as a multiple of $C$. (3) State the one rate comparison that justifies $dO/dt \\approx 0$.",
+			"back": "Method: inflow to $O$ is openings, $k_{op}C$; outflow is every exit from $O$, $(k_{cl}+k_{ch})O$. So $dO/dt = 2C - 100\\,O$. Set to zero: $O = \\frac{k_{op}}{k_{cl}+k_{ch}}C = 0.02\\,C$. Justified because the total exit rate from $O$ ($100$/s, lifetime 0.01 s) is much larger than the inflow rate constant $k_{op} = 2$/s, so $O$ settles far faster than $C$ changes. Which exit is bigger ($k_{cl}$ or $k_{ch}$) does not matter; only their sum versus $k_{op}$. Watch the arrow directions: $k_{op}$ feeds $O$, $k_{cl}$ and $k_{ch}$ drain it.",
+			"kind": "problem",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-15T03:57:22.252Z",
+			"fsrs": {
+				"due": "2026-10-20T18:48:28.832Z",
+				"stability": 1.21921728,
+				"difficulty": 7.60420977,
+				"elapsed_days": 1,
+				"scheduled_days": 2,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-18T18:48:28.832Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-17T20:31:40.595Z",
+					"rating": "again",
+					"note": "$\\frac{dO}{dt} = \\frac{dV}{dt}Q\\big|_O = 5\\frac{dC}{dt} - 250\\frac{dO}{dt}$: the product should be $VQ$ (populations), not $\\frac{dV}{dt}Q$, which should give $5C - 250\\,O$.",
+					"session": "smvcsvpb2ptnp",
+					"check": "problem",
+					"modality": "photo",
+					"latencyMs": 821763,
+					"confidence": 90
+				},
+				{
+					"at": "2026-10-18T18:48:28.832Z",
+					"rating": "hard",
+					"note": "Part (3): the comparison is stated as $k_{op} \\ll k_{cl}$ instead of $k_{op} \\ll k_{cl}+k_{ch}$, and the reason why it matters is not given.",
+					"check": "problem",
+					"modality": "typed",
+					"latencyMs": 1228391,
+					"confidence": 70
+				}
+			]
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv90yg1jmw9b",
+			"front": "For $C \\rightleftharpoons O \\to X$, write $k_{obs}$ as (opening rate) × (fraction of openings that exchange). What is that fraction, and why is it not $k_{ch}/k_{cl}$?",
+			"back": "$k_{obs} \\approx k_{op}\\cdot\\dfrac{k_{ch}}{k_{cl}+k_{ch}}$. The fraction is the exchange exit over the *total* exits from $O$ (closing plus exchange). $k_{ch}/k_{cl}$ is only the EX2 approximation to it, valid when $k_{ch} \\ll k_{cl}$; in general it can exceed 1, which is impossible for a fraction, and would give $k_{obs} > k_{op}$, impossible since a site cannot exchange faster than it opens. Limits: $k_{ch} \\ll k_{cl}$ gives $K_{op}k_{ch}$ (EX2); $k_{ch} \\gg k_{cl}$ gives $k_{op}$ (EX1). Full form with the $O$ correction: $k_{op}k_{ch}/(k_{op}+k_{cl}+k_{ch})$.",
+			"kind": "recall",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-15T04:14:25.207Z",
+			"fsrs": {
+				"due": "2026-10-22T18:27:31.638Z",
+				"stability": 4.54602939,
+				"difficulty": 5.10228691,
+				"elapsed_days": 1,
+				"scheduled_days": 4,
+				"reps": 2,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-18T18:27:31.638Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-17T20:48:39.281Z",
+					"rating": "hard",
+					"note": "The explanation never identifies $k_{cl}+k_{ch}$ as the total exit rate from O. It also never says why $k_{ch}/k_{cl}$ fails in general: it holds only when $k_{ch} \\ll k_{cl}$ and can otherwise exceed 1.",
+					"session": "smvcsvpb2ptnp",
+					"check": "recall",
+					"modality": "photo",
+					"latencyMs": 380510,
+					"confidence": 100
+				},
+				{
+					"at": "2026-10-18T18:27:31.638Z",
+					"rating": "good",
+					"check": "recall",
+					"modality": "typed",
+					"latencyMs": 77086956,
+					"confidence": 100
+				}
+			]
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv90yg1jfy2r",
+			"front": "$C \\rightleftharpoons O \\to X$ with $k_{op} = 1$, $k_{cl} = 200$, $k_{ch} = 50$ per second. Compute $k_{obs}$ from the general formula, then say which limit (EX1 or EX2) it is closer to and what each limiting formula would have given.",
+			"back": "Method: share of openings that exchange $= k_{ch}/(k_{cl}+k_{ch}) = 50/250 = 0.2$, so $k_{obs} = k_{op}\\times 0.2 = 0.2$/s (three-term: $50/251 \\approx 0.199$/s). Closer to EX2 since $k_{ch} < k_{cl}$: EX2 formula $K_{op}k_{ch} = (1/200)(50) = 0.25$/s (20% high because $k_{ch}$ is not ≪ $k_{cl}$); EX1 formula $k_{op} = 1$/s (far off). The general formula interpolates between them.",
+			"kind": "problem",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-15T04:14:25.207Z",
+			"fsrs": {
+				"due": "2026-10-15T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 1,
+			"graduated": false,
+			"id": "cmv91qdk7e2ma",
+			"front": "Raising pH moves an amide from EX2 toward EX1. Which of $k_{op}, k_{cl}, k_{ch}$ does pH change, by how much per unit, and why does that change the regime in that direction?",
+			"back": "Only $k_{ch}$: above pH ~3 exchange is base-catalysed, $k_{ch} \\propto [\\mathrm{OH^-}]$, so ten-fold per pH unit. $k_{op}$ and $k_{cl}$ are protein motions and stay fixed. The regime is the race between the two exits from $O$: share of openings that exchange $= k_{ch}/(k_{cl}+k_{ch})$. Raising $k_{ch}/k_{cl}$ makes exchange win before closing, the share $\\to 1$, $k_{obs} \\to k_{op}$ (EX1). Experimental signature: in EX2 $k_{obs}$ scales ten-fold per pH unit; in EX1 it stops responding to pH. The crossover pH is where $k_{ch} = k_{cl}$.",
+			"kind": "recall",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-15T04:36:08.359Z",
+			"fsrs": {
+				"due": "2026-10-20T21:02:06.391Z",
+				"stability": 2.3065,
+				"difficulty": 2.11810397,
+				"elapsed_days": 0,
+				"scheduled_days": 3,
+				"reps": 1,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 2,
+				"last_review": "2026-10-17T21:02:06.391Z"
+			},
+			"history": [
+				{
+					"at": "2026-10-17T21:02:06.391Z",
+					"rating": "good",
+					"session": "smvcsvpb2ptnp",
+					"check": "recall",
+					"modality": "photo",
+					"latencyMs": 413930,
+					"confidence": 100
+				}
+			],
+			"lastCriterionSession": "smvcsvpb2ptnp"
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmv91vl20vooh",
+			"front": "A segment of $N$ amides opens as a unit. Why does EX2 give a single isotope hump that slides gradually, while EX1 gives two fixed peaks that trade heights? Name the statistical ingredient and the quantity both envelopes share.",
+			"back": "Per opening, each exposed site exchanges with probability $s = k_{ch}/(k_{cl}+k_{ch})$. EX2 ($s \\ll 1$): at most one site per opening, so sites accumulate exchange independently over many openings; deuteron count is $\\mathrm{Bin}(N, 1-e^{-k_{obs}t})$, one hump sliding from 0 to $N$. EX1 ($s \\approx 1$): every opening exchanges all $N$ sites, so molecules are all-or-nothing: spikes at $+0$ and $+N$, heights $e^{-k_{op}t}$ and $1-e^{-k_{op}t}$. Ingredient: independent vs perfectly correlated coin flips. Both share the centroid $N(1-e^{-k_{obs}t})$, so centroid alone cannot distinguish them; width/shape can. Extra slowly-interconverting populations each add their own mode.",
+			"kind": "recall",
+			"topic": "m-hdx-ex1-ex2",
+			"lesson": "lessons/m-hdx-ex1-ex2.md",
+			"created": "2026-10-15T04:40:11.352Z",
+			"fsrs": {
+				"due": "2026-10-15T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmvafheoyiypm",
+			"front": "Rate matrix $Q = \\begin{pmatrix} -2 & 2 \\\\ 3 & -3 \\end{pmatrix}$ per second (rows = from). Find a left eigenvector $v$ with $vQ = 0$ and state what it represents physically and why.",
+			"back": "Method: write $(a,b)Q = (-2a+3b,\\ 2a-3b)$ and set to zero: $a = \\tfrac{3}{2}b$, so $v \\propto (3,2)$, i.e. 60%/40%. Meaning: $vQ = 0$ is the same as $\\dot p = 0$ for $p \\propto v$, so this is the stationary distribution: the one split where every flux balances ($2\\cdot 3 = 3\\cdot 2$) and nothing changes in time ($e^{0\\cdot t} = 1$). Use left eigenvectors because $p$ is a row multiplying $Q$ from the left; eigenvalues of $Q$ carry units of per second.",
+			"kind": "problem",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-linear-odes.md",
+			"created": "2026-10-16T03:48:50.722Z",
+			"fsrs": {
+				"due": "2026-10-16T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmvcsuygkts9c",
+			"front": "For $\\dot p = pQ$, suppose $p(0) = c_0\\, v$ where $v$ is a left eigenvector, $vQ = \\lambda v$, $v \\neq 0$. What is $p(t)$, and what two facts does the derivation use?",
+			"back": "$p(t) = c_0 e^{\\lambda t} v$: direction fixed, only the coefficient changes. Substitute $p = c v$: left side $\\dot c\\, v$, right side $(cv)Q = c(vQ) = \\lambda c\\, v$. Cancel the nonzero $v$: $\\dot c = \\lambda c$, so $c = c_0 e^{\\lambda t}$. Uses (1) eigenvector property $vQ = \\lambda v$, (2) scalar ODE solution.",
+			"kind": "recall",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-for-linear-odes-modes-of-the-li.md",
+			"created": "2026-10-17T19:38:50.228Z",
+			"fsrs": {
+				"due": "2026-10-18T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmvcsuygkeggy",
+			"front": "$Q = \\begin{pmatrix} -1 & 1 \\\\ 4 & -4 \\end{pmatrix}$ has left eigenvectors $(0.8, 0.2)$ with $\\lambda = 0$ and $(1,-1)$ with $\\lambda = -5$. Starting from $p(0) = (0.9, 0.1)$, write $p(t)$ exactly.",
+			"back": "Method: split $p(0)$ into eigenvectors, then multiply each piece by $e^{\\lambda t}$. $(0.9, 0.1) = (0.8, 0.2) + 0.1\\,(1,-1)$, so $p(t) = (0.8, 0.2) + 0.1\\, e^{-5t}\\,(1,-1)$. The stationary piece never changes; the zero-sum deviation decays at $5$/s. In two states every deviation between normalized populations is a multiple of $(1,-1)$, so relaxation is a single exponential.",
+			"kind": "problem",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-for-linear-odes-modes-of-the-li.md",
+			"created": "2026-10-17T19:38:50.228Z",
+			"fsrs": {
+				"due": "2026-10-18T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmvcsuygkuv78",
+			"front": "Why is the eigenvector $(1,-1)$ of a 2-state rate matrix not a population, and why do we still care about it?",
+			"back": "It has a negative entry and sums to zero, so it is a deviation (extra in A, same amount missing from B), not a distribution. Every real start is the stationary split plus a multiple of it, and that multiple decays as $e^{\\lambda t}$ with its own eigenvalue, so it is the relaxation mode. Scalar multiples (e.g. $(-2,2)$) are the same eigenvector with the same eigenvalue.",
+			"kind": "recall",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-for-linear-odes-modes-of-the-li.md",
+			"created": "2026-10-17T19:38:50.228Z",
+			"fsrs": {
+				"due": "2026-10-18T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmvepz9hm8z3p",
+			"front": "Superposition for $\\dot p = pQ$: given left eigenvectors $v_i Q = \\lambda_i v_i$ that span the space, state the two-step recipe for $p(t)$ from an arbitrary $p(0)$, and name the two facts that make it valid.",
+			"back": "(1) Expand $p(0) = \\sum_i c_i v_i$ (solve the linear system for the $c_i$). (2) $p(t) = \\sum_i c_i e^{\\lambda_i t} v_i$. Valid because (a) linearity: $(\\sum c_i v_i)Q = \\sum c_i (v_i Q)$, so modes evolve separately; (b) each mode obeys $\\dot c_i = \\lambda_i c_i$ (eigenvector property), solved by $c_i e^{\\lambda_i t}$.",
+			"kind": "recall",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-linear-odes.md",
+			"created": "2026-10-19T03:53:44.650Z",
+			"fsrs": {
+				"due": "2026-10-19T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmvepz9hnp5ue",
+			"front": "Substitute $p = c_1 v_1 + c_2 v_2$ into $\\dot p = pQ$, where $v_1 Q = \\lambda_1 v_1$ and $v_2 Q = \\lambda_2 v_2$ are independent. Derive the ODE for $c_2(t)$ and say which fact justifies each step.",
+			"back": "Right side: $pQ = c_1(v_1Q) + c_2(v_2Q) = \\lambda_1 c_1 v_1 + \\lambda_2 c_2 v_2$ (linearity, then eigenvector property). Left side: $\\dot p = \\dot c_1 v_1 + \\dot c_2 v_2$ (the $v_i$ are constant). Equate and match coefficients, allowed because $v_1, v_2$ are linearly independent so the expansion is unique: $\\dot c_2 = \\lambda_2 c_2$, hence $c_2(t) = c_2(0) e^{\\lambda_2 t}$. Example: $Q = ((-2,2),(1,-1))$, $v_2 = (1,-1)$, $\\lambda_2 = -3$ gives $\\dot c_2 = -3 c_2$.",
+			"kind": "problem",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-linear-odes.md",
+			"created": "2026-10-19T03:53:44.650Z",
+			"fsrs": {
+				"due": "2026-10-19T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"criterionSessions": 0,
+			"graduated": false,
+			"id": "cmvepz9hnvr7f",
+			"front": "A $3\\times 3$ rate matrix has only two independent left eigenvectors $v_1, v_2$. Which step of the superposition recipe fails for a $p(0)$ outside their plane, and in what sense does it fail? When is this failure guaranteed not to happen?",
+			"back": "The expansion step: no $c_1, c_2$ exist with $p(0) = c_1 v_1 + c_2 v_2$ (the component system is inconsistent, e.g. $0 = 0.2$), not merely hard to solve. The pure sum of exponentials then does not describe the solution (a $t e^{\\lambda t}$ term appears). It cannot happen when the $n$ eigenvalues are distinct: eigenvectors for distinct eigenvalues are independent and span.",
+			"kind": "recall",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-linear-odes.md",
+			"created": "2026-10-19T03:53:44.650Z",
+			"fsrs": {
+				"due": "2026-10-19T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": []
+		},
+		{
+			"id": "cmvhmivpv5i00",
+			"front": "Why does $v\\,e^{Qt} = e^{\\lambda t} v$ for a left eigenvector $v$ with $vQ = \\lambda v$? Give the one-line reason using the series $e^{Qt} = \\sum_k (Qt)^k/k!$.",
+			"back": "Applying $vQ = \\lambda v$ repeatedly gives $vQ^k = \\lambda^k v$, so every term of the series becomes $\\frac{(\\lambda t)^k}{k!} v$; the fixed vector factors out and the scalar series $\\sum (\\lambda t)^k/k! = e^{\\lambda t}$ remains. This is why $p(0)e^{Qt}$ with $p(0) = \\sum c_i v_i$ equals the superposition $\\sum c_i e^{\\lambda_i t} v_i$: $e^{Qt}$ is the superposition recipe written as one matrix.",
+			"kind": "recall",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-linear-odes.md",
+			"created": "2026-10-21T04:40:19.987Z",
+			"fsrs": {
+				"due": "2026-10-21T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": [],
+			"criterionSessions": 0,
+			"graduated": false
+		},
+		{
+			"id": "cmvhmivpv57ix",
+			"front": "$V$ has the left eigenvectors of $Q$ as rows, $\\Lambda$ the eigenvalues on the diagonal, so $VQ = \\Lambda V$. A colleague concludes $Q = V\\Lambda V^{-1}$ and $e^{Qt} = V e^{\\Lambda t} V^{-1}$. Right or wrong, and why?",
+			"back": "Wrong order. To isolate $Q$ from $VQ = \\Lambda V$ you must multiply on the LEFT by $V^{-1}$, because $V$ sits to the left of $Q$ and only $V^{-1}V = I$ cancels it there. So $Q = V^{-1}\\Lambda V$, $Q^k = V^{-1}\\Lambda^k V$, $e^{Qt} = V^{-1} e^{\\Lambda t} V$. The $t=0$ check (both give $I$) cannot catch the error; a row-sum or $t\\to\\infty$ check on a generic example does. ($V\\Lambda V^{-1}$ is the form for eigenvectors as COLUMNS.)",
+			"kind": "recall",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-linear-odes.md",
+			"created": "2026-10-21T04:40:19.987Z",
+			"fsrs": {
+				"due": "2026-10-21T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": [],
+			"criterionSessions": 0,
+			"graduated": false
+		},
+		{
+			"id": "cmvhmivpvqupy",
+			"front": "$Q = \\begin{pmatrix} -2 & 2 \\\\ 1 & -1 \\end{pmatrix}$ with left eigenvectors $v_1 = (1,2)$, $\\lambda_1 = 0$ and $v_2 = (1,-1)$, $\\lambda_2 = -3$. Compute $e^{Qt}$ explicitly via $V^{-1} e^{\\Lambda t} V$ and run two sanity checks.",
+			"back": "Method: $V = \\begin{pmatrix}1&2\\\\1&-1\\end{pmatrix}$, $\\det V = -3$, $V^{-1} = \\frac13\\begin{pmatrix}1&2\\\\1&-1\\end{pmatrix}$. $V^{-1}e^{\\Lambda t}$ scales COLUMN $j$ of $V^{-1}$ by $e^{\\lambda_j t}$ (equivalently $e^{\\Lambda t}V$ scales ROW $j$ of $V$). Result: $e^{Qt} = \\begin{pmatrix} \\frac13 + \\frac23 e^{-3t} & \\frac23 - \\frac23 e^{-3t} \\\\ \\frac13 - \\frac13 e^{-3t} & \\frac23 + \\frac13 e^{-3t} \\end{pmatrix}$. Checks: $t=0$ gives $I$; every row sums to 1 (the $\\lambda=0$ mode conserves probability); $t\\to\\infty$ rows $\\to (1/3, 2/3) \\propto v_1$ (stationary split); $\\frac{d}{dt}$ at $0$ equals $Q$ ($e^{Qt} \\approx I + Qt$). A row not summing to 1 means a slip.",
+			"kind": "problem",
+			"topic": "matrix-exponential-linear-odes",
+			"lesson": "lessons/matrix-exponential-linear-odes.md",
+			"created": "2026-10-21T04:40:19.987Z",
+			"fsrs": {
+				"due": "2026-10-21T12:00:00.000Z",
+				"stability": 0,
+				"difficulty": 0,
+				"elapsed_days": 0,
+				"scheduled_days": 0,
+				"reps": 0,
+				"lapses": 0,
+				"learning_steps": 0,
+				"state": 0
+			},
+			"history": [],
+			"criterionSessions": 0,
+			"graduated": false
+		}
+	]
+}

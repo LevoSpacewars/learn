@@ -1,41 +1,160 @@
 ---
 slug: let-s-continue-from-the-last-lesson
-status: unknown
-updated: 2026-10-07T05:09:51.592Z
+status: solid
+updated: 2026-10-19T04:12:11.959Z
 ---
 # HDX kinetics math (rates, Markov chains, first-order decay)
 
-**Status:** unknown
+**Status:** solid
 
-**Lesson:** [[let-s-continue-from-the-last-lesson]] (paused) — Stopped during the probe (no plan yet). Mapped so far (see this note and lessons/i-had-ai-build-an-application-for-me-and-i-wanted-.md): rate meaning = open misconception; 2x2 transition matrix correct, two-step propagation unclear; row-vector times matrix correct; first-order decay dS/dt = -kS was read as dS/dt = -k (linear vs exponential). Next: finish the probe quickly (at most 2 more questions), present the plan, start teaching from first-order decay.
+**Lesson:** [[let-s-continue-from-the-last-lesson]] (done, 4/7 nodes) — Goal reached: wrote Q for C⇌O→X and dX/dt = k_ch·O. D3 (stationary = balanced flows) and D4 (P = I + Q dt, dv/dt = vQ) were delivered expository without their checks; cards cover them. Next: the EX1/EX2 milestone, solving the master equation in the k_cl ≫ k_ch and k_cl ≪ k_ch limits.
 
-## Evidence (8, latest first)
-- 2026-10-07 recall/recall ✗ 5% (conf 70%)
-  - asked: A quantity $S(t)$ obeys $$\frac{dS}{dt} = -k\,S, \qquad S(0)=1.$$
-  - answered: photo
-  - first error: Copying the equation as dS/dt = -k, dropping the factor S on the right-hand side; this led to S = 1 - kt instead of an exponential.
-- 2026-10-07 recall/recall ◐ 70% (conf 100%)
-  - asked: Pure arithmetic, no probability. Let $$A = \begin{pmatrix} 2 & 1 \\ 0 & 3 \end{pmatrix}, \qquad \mathbf{v} = (1,\ 4) \text{ (a row vector).}$$ Compute the row vector $\mathbf{v}A$. Then say in one line what $\mathbf v A$ is in terms of the rows of $A$.
-  - answered: photo
-  - first error: Did not answer the second part: no description of vA in terms of the rows of A.
-- 2026-10-07 recall/recall ◐ 40% (conf 10%)
-  - asked: A protein flips between two conformations, **C** (closed) and **O** (open), checked once per nanosecond (discrete time). Each step: - from C: stays C with prob $0.9$, goes to O with prob $0.1$ - from O: goes to C with prob $0.5$, stays O with prob $0.5$   Work on paper and send a photo from the `/phone` page, or type it. If part of it is unfamiliar, give your best guess for that part instead of sk
-  - answered: photo
-  - first error: Part 2: the step-2 combination ('{0.9,0.1}⊗{0.9,0.1} + {0.9,0.1}⊗{0.5,0.5}') is not well-defined and is never evaluated to a final distribution.
-- 2026-10-07 recall/recall ✗
-  - asked: A protein flips between two conformations, **C** (closed) and **O** (open), checked once per nanosecond (discrete time). Each step: - from C: stays C with prob $0.9$, goes to O with prob $0.1$ - from O: goes to C with prob $0.5$, stays O with prob $0.5$
-- 2026-10-07 recall/recall ✗ 0% (conf 0%)
-  - asked: A protein flips between two conformations, **C** (closed) and **O** (open), checked once per nanosecond (discrete time). Each step: - from C: stays C with prob $0.9$, goes to O with prob $0.1$ - from O: goes to C with prob $0.5$, stays O with prob $0.5$
-  - answered: give me  phone for photo
-  - first error: No answer was provided for part 1. The submission is a request to upload a photo, not a solution.
-- 2026-10-07 recall/predict ◐ 30% (conf 50%)
-  - asked: Same setup, but now a fast site: $k = 3\ \text{s}^{-1}$. It starts unexchanged.  What is the probability it has exchanged **by** $t = 1$ s? Give a number (rough is fine) and say how you got it.
-  - answered: I took the integral of e(-3t)dt from 0 to 1. I got 1/3(1-e^-3)
-  - first error: They used e^{-3t} as the probability density instead of 3e^{-3t}. The density is missing the rate factor k.
-- 2026-10-07 quiz ✗ (conf 100%)
-  - asked: A site that hasn't exchanged yet has exchange rate $k = 0.1\ \text{s}^{-1}$. Which statement is what that rate literally means?
-  - answered: 4. In any 1 s interval, a not-yet-exchanged site exchanges with probability exactly $0.1$
-- 2026-10-07 recall/recall ◐ 40% (conf 30%)
-  - asked: A single amide hydrogen exchanges with solvent deuterium irreversibly, at a constant rate $k$ (per second). It starts unexchanged at $t=0$.  What is the probability it is **still unexchanged** at time $t$? And *why* that form — what assumption about the exchange process gives it?
-  - answered: e^(-kt). This can be derived from free energy I believe.
-  - first error: Attributes the exponential form to free energy instead of the constant-rate / memoryless assumption (dS/dt = -kS).
+## Misconceptions
+- [resolved] believed "A rate k = 0.1/s means the event has probability exactly 0.1 per second" — truth: k·dt is the probability only over a tiny dt, applied to survivors; over 1 s the probability is 1 − e^(−k) ≈ 0.095 (for 0 / against 2)
+- [resolved] believed "The density k·e^(−kt) evaluated at t is the probability of having exchanged by time t" — truth: k·e^(−kt) is probability per unit time; P(exchanged by t) = 1 − e^(−kt), which is ≤ 1 (for 1 / against 2)
+- [open] believed "The survival fraction S in dS/dt = -kS is entropy, and a change in entropy is a probability" — truth: S is just the fraction of sites still unexchanged; the k·dt rule is the definition of a rate, unrelated to entropy (for 1 / against 0)
+- [resolved] believed "To chain slices, multiply the per-slice exchange probability k·dt by itself" — truth: Multiply the per-slice survival factors (1 − k·dt); exchanged = 1 − product (for 1 / against 2)
+- [resolved] believed "The diagonal entry Q_ii of the rate matrix is the rate of jumping from state i back into state i." — truth: Q_ii = minus the total exit rate from i; it comes from (P_ii − 1)/dt, so rows of Q sum to zero. Staying is not a jump and has no rate. (for 1 / against 2)
+
+## Evidence (89, latest first)
+- 2026-10-19 recall/flaw ✓ 95% (conf 100%)
+  - asked: A colleague works this out. Tube of $N_0 = 800$ unexchanged sites, rate $k = 2$ per s, slice width $dt = 0.1$ s, so $k\,dt = 0.2$. "Slice 1: $0.2 \times 800 = 160$ exchange, $640$ survive. Slice 2: $0.2 \times 800 = 160$ exchange, $480$ survive. Slice 3: $0.2 \times 800 = 160$ exchange, $320$ survive. Survivors after $n$ slices: $N_0(1 - n k\,dt)$." Is this right? If not, where does it go wrong, …
+  - answered: photo: work-20261018-211157.png
+- 2026-10-19 recall/recall ◐ 60% (conf 65%)
+  - asked: You have a one-step transition matrix $P(dt)$ for a tiny time slice $dt$. Write $P(dt)$ in terms of a time-independent matrix $Q$. Say what the off-diagonal entries $Q_{ij}$ mean, what the diagonal entries $Q_{ii}$ are and why they have that value, and why every row of $Q$ adds up to zero.
+  - answered: photo: work-20261018-210639-1.png, work-20261018-210639-2.png
+  - first error: The boxed formula $P(dt) = Q\,dt$ omits the identity: it should be $P(dt) = I + Q\,dt$.
+- 2026-10-17 recall/recall ◐ 60% (conf 100%)
+  - asked: Sites exchange with rate $k$; split time into thin slices of width $dt$. Three candidates for the fraction still unexchanged after two slices: (A) $(1 - k dt)^2$, (B) $1 - 2 k dt$, (C) $(k dt)^2$. Which is correct, and in one line each, what is wrong with the other two?
+  - answered: photo: work-20261017-135416-1.png, work-20261017-135416-2.png
+  - first error: No reason is given for why $(1-k\,dt)^2$ is correct (survival of slice 1, then of slice 2 applied to what slice 1 left).
+- 2026-10-17 recall/problem ◐ 80% (conf 100%)
+  - asked: A site has exchange rate $k = 0.5$ per second. A colleague says: "so there is a 50% chance it exchanges within the first second." Compute the actual probability that it has exchanged by $t = 1$ s (use $e^{-0.5} \approx 0.607$), and explain in a sentence or two why the colleague's number is off and in which direction.
+  - answered: photo: work-20261017-134130.png
+  - first error: $1-0.607$ was evaluated as $0.303$ instead of $0.393$.
+- 2026-10-17 recall/recall ✓ 92% (conf 100%)
+  - asked: A deuterium-exchange site has rate constant $k$. Take an infinitesimally thin time slice of width $dt$. The quantity $k \cdot dt$ is a probability. A probability of what event, and which population of sites does it refer to: all the sites you started with, or some subset?
+  - answered: photo: work-20261017-131708.png
+- 2026-10-17 recall/problem ✓ 97% (conf 100%)
+  - asked: Start with 800 unexchanged amide sites. In each time slice, 20% of the sites that are still unexchanged at the start of that slice exchange. After 3 slices: (a) how many sites are still unexchanged, (b) what fraction of the original 800 has exchanged, (c) what does the number 0.8 stand for in your calculation?
+  - answered: photo: work-20261017-125138.png
+- 2026-10-15 recall/recall ✗ 10% (conf 100%)
+  - asked: With $k = 4$ per second: what is the value and unit of $k e^{-kt}$ at $t = 0$, and what quantity do you get when you multiply it by a thin slice $dt = 0.01$ s?
+  - answered: IT"S A PROBABILITY DENSITY. I shouldn't have to redescibe the actual definition of what that is every single time that's up for review!!!!!!!!! I'm exactly right ESPECIALLY when I said it also gives us the rate of change at any time!!!!
+  - first error: No value or unit for $k e^{-kt}$ at $t=0$ is stated, and the product with $dt = 0.01$ s is never computed or interpreted.
+- 2026-10-15 recall/recall ◐ 30% (conf 100%)
+  - asked: A single site exchanges at rate $k = 4$ per second. Three expressions: $1 - e^{-kt}$, $k e^{-kt}$, and $1/k$. For each, say what it is (name, units) and then: which of the three can be larger than 1, and why is that not a contradiction?
+  - answered: 1. 1-e^-kt is the fraction of exchanged population 2. ke^-kt is the probability density of exchanged population, which really also is also a function that returns the rate of population change at any time 3. it is the mean exchange time 2 and 3 can be greater than 1. This is not a contradiction since 1/k is just a time from the rate, and the probability denisity, when integrated from 0->inf will …
+  - first error: No units are given for any of the three expressions. The first substantive error is claiming $1/k$ can exceed 1, when the rubric expects only $ke^{-kt}$. Here $1/k = 0.25\,\mathrm{s}$.
+- 2026-10-15 recall/recall ✓ 100% (conf 100%)
+  - asked: Fill the blank: after one step the new counts $700$ and $300$ must add to $1000$ because every ______ of $P$ sums to $1$.
+  - answered: Row
+- 2026-10-15 recall/recall ✗ 0% (conf 100%)
+  - asked: Same $P$ and same start ($600$ in $A$, $400$ in $B$). Give the two numbers whose sum is the new $A$ count, and the new $B$ count. Then state the one-line check that the two new counts must pass.
+  - answered: THIS IS DUMB!!!!! MY LAST QUESTION I HAD SHOWN ALL MY WORK SO I LITERALLY HAD THE STATE NUMBER ASSOCIATED. YOU ONLY SAID TERMS AND NOT NUMBERS/SUMS
+  - first error: No attempt at the question: none of the components of the new $A$ count, the new $B$ count, or the total check is given.
+- 2026-10-15 recall/problem ◐ 60% (conf 100%)
+  - asked: Two states, $A$ and $B$. One-step transition matrix, rows = from, columns = to: $$P = \begin{pmatrix} 0.9 & 0.1 \\ 0.4 & 0.6 \end{pmatrix}$$ Right now there are $600$ sites in $A$ and $400$ in $B$. (a) How many are in $A$ and in $B$ after one step? (b) Write the new $A$ count as a sum of two terms and say in words what each of the two terms counts.
+  - answered: photo: work-20261014-190700-1.png, work-20261014-190700-2.png
+  - first error: In (b), the two terms are left as symbols $\phi_{A\to A}$ and $\phi_{B\to A}$ without being identified as $540$ and $160$. Separately, the boxed B count in (a) is illegible and could read $700$ instead of $300$.
+- 2026-10-13 recall/problem ✗ 0% (conf 0%)
+  - asked: $k = 1$ per s, $t = 1$ s, split into $n$ equal slices. Each slice removes a fraction $1/n$ of the sites *still present*. Write the survivor fraction after all $n$ slices as a single expression in $n$, and give its value for $n = 2$ and $n = 1000$ (a calculator is fine).
+  - answered: let's finis recall. This is taking way too long for me to just actually learn something new
+  - first error: No attempt: the survivor-fraction expression in $n$ is missing.
+- 2026-10-13 recall/recall ◐ 40% (conf 100%)
+  - asked: Sites exchange at rate $k = 1$ per s. A student says: "after $t = 1$ s the unexchanged fraction is $1 - k t = 0$, everything is gone." The true answer is $e^{-1} \approx 0.37$. (a) What is wrong with the student's bookkeeping, in words? (b) Show how the number $e$ appears when you do the bookkeeping correctly.
+  - answered: (a) the treated that interval of time as a single slice, when it should have been for many small slices (dt). (b) When you take the limit of n slices going to infinity the survivor relationship is e^-kt. you get this from dU/dt = -kU, and when you solve for U, you get e^-kt.
+  - first error: In (a), 'many small slices' is given without saying each slice removes $k\,dt$ of the current survivors rather than of the original pool.
+- 2026-10-13 recall/problem ✓ 100% (conf 100%)
+  - asked: Completion. Closed opens with probability $0.1$, open closes with probability $0.3$, 1000 sites. Balance condition: $0.1\,\pi_C = 0.3\,\pi_O$, so $\pi_C = 3\,\pi_O$. With $\pi_C + \pi_O = 1000$: $\pi_O = \_\_$ and $\pi_C = \_\_$.
+  - answered: photo: work-20261012-204938.png
+- 2026-10-13 recall/problem idk
+  - asked: Same chain: closed opens with probability $0.1$, open closes with probability $0.3$. Out of 1000 sites, $\pi_C$ are closed and $\pi_O$ open. Write "sites leaving $C$ this step = sites arriving in $C$ this step" as an equation in $\pi_C, \pi_O$, and solve for the split.
+- 2026-10-13 recall/problem ✗ 15% (conf 50%)
+  - asked: A two-state chain $C \rightleftharpoons O$: each step, a closed site opens with probability $0.1$ and an open site closes with probability $0.3$. (a) Find the long-run split $\pi = (\pi_C, \pi_O)$ and show the one-line condition you used to get it. (b) Once the chain has reached that split, what is an individual site doing?
+  - answered: photo: work-20261012-204054.png
+  - first error: Second row of $P$ is written as $(0.7, 0.3)$, but an open site closes with probability $0.3$, so the row should be $(0.3, 0.7)$. Then $\pi$ is computed by averaging columns, $\pi_C = \frac{0.9+0.7}{2}$, which is not a stationarity condition.
+- 2026-10-13 recall/problem ✓ 100% (conf 100%)
+  - asked: Completion. States $A$, $B$, and a trap $T$ that nothing leaves. $A \to B$ at rate 2, $B \to A$ at rate 1, $B \to T$ at rate 4. Rows = FROM, order $A, B, T$. The trap row of $P(dt)$ is $(0, 0, 1)$. Fill in the blank: the trap row of $Q$ is $(0, 0, \_\_)$.
+  - answered: 0
+- 2026-10-13 quiz ✓ (conf 100%)
+  - asked: Completion. A chain has states $A$, $B$, and a trap $T$ that nothing leaves. $A \to B$ at rate 2, $B \to A$ at rate 1, $B \to T$ at rate 4. Order $A, B, T$, rows = FROM: $$Q = \begin{pmatrix} -2 & 2 & 0 \\ 1 & -5 & 4 \\ 0 & 0 & \_\_ \end{pmatrix}$$ What is the blank, and what does $dv/dt = vQ$ give for $dT/dt$?
+  - answered: Q_TT = 0, and dT/dt = 4B
+- 2026-10-13 recall/problem ◐ 50% (conf 100%)
+  - asked: An amide can be closed ($C$), open ($O$), or exchanged ($X$, permanent). Closed opens at rate $a$, open closes at rate $b$, and open sites exchange at rate $c$. Nothing leaves $X$. Order the states $C, O, X$, rows = FROM. (a) Write the $3 \times 3$ rate matrix $Q$ in terms of $a, b, c$. (b) Using $dv/dt = vQ$ with $v = (C, O, X)$, write the equation for $dX/dt$.
+  - answered: photo: work-20261012-203253.png
+  - first error: Part (a), third row: $Q_{XX} = 1$; the absorbing state's row must be $(0, 0, 0)$.
+- 2026-10-13 quiz ✓ (conf 50%)
+  - asked: Completion. Two states $C \rightleftharpoons O$, with $k_{op} = 0.5$ per s and $k_{cl} = 4$ per s. Rows = FROM, order $C, O$: $$Q = \begin{pmatrix} -0.5 & 0.5 \\ 4 & \_\_ \end{pmatrix}$$ What is the blank, and what is it?
+  - answered: -4: minus the total exit rate from O, so the row sums to zero
+- 2026-10-13 quiz ✓ (conf 0%)
+  - asked: Three states $A, B, C$. From $B$, a site jumps to $A$ at rate $3$ per s and to $C$ at rate $1$ per s. Nothing else leaves $B$. Row $B$ of $Q$ (order $A, B, C$) is $\begin{pmatrix} 3 & \_\_ & 1 \end{pmatrix}$. What is the blank, $Q_{BB}$?
+  - answered: -4
+- 2026-10-13 recall/recall ◐ 50% (conf 100%)
+  - asked: A chain is described by a step matrix $P$ for a step of width $dt$. Someone hands you a matrix $Q$ and says "this is the chain itself, independent of $dt$." (a) Write the relation between $P(dt)$ and $Q$ for a tiny $dt$, and say what an off-diagonal entry $Q_{ij}$ and a diagonal entry $Q_{ii}$ mean physically. (b) Why must every row of $Q$ sum to exactly zero?
+  - answered: photo: work-20261012-202230.png
+  - first error: $Q_{ii}$ is described as the rate of jumping back into state $i$ ($i \to i$).
+- 2026-10-13 quiz ✓ (conf 100%)
+  - asked: A student computing $vP$ above copied the $300 \cdot 0.2 = 60$ term into $C'$ instead of $X'$ and got $(600, 300, 100)$, total still 1000. Which statement correctly explains why the total check passes anyway?
+  - answered: Each row of P sums to 1 (every site goes somewhere), so the total of vP always equals the total of v; the 60 was added to one entry and removed from another, which cancels in the sum.
+- 2026-10-13 recall/problem ◐ 60% (conf 70%)
+  - asked: A population of amide sites moves between three states each time step: $C$ (closed), $O$ (open), $X$ (exchanged, never comes back). Rows = FROM, columns = TO, order $C, O, X$: $$P = \begin{pmatrix} 0.7 & 0.3 & 0 \\ 0.4 & 0.4 & 0.2 \\ 0 & 0 & 1 \end{pmatrix}$$ Right now the counts are $v = (600, 300, 100)$. (a) Compute the counts after one step, $v P$, showing each entry as a sum of inflows. (b) T…
+  - answered: photo: work-20261012-201441.png
+  - first error: Part (b): the justification appeals to the transpose having 'the same conservation property' rather than to row sums of $P$ equalling 1 and to offsetting errors in entries.
+- 2026-10-11 recall/transfer ✓ 90% (conf 50%)
+  - asked: HDX chain $C \rightleftharpoons O \to X$ with rates: $C \to O$ at $k_{op}$, $O \to C$ at $k_{cl}$, $O \to X$ at $k_{ch}$; $X$ is permanent. State order $C, O, X$, rows = FROM. Write the $3 \times 3$ rate matrix $Q$, and from $\frac{dv}{dt} = v Q$ write out the single equation for $\frac{dX}{dt}$.
+  - answered: photo: work-20261011-133057-1.png, work-20261011-133057-2.png
+- 2026-10-11 recall/predict ✗ 0% (conf 0%)
+  - asked: Two-state chain, $C$ and $O$, rows = FROM: $$P = \begin{pmatrix} 0.8 & 0.2 \\ 0.5 & 0.5 \end{pmatrix}$$ Start with every site closed: $v_0 = (1000, 0)$. Compute $v_1 = v_0 P$ and then $v_2 = v_1 P$, and in one sentence say what you expect the counts to do if we keep going for many more steps.
+  - answered: WHEN AM I GOING TO LEARN SOMETHING NEW??????????????? LET'S MOVE ON FOR GODS SAKE.
+  - first error: No attempt: $v_1 = v_0 P$ was not computed.
+- 2026-10-11 recall/flaw ✓ 75% (conf 45%)
+  - asked: Same $P$ and $v = (500, 300, 200)$. Here is a worked line for the new counts: $O' = 500 \cdot 0.1 + 300 \cdot 0.3 = 50 + 90 = 140$, and $X' = 300 \cdot 0.1 + 200 \cdot 1 = 30 + 200 = 230$, so the $30$ sites in $X'$ are the ones that were open and happened to exchange this step. Together with $C' = 630$ the total is $1000$. Is this right? If not, where does it go wrong?
+  - answered: this is correct.
+- 2026-10-11 recall/predict ◐ 35% (conf 100%)
+  - asked: Three states for an amide: $C$ (closed), $O$ (open), $X$ (exchanged, permanent). Per time step, rows = FROM, columns = TO, in the order $C, O, X$: $$P = \begin{pmatrix} 0.9 & 0.1 & 0 \\ 0.6 & 0.3 & 0.1 \\ 0 & 0 & 1 \end{pmatrix}$$ Start with counts $v = (500, 300, 200)$. Compute the count vector after one step, all three entries, and check that the total is still 1000.
+  - answered: photo: work-20261011-124927-1.png, work-20261011-124927-2.png
+  - first error: In the third entry, $X' = 0 + 0 + 200$ omits the $0.1\cdot 300$ flow from $O$ to $X$; it should include $30$.
+- 2026-10-11 recall/problem ✓ 100% (conf 100%)
+  - asked: Same table, $k\,dt = 0.3$, survivors $= 343$ after slice 3. Slice 4: exchanged $= \underline{\quad ?\quad}$ and survivors after $= \underline{\quad ?\quad}$. Fill both numbers.
+  - answered: exchanged = 102.9 survivors = 240.1
+- 2026-10-11 recall/problem ✗ 0% (conf 0%)
+  - asked: $N_0 = 1000$ unexchanged sites, $k = 3$ per second, slice width $dt = 0.1$ s. Fill a small table with two columns, exchanged-in-slice and survivors-after-slice, for slices 1, 2 and 3. Both columns, all three rows.
+  - answered: no it's time to start learning something new. Review done!
+  - first error: No attempt: neither the exchanged-in-slice column nor the survivors-after-slice column was filled for any slice.
+- 2026-10-11 recall/problem ◐ 55% (conf 100%)
+  - asked: Start from the one-slice bookkeeping rule for unexchanged sites: $U_{\text{new}} = U - k\,dt\,U$. Derive $\frac{dU}{dt} = -kU$ from it, showing each step, and state in one sentence why the ratio $(U_{\text{new}} - U)/dt$ does not go to zero as $dt \to 0$ even though the numerator does.
+  - answered: photo: work-20261011-123040-1.png, work-20261011-123040-2.png
+  - first error: The jump from $U_n - U = -k\,dt\,U$ straight to $\frac{dU}{dt} = -kU$ omits dividing by $dt$ (giving $\frac{U_n - U}{dt} = -kU$) and taking $dt \to 0$.
+- 2026-10-11 recall/recall ◐ 40% (conf 100%)
+  - asked: Three students compute the fraction still unexchanged after two thin slices, each of width $dt$: - Student A: $(1 - k\,dt)^2$ - Student B: $1 - 2k\,dt$ - Student C: $(k\,dt)^2$ Which one is exactly right, and in one sentence each, what are B and C actually computing (or getting wrong)?
+  - answered: student A has it right. Student B just doubled the rate for a single slice, and student C is calculating the amount an exchanged population exchanges again after 1 slice, which does not make sense.
+  - first error: No reason is given for why $(1-k\,dt)^2$ is exact.
+- 2026-10-11 recall/problem ✓ 85% (conf 80%)
+  - asked: A site has $k = 0.5$ per second. A colleague says: "So there's a 50% chance it exchanges in the first second." Compute the actual probability of exchanging within the first second (use $e^{-0.5} \approx 0.607$), and explain in one or two sentences why it differs from $0.5$.
+  - answered: we can actually use (1 - e^(-0.5)) which is approx (1- 0.607) = 0.393. The reason it isn't 0.5 is because the exchange rate occurs proportional to the current population in time, so we need to take many small slices within that interval to get the exchange, the continuous form of the surviving fraction is e^-kt and we just need to get the exchanged fraction with (1-e^-kt).
+- 2026-10-11 recall/recall ✓ 100% (conf 100%)
+  - asked: Completion, one blank: "The mean exchange time $1/k$ equals the total area under the curve $e^{-kt}$, which is the ______ fraction as a function of time."
+  - answered: survival
+- 2026-10-11 recall/problem ◐ 50% (conf 100%)
+  - asked: Completion. For $k = 4$ per second, the mean exchange time is $$\langle t \rangle = \int_0^\infty t \cdot 4 e^{-4t}\, dt = \Big[-t e^{-4t}\Big]_0^\infty + \int_0^\infty e^{-4t}\, dt = 0 + \underline{\quad ?\quad} \text{ s}.$$ Fill the blank with the number, and say in a few words what curve that remaining integral is the area under.
+  - answered: 1/4
+  - first error: No interpretation given: the answer omits that $\int_0^\infty e^{-4t}\,dt$ is the area under the survival curve $e^{-kt}$.
+- 2026-10-11 recall/recall ◐ 70% (conf 100%)
+  - asked: A site has $k = 0.5$ per second. What is its mean time to exchange, and what is its half-life (the time at which half the sites have exchanged)? Give both numbers in seconds and the one-line reason each formula holds. (Use $\ln 2 \approx 0.69$.)
+  - answered: photo: work-20261011-121144.png
+  - first error: Part 1 states $\frac{1}{0.5} = 2$ s with no reason for why the mean is $1/k$.
+- 2026-10-11 recall/recall ◐ 40% (conf 75%)
+  - asked: For a site exchanging with rate $k$, three expressions keep showing up: $1 - e^{-kt}$, $k e^{-kt}$, and $1/k$. Say in one short phrase what each one is (including its units), and name which of the three can be larger than 1.
+  - answered: 1-e^(-kt) is the fraction of the population is exchanged (unitless) ke^(-kt) is the probability density for exchange in time, it's units are in #/s. Additionally, it can also be used to determine the rate of population change at a given time. 1/k is the inverse rate, or the relaxation time (I think), it's units are in s/#. I believe it gives half-life
+  - first error: Calling $1/k$ the half-life. The question of which expressions can exceed 1 was also never answered.
+- 2026-10-11 recall/recall ✓ 100% (conf 65%)
+  - asked: Same tube: survivors go $800 \to 640 \to 512 \to 409.6$ with $k\,dt = 0.2$. Give the number of sites that exchange during slice 1, slice 2 and slice 3, and state in one phrase the rule you used to get each one.
+  - answered: slice 1 = 800 * 0.2 = 160 slice 2 = 640 * 0.2 = 128 slice 3 = 512 * 0.2 = 102.4. Additionally we could have gotten the frist number 160 and the just multiply it by 0.8^n to get the next n slice. I used the the exchange count in each slice for k * dt time s the current survivors.
+- 2026-10-11 recall/problem ◐ 60% (conf 100%)
+  - asked: A tube holds $N_0 = 800$ unexchanged sites, rate $k = 2$ per second, slice width $dt = 0.1$ s. For slices 1, 2 and 3: how many sites exchange during each slice, and how many survivors remain after each slice? Show the numbers.
+  - answered: slices_1 = 800 * (1-2*0.1) = 640 slices_2 = slices_1 * (1-2*0.1) = 512 slices_3 = slices_2 * (1-2*0.1) = 409
+  - first error: The exchange counts per slice are never given; only survivors are shown. Slice 3 is also truncated to $409$ rather than $409.6$.
+- 2026-10-11 recall/recall ✓ 100% (conf 45%)
+  - asked: Split time $t$ into $n$ equal slices of width $dt = t/n$. Write the surviving fraction after all $n$ slices as a single expression in $k$, $t$ and $n$, and name what that expression tends to as $n \to \infty$.
+  - answered: (1-k*t/n)^n. As n->inf this fraction tends to e^(-kt)
