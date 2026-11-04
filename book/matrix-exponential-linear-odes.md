@@ -1,8 +1,8 @@
 ---
 slug: matrix-exponential-linear-odes
 title: "Matrix exponential for linear ODEs: modes of the Linderstrøm-Lang chain"
-readings: 9
-updated: 2026-10-30T03:20:51.089Z
+readings: 10
+updated: 2026-11-04T05:03:48.541Z
 ---
 # Matrix exponential for linear ODEs: modes of the Linderstrøm-Lang chain
 
@@ -472,3 +472,83 @@ Take $k_{op} = 1$, $k_{cl} = 100$, $k_{ch} = 10$ (all per second).
 #### What it hangs off
 
 The matrix exponential: $p(t) = p(0)e^{Qt} = \sum_i c_i e^{\lambda_i t} v_i$ says the only rates that can appear in any population are eigenvalues of $Q$, which is why we hunt for them. The $2\times 2$ eigenvalue formula from trace and determinant is the same handle you used to find $(3,2)$ and $(1,-1)$ earlier. And the zero eigenvalue is the same conservation mode as before, now sitting on the absorbing state instead of on a stationary split between live states.
+
+### The spectrum of the three-state Linderstrøm-Lang chain
+
+This section finds the eigenvalues and left eigenvectors of the rate matrix for the Linderstrøm-Lang chain $C \rightleftharpoons O \to X$ (closed, open, exchanged), so that the superposition formula $p(t) = \sum_i c_i e^{\lambda_i t} v_i$ can be written out for it explicitly.
+
+#### Why we need this now
+
+Everything built so far (the collapse of $\dot p = pQ$ to $\dot c = \lambda c$ along an eigenvector, superposition, $e^{Qt} = V^{-1} e^{\Lambda t} V$) begins with the words "given the left eigenvectors $v_i$ and eigenvalues $\lambda_i$ of $Q$". For a general $3\times3$ matrix that means a cubic equation. The exchange chain is not a general matrix, though: it has structure, and the structure does most of the work.
+
+#### The rate matrix
+
+States in the order $(C, O, X)$, rows = FROM, columns = TO. Rates: $k_{op}$ for $C \to O$, $k_{cl}$ for $O \to C$, $k_{ch}$ for $O \to X$. Each diagonal entry is minus the total exit rate from that state, so each row sums to zero:
+
+$$Q = \begin{pmatrix} -k_{op} & k_{op} & 0 \\ k_{cl} & -(k_{cl}+k_{ch}) & k_{ch} \\ 0 & 0 & 0 \end{pmatrix}$$
+
+The third row is all zeros because nothing leaves $X$: it is absorbing.
+
+#### Step 1: the absorbing state hands us one eigenvalue for free
+
+We want $v$ and $\lambda$ with $vQ = \lambda v$. Try the simplest candidate, $v = (0,0,1)$. Multiplying on the left picks out row 3 of $Q$, which is $(0,0,0)$. So $vQ = 0 = 0 \cdot v$: the eigenvalue is $\lambda_0 = 0$ with left eigenvector $(0,0,1)$. Meaning: the population "everything in $X$" never changes. That is the stationary mode, and it is where every start ends up.
+
+#### Step 2: the other two eigenvalues come from the $2\times2$ block
+
+Write $v = (a, b, c)$ and look at the first two components of $vQ = \lambda v$. Because column 1 and column 2 of $Q$ have a zero in the third row, $c$ never appears in them:
+
+$$(a, b)\, A = \lambda\,(a, b), \qquad A = \begin{pmatrix} -k_{op} & k_{op} \\ k_{cl} & -(k_{cl}+k_{ch}) \end{pmatrix}$$
+
+So $(a,b)$ must be a left eigenvector of the $2\times2$ block $A$ (the $C$–$O$ part of the chain, with the leak to $X$ showing up only inside the diagonal entry $-(k_{cl}+k_{ch})$). The third component then follows from column 3: $b\,k_{ch} = \lambda c$, so $c = b\,k_{ch}/\lambda$.
+
+For a $2\times2$ matrix the eigenvalues solve $\lambda^2 - (\mathrm{tr}\,A)\lambda + \det A = 0$. Here
+
+$$\mathrm{tr}\,A = -(k_{op} + k_{cl} + k_{ch}) \equiv -S, \qquad \det A = k_{op}(k_{cl}+k_{ch}) - k_{op}k_{cl} = k_{op}k_{ch}.$$
+
+Notice the cancellation in the determinant: the $k_{op}k_{cl}$ from the back-and-forth between $C$ and $O$ drops out, leaving only the product of the two rates on the one-way path $C \to O \to X$. So
+
+$$\lambda^2 + S\lambda + k_{op}k_{ch} = 0, \qquad \lambda_{\pm} = \frac{-S \pm \sqrt{S^2 - 4k_{op}k_{ch}}}{2}.$$
+
+Both roots are real and negative: the discriminant equals $(k_{op} - k_{cl} - k_{ch})^2 + 4k_{op}k_{cl} > 0$, and the roots have sum $-S < 0$ and product $k_{op}k_{ch} > 0$. So the full spectrum is
+
+$$\{\,0,\ \lambda_+,\ \lambda_-\,\}, \qquad 0 > \lambda_+ > \lambda_-,$$
+
+one stationary mode and two decaying modes, one slow ($\lambda_+$, closer to zero) and one fast ($\lambda_-$).
+
+#### A check that costs nothing: nonzero-eigenvalue modes are deviations
+
+Each row of $Q$ sums to zero, i.e. $Q\mathbf{1} = 0$ with $\mathbf{1} = (1,1,1)^T$. Multiply $vQ = \lambda v$ on the right by $\mathbf{1}$: the left side is $v(Q\mathbf{1}) = 0$, the right side is $\lambda\,(v\cdot\mathbf{1})$. So whenever $\lambda \neq 0$, the entries of $v$ must sum to zero. This is the three-state version of the $(1,-1)$ story: every decaying mode is a redistribution, not a population, and if a computed eigenvector for $\lambda_\pm$ does not sum to zero, something is wrong.
+
+#### Worked instance
+
+Take $k_{op} = 2$, $k_{cl} = 4$, $k_{ch} = 5$ (per second).
+
+$$Q = \begin{pmatrix} -2 & 2 & 0 \\ 4 & -9 & 5 \\ 0 & 0 & 0 \end{pmatrix}$$
+
+**Eigenvalues.** $S = 2 + 4 + 5 = 11$, $k_{op}k_{ch} = 10$. The quadratic is $\lambda^2 + 11\lambda + 10 = (\lambda + 1)(\lambda + 10) = 0$, so $\lambda_+ = -1$, $\lambda_- = -10$, plus $\lambda_0 = 0$. Sanity: sum of the two roots is $-11 = -S$, product is $10 = k_{op}k_{ch}$.
+
+**Left eigenvector for $\lambda_+ = -1$.** Write $v = (a,b,c)$ and read $vQ = -v$ one column at a time.
+- Column 1: $-2a + 4b = -a \Rightarrow a = 4b$. Pick $b = 1$, so $a = 4$.
+- Column 3: $5b = -c \Rightarrow c = -5$.
+- Column 2 as a check: $2a - 9b = 8 - 9 = -1$, and $\lambda b = -1$. Consistent.
+
+So $v_+ = (4, 1, -5)$. Entries sum to zero, as they must.
+
+**Left eigenvector for $\lambda_- = -10$.**
+- Column 1: $-2a + 4b = -10a \Rightarrow 8a = -4b \Rightarrow b = -2a$. Pick $a = 1$, $b = -2$.
+- Column 3: $5b = -10c \Rightarrow c = -b/2 = 1$.
+- Column 2 check: $2a - 9b = 2 + 18 = 20$, and $\lambda b = (-10)(-2) = 20$. Consistent.
+
+So $v_- = (1, -2, 1)$, again summing to zero.
+
+**Stationary mode.** $v_0 = (0,0,1)$ with $\lambda_0 = 0$.
+
+The three vectors are linearly independent (three distinct eigenvalues guarantee it), so any start $p(0)$ expands uniquely as $c_0 v_0 + c_+ v_+ + c_- v_-$, and
+
+$$p(t) = c_0\,(0,0,1) + c_+ e^{-t}\,(4,1,-5) + c_- e^{-10t}\,(1,-2,1).$$
+
+Since $p(t) \to c_0 (0,0,1)$ and total population is conserved, $c_0$ must equal the total, here 1 for a probability vector.
+
+#### What this hangs off
+
+The eigenvalue-zero mode is the same object as the stationary split you found for $2\times2$ chains by solving $vQ = 0$; here the absorbing row makes it trivial. The two decaying modes are the three-state version of the $(1,-1)$ deviation mode: the sum-to-zero argument is literally $vQ\mathbf{1} = 0$. And once the $v_i$ and $\lambda_i$ are in hand, the superposition formula and $e^{Qt} = V^{-1}e^{\Lambda t}V$ apply verbatim. The next section reads the physics off this spectrum: the slow eigenvalue $\lambda_+$ is the observed exchange rate, and the EX1 and EX2 limits are what $\lambda_+$ becomes when $k_{ch} \gg k_{cl}$ or $k_{ch} \ll k_{cl}$.

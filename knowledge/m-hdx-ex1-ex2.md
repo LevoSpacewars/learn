@@ -1,7 +1,7 @@
 ---
 slug: m-hdx-ex1-ex2
 status: solid
-updated: 2026-10-18T18:48:28.827Z
+updated: 2026-11-04T05:00:15.727Z
 ---
 # EX1 vs EX2 from the master equation
 
@@ -9,8 +9,20 @@ updated: 2026-10-18T18:48:28.827Z
 
 **Lesson:** [[m-hdx-ex1-ex2]] (done, 6/7 nodes) — R1, D1, D2, R2, D3, D4 confirmed. G (envelope shapes) read; he claims expertise and ended the recall phase before the transfer check.
 Next: if he agrees, one quick transfer (bleaching-bead analogue) to close G and the lesson; otherwise mark done on his word and move to the HDX milestone.
+**Book:** [[book/m-hdx-ex1-ex2|EX1 vs EX2 from the master equation]] (the readings only, no cards)
 
-## Evidence (27, latest first)
+## Misconceptions
+- [open] believed "The quasi-steady-state approximation dO/dt ≈ 0 is justified by k_op ≪ k_cl (the open population being small)." — truth: It is justified by the total exit rate from O, k_cl + k_ch, being ≫ k_op: O relaxes to its balance much faster than C changes. Smallness of O is a separate (population) statement; which exit is larger (k_cl vs k_ch) decides EX1/EX2, not the approximation. (for 1 / against 0)
+
+## Evidence (29, latest first)
+- 2026-11-04 recall/recall ◐ 40%
+  - asked: A stretch of $N$ backbone amides is protected together: when the segment opens, all $N$ are exposed at once; when it closes, all are shielded. In the mass spectrum over time, one regime shows a single isotope envelope whose center drifts smoothly from $+0$ toward $+N$ Da. The other regime shows two envelopes at fixed positions ($+0$ and $+N$) with one shrinking as the other grows. Explain which r…
+  - answered: photo: work-20261103-205944.png
+  - first error: Describing EX2 as 'limited by the opening rate'. That is the EX1 limit; in EX2, closing outcompetes chemical exchange, so $s = k_{ch}/(k_{cl}+k_{ch}) \ll 1$.
+- 2026-11-04 recall/problem ◐ 65%
+  - asked: An amide sits in a segment that opens and closes: closed $C \rightleftharpoons O$ open, and from $O$ it can exchange irreversibly to $X$. Rates per second: $k_{op} = 2$, $k_{cl} = 40$, $k_{ch} = 10$. (a) Compute the observed exchange rate $k_{obs}$ from the general formula. (b) Which limit is this closer to, EX1 or EX2, and why? What would each limiting formula have given for $k_{obs}$?
+  - answered: photo: work-20261103-204008.png
+  - first error: In (b), the EX2 formula $k_{obs} \approx \frac{k_{op} k_{ch}}{k_{ch}+k_{cl}}$ is the general formula, not the EX2 limiting form.
 - 2026-10-18 recall/problem ◐ 65% (conf 70%)
   - asked: Chain $C \rightleftharpoons O \to X$ with $k_{op} = 4$ per second (C to O), $k_{cl} = 60$ per second (O to C), $k_{ch} = 140$ per second (O to X). (1) Write the balance equation for the open population, $dO/dt$, as inflow minus outflow using the populations $C$ and $O$ and the numbers above. (2) Set it to zero and give the quasi-steady-state $O$ as a multiple of $C$. (3) Name the one rate compari…
   - answered: 1) dO/dt = 4C - (60 + 140)O 2) dO/dt appox 0 => 4/200*C = O 3) this is okay since kop << kcl. This is relevant because it says that the appoximation of U = C is valid.

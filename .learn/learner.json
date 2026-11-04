@@ -1860,7 +1860,23 @@
 			"id": "smvuekkie8rug",
 			"at": "2026-10-30T03:18:42.134Z",
 			"kind": "learn",
-			"lesson": "matrix-exponential-linear-odes"
+			"lesson": "matrix-exponential-linear-odes",
+			"ended": "2026-10-30T03:18:42.134Z"
+		},
+		{
+			"id": "smw1l9k8uhce1",
+			"at": "2026-11-04T04:00:29.118Z",
+			"kind": "review",
+			"unaided": false,
+			"ended": "2026-11-04T04:00:29.118Z"
+		},
+		{
+			"id": "smw1nfkyhglyz",
+			"at": "2026-11-04T05:01:09.209Z",
+			"kind": "learn",
+			"lesson": "matrix-exponential-linear-odes",
+			"ended": "2026-11-04T05:01:17.924Z",
+			"note": "Review (4 of 10 cards posed, then he switched to the matrix-exponential lesson). Slice-rule derivation: ratio part solid, slipped on integrating dN/N (wrote e^N, dropped N_0). EX1/EX2 k_obs problem: general formula and EX2 call right, wrote the general formula as the EX2 limit and gave no limit numbers. vP problem: numbers and row-sum reason right, again offered \"transpose\" as an error that passes the total check (it doesn't). EX1/EX2 envelope card: regimes matched but called EX2 \"limited by opening rate\" (that is EX1), no statistical ingredient, no shared centroid; repaired in chat. Not posed: e^{-kt} vs 1-kt (REPEATED), density/units transfer (REPEATED), three matrix-exponential cards, vP transfer. Watch: EX1/EX2 mechanism (which exit wins from O), and the transpose idea."
 		}
 	],
 	"goals": [

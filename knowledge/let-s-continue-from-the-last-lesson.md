@@ -1,13 +1,14 @@
 ---
 slug: let-s-continue-from-the-last-lesson
 status: solid
-updated: 2026-10-19T04:12:11.959Z
+updated: 2026-11-04T04:52:53.206Z
 ---
 # HDX kinetics math (rates, Markov chains, first-order decay)
 
 **Status:** solid
 
 **Lesson:** [[let-s-continue-from-the-last-lesson]] (done, 4/7 nodes) — Goal reached: wrote Q for C⇌O→X and dX/dt = k_ch·O. D3 (stationary = balanced flows) and D4 (P = I + Q dt, dv/dt = vQ) were delivered expository without their checks; cards cover them. Next: the EX1/EX2 milestone, solving the master equation in the k_cl ≫ k_ch and k_cl ≪ k_ch limits.
+**Book:** [[book/let-s-continue-from-the-last-lesson|HDX kinetics math (rates, Markov chains, first-order decay)]] (the readings only, no cards)
 
 ## Misconceptions
 - [resolved] believed "A rate k = 0.1/s means the event has probability exactly 0.1 per second" — truth: k·dt is the probability only over a tiny dt, applied to survivors; over 1 s the probability is 1 − e^(−k) ≈ 0.095 (for 0 / against 2)
@@ -16,7 +17,15 @@ updated: 2026-10-19T04:12:11.959Z
 - [resolved] believed "To chain slices, multiply the per-slice exchange probability k·dt by itself" — truth: Multiply the per-slice survival factors (1 − k·dt); exchanged = 1 − product (for 1 / against 2)
 - [resolved] believed "The diagonal entry Q_ii of the rate matrix is the rate of jumping from state i back into state i." — truth: Q_ii = minus the total exit rate from i; it comes from (P_ii − 1)/dt, so rows of Q sum to zero. Staying is not a jump and has no rate. (for 1 / against 2)
 
-## Evidence (89, latest first)
+## Evidence (91, latest first)
+- 2026-11-04 recall/problem ◐ 60%
+  - asked: Three states for a site: $C$ (closed), $O$ (open), $X$ (exchanged, which nothing ever leaves). One-step matrix with rows = FROM, columns = TO: $$P = \begin{pmatrix} 0.8 & 0.2 & 0 \\ 0.5 & 0.3 & 0.2 \\ 0 & 0 & 1 \end{pmatrix}$$ Counts now: $v = (600, 300, 100)$ for $(C, O, X)$. (a) Compute the counts after one step, showing what each term in each sum counts. (b) Check that the total is conserved. …
+  - answered: photo: work-20261103-205219-1.png, work-20261103-205219-2.png
+  - first error: In (a), no term is labeled with what it counts. In (b), the proposed wrong answer (transposing $P$) does not conserve the total: $vP^T = (540, 410, 100)$ sums to $1050$.
+- 2026-11-04 recall/problem ◐ 70%
+  - asked: A pool of $N$ unreacted molecules loses a fraction $r \cdot dt$ of its *current* members in each thin slice $dt$, so one slice gives $N_{new} = N - r \cdot dt \cdot N$. (a) From this one-slice rule, derive the differential equation for $N(t)$. (b) Numerically: $N = 400$, $r = 3$ per second. Compute $(N_{new} - N)/dt$ for $dt = 0.1$ s and for $dt = 0.0001$ s. Why does this ratio not shrink toward …
+  - answered: photo: work-20261103-202419.png
+  - first error: The line $e^N = -rt$: integrating $\frac{dN}{N}$ does not give $e^N$, and the boxed $N(t) = e^{-rt}$ has no initial amount $N_0$.
 - 2026-10-19 recall/flaw ✓ 95% (conf 100%)
   - asked: A colleague works this out. Tube of $N_0 = 800$ unexchanged sites, rate $k = 2$ per s, slice width $dt = 0.1$ s, so $k\,dt = 0.2$. "Slice 1: $0.2 \times 800 = 160$ exchange, $640$ survive. Slice 2: $0.2 \times 800 = 160$ exchange, $480$ survive. Slice 3: $0.2 \times 800 = 160$ exchange, $320$ survive. Survivors after $n$ slices: $N_0(1 - n k\,dt)$." Is this right? If not, where does it go wrong, …
   - answered: photo: work-20261018-211157.png
@@ -151,10 +160,3 @@ updated: 2026-10-19T04:12:11.959Z
 - 2026-10-11 recall/recall ✓ 100% (conf 65%)
   - asked: Same tube: survivors go $800 \to 640 \to 512 \to 409.6$ with $k\,dt = 0.2$. Give the number of sites that exchange during slice 1, slice 2 and slice 3, and state in one phrase the rule you used to get each one.
   - answered: slice 1 = 800 * 0.2 = 160 slice 2 = 640 * 0.2 = 128 slice 3 = 512 * 0.2 = 102.4. Additionally we could have gotten the frist number 160 and the just multiply it by 0.8^n to get the next n slice. I used the the exchange count in each slice for k * dt time s the current survivors.
-- 2026-10-11 recall/problem ◐ 60% (conf 100%)
-  - asked: A tube holds $N_0 = 800$ unexchanged sites, rate $k = 2$ per second, slice width $dt = 0.1$ s. For slices 1, 2 and 3: how many sites exchange during each slice, and how many survivors remain after each slice? Show the numbers.
-  - answered: slices_1 = 800 * (1-2*0.1) = 640 slices_2 = slices_1 * (1-2*0.1) = 512 slices_3 = slices_2 * (1-2*0.1) = 409
-  - first error: The exchange counts per slice are never given; only survivors are shown. Slice 3 is also truncated to $409$ rather than $409.6$.
-- 2026-10-11 recall/recall ✓ 100% (conf 45%)
-  - asked: Split time $t$ into $n$ equal slices of width $dt = t/n$. Write the surviving fraction after all $n$ slices as a single expression in $k$, $t$ and $n$, and name what that expression tends to as $n \to \infty$.
-  - answered: (1-k*t/n)^n. As n->inf this fraction tends to e^(-kt)
