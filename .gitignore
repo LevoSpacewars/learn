@@ -9,7 +9,7 @@ inbox/
 # recordings are transcribed on arrival; the transcript lives in events.jsonl
 work/audio-*
 # dependencies (reinstalled by bin/setup)
-node_modules/
+node_modules
 # Claude Code worktrees (agents develop here; see .claude/CLAUDE.md)
 .claude/worktrees/
 # test scratch: logs, screenshots, generated tsconfig
