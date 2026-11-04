@@ -10,7 +10,7 @@
  *
  * Kinds (the critical-thinking checks; which one a node gets is assigned by
  * lesson_plan / review_due, not chosen here):
- *   recall   — say the idea and why                 explain  — explain-back in own words
+ *   recall   — say the idea and why (an equation is a why) explain  — explain-back: the chain, in math or words
  *   predict  — commit to an outcome before reveal   boundary — which assumption / what breaks
  *   flaw     — is this (planted-error) argument right?   transfer — same structure, new clothes
  *   problem  — work it on paper
@@ -45,6 +45,8 @@ import {
 	clearMiss,
 	gateReason,
 	isMiss,
+	MISS_SCORE,
+	reviewPartsReason,
 	isReady,
 	ladderNext,
 	ladderOutcome,
@@ -180,10 +182,11 @@ function addWrapped(lines: string[], text: string, width: number, indent = ""): 
 	for (const line of wrapTextWithAnsi(text, contentWidth)) lines.push(truncateToWidth(`${indent}${line}`, width));
 }
 
-/** FSRS rating from the grader's score: the substance decides, not the verdict label. Time is never a factor: he walks away mid-answer and comes back. */
+/** FSRS rating from the grader's score: the substance decides, not the verdict label. Time is never a factor: he walks away mid-answer and comes back.
+ *  A MINOR GAP (partial at or above MISS_SCORE: the substance right) schedules as good, so it is not re-tested. */
 export function ratingFor(r: Pick<GradeResult, "verdict" | "score">): "again" | "hard" | "good" | "easy" {
 	if (r.verdict === "incorrect" || r.score < 0.4) return "again";
-	if (r.score < 0.75) return "hard";
+	if (r.score < MISS_SCORE) return "hard";
 	if (r.verdict === "correct" && r.score >= 0.95) return "easy";
 	return "good";
 }
@@ -457,6 +460,7 @@ export function recallBlock(p: Pedagogy, o: { kind: CheckKind; prompt: string; p
 		(o.kind === "predict" ? undefined : readingReason(p)) ??
 		floorReason(p) ??
 		ladderReason(p, { kind: o.kind, stage: o.stage, paper: o.paper, cardId: o.cardId }) ??
+		(o.cardId ? reviewPartsReason(o.prompt) : undefined) ??
 		gateReason(p, o.prompt, o.say?.length ?? 0)
 	);
 }

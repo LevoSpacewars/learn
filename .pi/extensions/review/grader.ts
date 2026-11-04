@@ -47,9 +47,9 @@ const DEFAULT_MODEL = "claude-bridge/claude-opus-5-5";
 const TIMEOUT_MS = 120_000;
 
 const KIND_RUBRIC: Record<string, string> = {
-	recall: "Grade whether the learner's answer captures the idea in the reference, including the WHY when the reference gives one. Wording may differ freely. Missing the reason when the reference states it is at most 'partial'.",
+	recall: "Grade whether the learner's answer captures the idea in the reference, including the WHY when the reference gives one. Wording may differ freely, and the why may be given as math: an equation, a derivation step or a relation (e.g. 'dN = -rN dt, so dN/dt = -rN, a constant') IS the reason. Missing the reason entirely when the reference states it is at most 'partial'.",
 	explain:
-		"This is an explain-back in the learner's own words. Grade the reasoning chain: are the steps correct, are the dependencies stated, does it hang off the right foundations? A fluent restatement without the mechanism is 'partial'.",
+		"This is an explain-back: the reasoning chain, written as math, words or both. Grade the chain: are the steps correct and do they hang off the right foundations? A correct chain of equations is a complete explanation; never require prose, sentences or a named concept on top of it. A restatement of the result without any mechanism is 'partial'.",
 	predict:
 		"The learner predicted an outcome before seeing it. Grade the prediction against the reference AND the stated reason. A right prediction for a wrong reason is 'partial'.",
 	boundary:
@@ -72,6 +72,8 @@ export function buildGraderPrompt(input: GradeInput): string {
 		"",
 		"Rules of substance:",
 		"- Secondary omissions are NOTES in feedback, never errors: units not written out, a label or name not spelled out, a quantity present in the working but not restated in the final line, one ambiguous digit when the working shows the value, a step used correctly but not named. They do not lower the verdict when the idea and method are right.",
+		"- Math is an explanation. An answer given as equations or a short derivation, with no sentences, is as complete as one in prose. Never lower a verdict because the learner did not use the reference's words, did not name a concept, theorem or 'structure', or did not explain in words what the math already shows.",
+		"- Grade the main ask. If the question bundles side asks with its core (label each term, name the concept, give an example, compare with a second formula), grade the core: the result or step the question is about. A missed or weak side ask is a NOTE in feedback, not a lower verdict.",
 		"- 'correct' = the idea/method/result is right (score 0.85-1). 'partial' = a real piece of the idea is missing or wrong, the rest right (0.4-0.8; a correct method with an arithmetic slip is 0.7-0.8). 'incorrect' = the wrong idea, or essentially nothing (0-0.3).",
 		"- If the question is ambiguous or ill-posed and the learner's answer is reasonable under one honest reading, grade under that reading and say so in reasoning.",
 		"- Do not assert claims beyond the reference. If the learner says something the reference does not cover, do not call it wrong unless it is plainly false.",

@@ -31,7 +31,7 @@ The extension directories need their own `node_modules` (`bin/setup` installs th
 
 ## Live grader (manual, calls the model)
 
-`grader.live.mts`, `grader.live-reactions.mts`, `grader.live-concurrent.mts` run `review/grader.ts` for real (a separate `pi -p` per call, ~6 s each) on answers from past sessions: a substantively right answer must grade correct, a complaint must come back `attempted=false`, concurrent calls must not collide. Run with `node --import ./register.mjs grader.live.mts`. `notebook.live.mts` runs the real notebook tagger on a handwritten page synthesized with headless Chrome in a handwriting font (about 5 s): prints the transcript, tags and the markdown file.
+`grader.live.mts`, `grader.live-reactions.mts`, `grader.live-concurrent.mts`, `grader.live-math.mts` run `review/grader.ts` for real (a separate `pi -p` per call, ~6 s each) on answers from past sessions: a substantively right answer must grade correct, a complaint must come back `attempted=false`, concurrent calls must not collide, an answer written only as math must grade correct. Run with `node --import ./register.mjs grader.live.mts`. `notebook.live.mts` runs the real notebook tagger on a handwritten page synthesized with headless Chrome in a handwriting font (about 5 s): prints the transcript, tags and the markdown file.
 
 ## Tools
 

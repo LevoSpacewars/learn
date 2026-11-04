@@ -17,7 +17,11 @@ assert.equal(bookMarkdown(undefined, "x", [{ at: "", slug: "x", node: "A", title
 const { findNodeIds, nodeIdReason } = await import(`${WT}/review/pedagogy.ts`);
 const { learnerFields } = await import(`${WT}/recall.ts`);
 const { lessonNoteFiles } = await import(`${WT}/review/sidechat.ts`);
-const { sizeBatch } = await import(`${WT}/review/index.ts`); assert.deepEqual(sizeBatch([{k:"problem"},{k:"problem"},{k:"problem"},{k:"problem"},{k:"recall"}], (c: any) => c.k, undefined).map((c: any) => c.k), ["problem","problem","problem","recall"], "count-based: at most three problems, no clock");
+const { sizeBatch, batchChecks } = await import(`${WT}/review/index.ts`);
+const mixed = [{k:"problem"},{k:"problem"},{k:"recall"},{k:"problem"},{k:"recall"}];
+assert.equal(sizeBatch(mixed, (c: any) => c.k, undefined).length, 5, "count-based, no clock: problem cards are not dropped");
+assert.equal(sizeBatch(mixed, (c: any) => c.k, 3).length, 3);
+assert.deepEqual(batchChecks(mixed, (c: any) => c.k), [{check:"problem",quick:false},{check:"recall",quick:true},{check:"recall",quick:false},{check:"recall",quick:true},{check:"recall",quick:false}], "one paper problem per batch; the rest are quick checks");
 
 const lessons = [
 	{ slug: "mx", nodes: [{ id: "R", label: "Handles: scalar ODE and eigenvector" }, { id: "D1", label: "Along an eigenvector the ODE collapses" }, { id: "D2", label: "Superposition: p(t) = Σ c_i e^{λ_i t} v_i" }, { id: "D3", label: "e^{Qt}: definition, series" }, { id: "G", label: "Slow eigenvalue = k_obs" }] },

@@ -72,11 +72,19 @@ export function isMiss(verdict: string, score?: number): boolean {
 	return true; // incorrect, dontKnow
 }
 
-/** Sub-questions in a prompt: numbered lines, plus bullet lines that ask something. */
+/** Sub-questions in a prompt: numbered lines, lettered parts like "(a)" / "b)", plus bullet lines that ask something. */
 export function countParts(prompt: string): number {
 	const numbered = prompt.match(/^\s*\d+[.)]\s+/gm)?.length ?? 0;
+	const lettered = prompt.match(/(?:^|\s)\(?[a-f]\)\s+\S/gm)?.length ?? 0;
 	const bullets = prompt.match(/^\s*[-*•]\s+.*(\?|=\s*\?)\s*$/gm)?.length ?? 0;
-	return Math.max(1, numbered + bullets);
+	return Math.max(1, numbered + lettered + bullets);
+}
+
+/** Review cards ask ONE thing: a multi-part card made every answer "partial" on a side ask (2026-11-03). */
+export function reviewPartsReason(prompt: string): string | undefined {
+	const parts = countParts(prompt);
+	if (parts <= 1) return undefined;
+	return `Refused: a review card asks ONE thing; this prompt has ${parts} parts. Pose only the core of the card (the result or step it is about) as a single question he can answer with an equation, a number or one line. Drop side asks (label each term, name the concept, give an example of a wrong answer, explain in words). If the card's FRONT itself has several parts, pose its main part now and split the card with review_add_cards afterwards.`;
 }
 
 /** The learner said they are ready for the first question. */
@@ -311,7 +319,7 @@ export interface Ladder {
 }
 export const NEXTMOVE_RIGHT = 2; // next-move checks that must land before the completion rung
 export const NEXTMOVE_MAX = 3; // ... or this many asked
-export const NEXTMOVE_BANNER = "Next move only: say what the next step is and why that one, not the whole derivation.";
+export const NEXTMOVE_BANNER = "Next move only: write the next step (an equation is fine) and why that one, in a line, not the whole derivation.";
 export const COMPLETION_BANNER = "Fill the one blank.";
 
 function name(l: Ladder): string {

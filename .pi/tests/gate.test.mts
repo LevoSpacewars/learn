@@ -1,5 +1,18 @@
-import { countParts, gateReason } from "../extensions/recall.ts";
+import { countParts, gateReason, recallBlock } from "../extensions/recall.ts";
+import { reviewPartsReason } from "../extensions/review/pedagogy.ts";
 import assert from "node:assert/strict";
+
+// lettered parts, as review cards were written on 2026-11-03
+const twoPart = "A pool loses a fraction $r\\,dt$ per slice.\n\n(a) From this one-slice rule, derive the differential equation for $N(t)$.\n\n(b) Numerically: $N = 400$, $r = 3$. Compute $(N_{new} - N)/dt$.";
+assert.equal(countParts(twoPart), 2);
+assert.equal(countParts("Compute (a) the rate and (b) the limit."), 2, "inline lettered parts");
+assert.equal(countParts("With $f(a) = 3$ and $g(b) = 1$, what is $f(a)g(b)$?"), 1, "function arguments are not parts");
+assert.equal(countParts("What is $dN/dt$, and why is it fixed as $dt \\to 0$?"), 1);
+assert.equal(reviewPartsReason("What is $dN/dt$?"), undefined);
+assert.match(reviewPartsReason(twoPart) ?? "", /ONE thing/);
+const calm = () => ({ missStreak: 0, sinceMissChars: 0, reviewMode: true } as any);
+assert.match(recallBlock(calm(), { kind: "problem", prompt: twoPart, cardId: "c1" }) ?? "", /review card asks ONE thing/, "multi-part review card refused");
+assert.equal(recallBlock(calm(), { kind: "recall", prompt: "What is $dN/dt$ for this pool?", cardId: "c1" }), undefined, "one ask passes");
 
 // part counting
 assert.equal(countParts("What does it mean?"), 1);

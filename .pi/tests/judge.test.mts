@@ -48,6 +48,8 @@ assert.equal(pedagogy().reviewMode, false, "reset clears review mode");
 const prompt = buildGraderPrompt({ kind: "recall", prompt: "Q", reference: "R", cwd: "/tmp" });
 assert.match(prompt, /Grade the SUBSTANCE/);
 assert.match(prompt, /Secondary omissions are NOTES/);
+assert.match(prompt, /Math is an explanation/);
+assert.match(prompt, /Grade the main ask/);
 assert.match(prompt, /"attempted": true \| false/);
 assert.doesNotMatch(prompt, /audited on false positives/);
 assert.doesNotMatch(prompt, /strict/i);
@@ -55,7 +57,9 @@ const j = parseJson('{"reading":"complaint","reasoning":"","attempted":false,"ve
 assert.equal(j.attempted, false);
 
 // ---- ratingFor: by score
-assert.equal(ratingFor({ verdict: "partial", score: 0.6 }, 60000), "hard");
+assert.equal(ratingFor({ verdict: "partial", score: 0.6 }, 60000), "good", "MINOR GAP (substance right) is not re-tested");
+assert.equal(ratingFor({ verdict: "partial", score: 0.7 }, 60000), "good");
+assert.equal(ratingFor({ verdict: "partial", score: 0.55 }, 60000), "hard", "a real gap below the miss line");
 assert.equal(ratingFor({ verdict: "partial", score: 0.75 }, 60000), "good", "method right with a slip schedules as good");
 assert.equal(ratingFor({ verdict: "partial", score: 0.3 }, 60000), "again");
 assert.equal(ratingFor({ verdict: "incorrect", score: 0.9 }, 60000), "again");

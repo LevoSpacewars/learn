@@ -47,7 +47,7 @@ import {
 	updateNode,
 	upsertLesson,
 } from "./store.ts";
-import { clearMiss, pedagogy } from "./pedagogy.ts";
+import { clearMiss, countParts, pedagogy } from "./pedagogy.ts";
 import { bookPath, importSessionReadings, writeAllBooks, writeBook } from "./book.ts";
 import { addNote, deleteNote, loadNotes, noteLines, searchNotes, tagCounts, tagNote, tagPending, updateNote } from "./notebook.ts";
 
@@ -57,27 +57,34 @@ type CardKind = "recall" | "problem";
 export const NODE_ID_NOTE = "Node ids (R1, D2, G) are internal: in anything he reads, name the idea by its label (\"the matrix exponential\", \"the superposition step\"), never the id.";
 
 const DEFAULT_LIMIT = 10;
-const MAX_PROBLEMS = 3;
+/** Paper problems per review batch. Four multi-part paper cards took an hour on 2026-11-03; the rest are quick checks. */
+const MAX_PROBLEMS = 1;
 
 /**
  * Size the batch by count, never by time: sessions are not timed (he walks
- * away mid-answer and picks the session up later). `limit` cards, at most a
- * few of them paper problems. Always at least one card.
+ * away mid-answer and picks the session up later). `limit` cards. Always at
+ * least one card.
  */
-export function sizeBatch<T>(cards: T[], checkOf: (c: T) => CheckKind, limit?: number): T[] {
-	const out: T[] = [];
-	let problems = 0;
-	const max = Math.max(1, Math.floor(limit ?? DEFAULT_LIMIT));
-	for (const c of cards) {
-		if (out.length >= max) break;
-		if (checkOf(c) === "problem") {
-			if (problems >= MAX_PROBLEMS) continue;
-			problems++;
-		}
-		out.push(c);
-	}
-	return out;
+export function sizeBatch<T>(cards: T[], _checkOf: (c: T) => CheckKind, limit?: number): T[] {
+	return cards.slice(0, Math.max(1, Math.floor(limit ?? DEFAULT_LIMIT)));
 }
+
+/** The check each batch card gets: paper problems after the first are posed as a quick typed check of their key step. */
+export function batchChecks<T>(batch: T[], checkOf: (c: T) => CheckKind): Array<{ check: CheckKind; quick: boolean }> {
+	let problems = 0;
+	return batch.map((c) => {
+		const check = checkOf(c);
+		if (check !== "problem") return { check, quick: false };
+		if (problems < MAX_PROBLEMS) {
+			problems++;
+			return { check, quick: false };
+		}
+		return { check: "recall", quick: true };
+	});
+}
+
+const QUICK_PROBLEM =
+	"QUICK: this is a paper-problem card, posed this time as a quick check. Ask only for its key step or result (one equation, one number or one line, typed; paper: false). No setup to work through, no second part.";
 type RatingName = "again" | "hard" | "good" | "easy";
 type Modality = "choice" | "typed" | "photo" | "audio" | "implicit";
 
@@ -281,8 +288,8 @@ function relearnCards(store: Store, sessionId: string, sessionStart: Date): Revi
 }
 
 const CHECK_INSTRUCTIONS: Record<CheckKind, string> = {
-	recall: "Pose the FRONT (rephrased so the wording isn't the cue) and let the learner answer with `recall` (typed or photo). Never multiple-choice unless distractors are genuinely diagnostic.",
-	problem: "Generate a FRESH variant (new numbers/setup) of the problem in the BACK; pose it with `recall` kind 'problem' and let them work on paper (photo).",
+	recall: "Pose the FRONT (rephrased so the wording isn't the cue) as ONE question he can answer with an equation, a number or one line, and let the learner answer with `recall` (typed or photo). If the FRONT bundles several asks, pose only its core. Never multiple-choice unless distractors are genuinely diagnostic.",
+	problem: "Generate a FRESH variant (new numbers/setup) of the problem in the BACK with ONE thing to find (no (a)/(b) parts); pose it with `recall` kind 'problem' and let them work on paper (photo).",
 	flaw: "Do NOT ask the question. Instead present a confident, plausible answer/derivation for the FRONT that contains ONE planted error, and ask whether it is right (and what, if anything, is wrong) via `recall` kind 'flaw'. Accepting it counts as a miss.",
 	transfer: "Pose the same idea in an unrelated cover story or different notation (e.g. a textbook's or a paper's), so recognising the structure is the task. Use `recall` kind 'transfer'.",
 	predict: "",
@@ -300,7 +307,7 @@ const AddParams = Type.Object({
 			}),
 			kind: Type.Optional(
 				Type.Union([Type.Literal("recall"), Type.Literal("problem")], {
-					description: "recall = answerable in words. problem = solve on paper (shown via phone photo). Default recall.",
+					description: "recall = answerable in one line: an equation, a number or a short phrase. problem = solve on paper (shown via phone photo), ONE thing to find. Default recall.",
 				}),
 			),
 			topic: Type.String({ description: "Short topic slug, e.g. 'pythagoras'. Reuse the same slug for the same lesson topic." }),
@@ -477,9 +484,10 @@ export default function review(pi: ExtensionAPI) {
 		promptSnippet: "Use review_add_cards to save 1-3 spaced-review cards per concept the learner has solidly understood.",
 		promptGuidelines: [
 			"Add cards only for things the learner actually got — not for material you merely mentioned.",
-			"One idea per card. The front must stand alone months later with no lesson context.",
+			"One ask per card: no (a)/(b) parts, no numbered sub-questions (they are refused). Two things to test are two cards. The front must stand alone months later with no lesson context.",
+			"He answers in math, not prose. Phrase a 'why' so an equation or a step answers it (\"what is dN/dt, and why is it fixed as dt → 0?\" is answered by dN = -rN dt). Never ask him to explain in words, to name a concept or structure, to label every term, or to invent a wrong answer.",
 			"Prefer 'why'/'how' and application over trivia. Use kind 'problem' for skills best shown by working on paper.",
-			"Card quality rubric: the front has exactly one defensible answer; the back states the answer AND the reason; no yes/no fronts; no 'list all…' fronts; fronts don't leak the answer.",
+			"Card quality rubric: the front has exactly one defensible answer; the back states the answer AND the reason (the reason may be the equation); no yes/no fronts; no 'list all…' fronts; fronts don't leak the answer.",
 		],
 		renderCall: quietCall("save cards"),
 		renderResult: quietResult(firstLine),
@@ -488,6 +496,12 @@ export default function review(pi: ExtensionAPI) {
 			const store = load(ctx.cwd);
 			const existing = new Set(store.cards.map((c) => c.front.trim()));
 			const now = new Date();
+			const multi = params.cards.filter((c) => countParts(c.front) > 1);
+			if (multi.length) {
+				return textResult(
+					`Refused: one ask per card. ${multi.length} front(s) have several parts: ${multi.map((c) => `"${c.front.slice(0, 80)}${c.front.length > 80 ? "…" : ""}"`).join("; ")}. Split each into separate cards, one question each, answerable with an equation, a number or one line. Nothing was saved.`,
+				);
+			}
 			const added: string[] = [];
 			let skipped = 0;
 			for (const c of params.cards) {
@@ -559,7 +573,7 @@ export default function review(pi: ExtensionAPI) {
 			}
 			const isRetention = (c: ReviewCard) =>
 				(now.getTime() - new Date(c.created).getTime()) / 86400000 >= RETENTION_MIN_AGE_DAYS && hash01(`r${c.id}${session!.id}`) < RETENTION_RATE;
-			const fmt = (c: ReviewCard, check: CheckKind) => {
+			const fmt = (c: ReviewCard, check: CheckKind, quick: boolean) => {
 				const state = State[c.fsrs.state];
 				const lapses = c.fsrs.lapses ? `, lapses ${c.fsrs.lapses}` : "";
 				const last = c.history.at(-1);
@@ -569,7 +583,7 @@ export default function review(pi: ExtensionAPI) {
 				return [
 					`### ${c.id} [${c.kind}] topic: ${c.topic} (${state}, reps ${c.fsrs.reps}${lapses}, criterion sessions ${c.criterionSessions}${c.graduated ? ", graduated" : ""})${retention ? " RETENTION CHECK" : ""}`,
 					retention ? "RETENTION: pose it unaided and unannounced — no hint, no warm-up, no reaction beyond 'noted' until the close; pass `retention: true` to `recall`. This is the outcome metric." : "",
-					`CHECK: ${check} — ${CHECK_INSTRUCTIONS[check]}`,
+					`CHECK: ${check} — ${quick ? QUICK_PROBLEM : CHECK_INSTRUCTIONS[check]}`,
 					`FRONT: ${c.front}`,
 					`BACK (hidden from learner): ${c.back}`,
 					last ? `LAST: ${last.rating}${last.note ? ` — ${last.note}` : ""}` : "",
@@ -580,8 +594,9 @@ export default function review(pi: ExtensionAPI) {
 					.filter(Boolean)
 					.join("\n");
 			};
-			const lines = batch.map((c) => fmt(c, assignCardCheck(c, session!.id)));
-			const retryLines = retry.map((c) => fmt(c, c.kind === "problem" ? "problem" : "recall"));
+			const checks = batchChecks(batch, checkOf);
+			const lines = batch.map((c, i) => fmt(c, checks[i].check, checks[i].quick));
+			const retryLines = retry.map((c) => fmt(c, "recall", c.kind === "problem"));
 			const text = [
 				...header,
 				`${due.length} due, showing ${batch.length}. A card not shown is simply due next time; do not call review_due again for more until the retry list is empty. Nothing is timed: he may leave mid-answer and come back hours later; never mention time, speed or a budget.`,
