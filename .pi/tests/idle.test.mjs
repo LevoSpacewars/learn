@@ -1,6 +1,9 @@
 import puppeteer from "../extensions/visual-tools/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js";
-import fs from "node:fs"; import assert from "node:assert/strict";
-const LOG = new URL("./tmp/fake-answers.log", import.meta.url).pathname; try { fs.unlinkSync(LOG); } catch {}
+import fs from "node:fs"; import assert from "node:assert/strict"; import { spawn } from "node:child_process";
+const LOG = new URL("./tmp/fake-answers-idle.log", import.meta.url).pathname; try { fs.unlinkSync(LOG); } catch {}
+// its own fake server: no open question
+const server = spawn(process.execPath, [new URL("./fakeserver.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: "8795", NOPENDING: "1", ANSWERS: LOG }, stdio: "ignore" });
+await new Promise((r) => setTimeout(r, 600));
 const browser = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: true });
 try {
   for (const mode of ["full", "viewer"]) {
@@ -19,4 +22,4 @@ try {
   const sent = fs.readFileSync(LOG, "utf8").trim().split("\n").map((l) => JSON.parse(l.slice(l.indexOf(" ") + 1)));
   assert.equal(sent.length, 2); assert.equal(sent[0].note, "The 10^-2 is wrong: 0.95 x 400 = 380"); assert.equal(sent[0].images.length, 0);
   console.log("idle tests ok");
-} finally { await browser.close(); }
+} finally { await browser.close(); server.kill(); }

@@ -60,7 +60,7 @@ interface QuizResponse {
 	dontKnow: boolean;
 	note?: string;
 	answers: OptionAnswer[];
-	confidence?: number; // 0-100, asked after the selection and before feedback
+	confidence?: number; // legacy: not asked since 2026-10-19 (old entries still parse)
 }
 
 type QuizStatus = "answered" | "cancelled" | "unavailable";

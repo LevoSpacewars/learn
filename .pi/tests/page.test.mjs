@@ -22,7 +22,8 @@ try {
 	assert.equal(await page.$eval("#prompt h2", (n) => n.textContent.includes("Why the pool decays")), true);
 	assert.equal(await page.$eval("#prompt img", (n) => n.getAttribute("src").includes("viz%2Fdecay.svg")), true, "figure shown");
 	assert.equal(await page.$$eval("#quiz button", (b) => b.map((x) => x.textContent.trim()).join("|")), "Read it, ask me", "exactly one button");
-	for (const id of ["confrow", "hint", "idk", "skip", "endrecall"]) assert.equal(await page.$eval("#" + id, (n) => n.offsetParent === null), true, id + " hidden on a reading");
+	assert.equal(await page.$("#confrow"), null, "no confidence rating (dropped 2026-10-19)");
+	for (const id of ["hint", "idk", "skip", "endrecall"]) assert.equal(await page.$eval("#" + id, (n) => n.offsetParent === null), true, id + " hidden on a reading");
 	assert.equal(await page.$eval("#text", (n) => n.offsetParent !== null), true, "question box visible");
 	assert.equal(await page.$eval("#send", (b) => b.disabled), true);
 	await page.screenshot({ path: `${TMP}/shot-read-phone.png`, fullPage: true });

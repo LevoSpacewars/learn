@@ -7,25 +7,28 @@ cd .pi/tests
 npm install          # once: typescript + @types/node (for typecheck only)
 node run.mjs         # all *.test.mts; `node run.mjs gate judge` for a subset
 node typecheck.mjs   # tsc over every extension entry point
+node browser.mjs     # every browser check (Mac: needs Google Chrome)
 ```
 
-The extension directories need their own `node_modules` (`bin/setup` installs them). In a git worktree, symlink them from the main checkout: `ln -s ~/learn/.pi/extensions/review/node_modules .pi/extensions/review/node_modules` (same for `phone-work` and `visual-tools`).
+The extension directories need their own `node_modules` (`bin/setup` installs them). In a git worktree, symlink them from the main checkout: `ln -s ~/learn/.pi/extensions/review/node_modules .pi/extensions/review/node_modules` (same for `phone-work`, `visual-tools` and `.pi/tests`). The links are gitignored.
 
 ## Unit tests (`node run.mjs`)
 
 | file | covers |
 |---|---|
-| `gate.test.mts`, `floor.test.mts`, `guard.test.mts` | recall.ts: text-part counting for the gate, the floor prompt, the turn-end guard |
-| `judge.test.mts` | pedagogy.ts: `isMiss` (partial ≥ 0.6 is a minor gap), streaks, review mode, `clearMiss` |
+| `gate.test.mts`, `floor.test.mts`, `guard.test.mts` | recall.ts: part counting (numbered, (a)/(b), bullets) for the gate, the one-ask refusal for review cards, the floor prompt, the turn-end guard |
+| `judge.test.mts` | pedagogy.ts: `isMiss` (partial ≥ 0.6 is a minor gap), streaks, review mode, `clearMiss`; `ratingFor` (a minor gap schedules good); the grader prompt's rules (math is an explanation, grade the main ask) |
 | `ladder.test.mts` | pedagogy.ts: the practice ladder (next move → completion → check → derivation) |
 | `flow.test.mts` | recall.ts + quiz.ts driven by a fake pi through a teach session: reading gate, floor, quiz streak, `say`, predict rules |
 | `menu.test.mts` | start-menu.ts: last session note, "Next:" line, option ordering |
 | `mdlog.test.mts` | md-log.ts: callouts written to the lesson note |
-| `book.test.mts` | review/book.ts: readings log → `book/<slug>.md`, id stripping, session import |
-| `phone.test.mts`, `qr.test.mts` | phone-work: QR show/hide on globalThis, `/qr.svg`, the Phone button; binds `127.0.0.1` on ports 8795/8796 |
+| `book.test.mts` | review/book.ts: readings log → `book/<slug>.md`, id stripping, session import; review batch size and checks (one paper problem, the rest QUICK) |
+| `phone.test.mts`, `qr.test.mts` | phone-work: QR show/hide on globalThis, `/qr.svg`, the Phone button, `/lesson?since=` (unchanged note sends no markdown); binds `127.0.0.1` on ports 8795/8796 |
 | `notebook.test.mts` | review/notebook.ts: notes.jsonl fold, tagger with a fake runner (his title/tags win; handwritten pages handed over as files, transcript stored and searchable), `notebook/pages/*.png`, `notebook/*.md` + index, slice lines, the `/notebook` and `/note*` endpoints with a fake pi on port 8793 (pages saved, served, appended) |
 
-## Browser checks (manual, need Chrome)
+## Browser checks (`node browser.mjs`, need Chrome)
+
+Each check starts its own fake server on a fixed port and stops it again (`page.test.mjs` 8799-8801, `skip.test.mjs` 8794, `idle.test.mjs` 8795, `pad.check.mjs` 8802, `nb.check.mjs` 8792), so they run on their own and in any order. They run on the Mac (Chrome at `/Applications/Google Chrome.app`), not on the desktop.
 
 `fakeserver.mjs` serves `page.html` with a fake lesson and a fake pending prompt (`PENDING=read|say|predict`, `NOPENDING=1`, `PORT`, `ANSWERS` log) so the cards can be screenshotted and clicked without pi. `fakebook.mjs` does the same for the Book view (`VAULT=<vault>`). `page.test.mjs`, `idle.test.mjs`, `skip.test.mjs`, `pad.check.mjs` and `nb.check.mjs` (the Notebook panel against its own fake server on 8792, scratch engine inlined: draw strokes with the mouse, save, see the page and its transcript, add a page, edit, filter, search, phone width, "Note this") drive those with puppeteer-core from `visual-tools/node_modules` and headless Google Chrome; `shot.mjs <url> <out.png> [w h]` takes a screenshot; `mermaid.debug.mjs <url>` prints the page console. Headless Chrome's minimum window width is about 500px: narrower screenshots are cropped, not reflowed.
 
